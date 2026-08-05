@@ -1,0 +1,18 @@
+# SPOT AI Microservices - Locked Dependency Manifest
+fastapi==0.111.1
+uvicorn[standard]==0.30.1
+pydantic==2.8.2
+xgboost==2.1.0
+scikit-learn==1.5.1
+numpy==1.26.4
+pandas==2.2.2
+google-generativeai==0.7.2
+openai==1.37.0
+psycopg2-binary==2.9.9
+redis==5.0.8
+python-dotenv==1.0.1
+requests==2.32.3
+pytest==8.2.2
+black==24.4.2
+flake8==7.1.0
+isort==5.13.2

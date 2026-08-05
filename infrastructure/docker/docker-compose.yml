@@ -1,0 +1,150 @@
+services:
+  postgres:
+    image: postgres:16.3-alpine
+    container_name: spot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-spot_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-spot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spot_admin} -d ${POSTGRES_DB:-spot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network
+
+  redis:
+    image: redis:7.2.5-alpine
+    container_name: spot-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network
+
+  # --- services/* (Node/Express, packages/* resolved from workspace root) ---
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: spot-api-gateway
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spot_admin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-spot}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+      PORT: ${API_GATEWAY_PORT:-4000}
+    ports:
+      - "${API_GATEWAY_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - spot-network
+
+  core-api:
+    build:
+      context: ../..
+      dockerfile: services/core-api/Dockerfile
+    container_name: spot-core-api
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spot_admin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-spot}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+      PORT: ${CORE_API_PORT:-4001}
+    ports:
+      - "${CORE_API_PORT:-4001}:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - spot-network
+
+  # --- services/ai-services (Python/FastAPI, standalone requirements.txt) ---
+
+  ai-services:
+    build:
+      context: ../../services/ai-services
+      dockerfile: Dockerfile
+    container_name: spot-ai-services
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spot_admin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-spot}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    ports:
+      - "${AI_SERVICES_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - spot-network
+
+  # --- apps/* (Next.js, packages/* resolved from workspace root) ---
+  # apps/mobile-app (Expo) is intentionally not containerized: run via Expo CLI.
+
+  web-client:
+    build:
+      context: ../..
+      dockerfile: apps/web-client/Dockerfile
+    container_name: spot-web-client
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:${API_GATEWAY_PORT:-4000}
+      PORT: ${WEB_CLIENT_PORT:-3000}
+    ports:
+      - "${WEB_CLIENT_PORT:-3000}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - spot-network
+
+  admin-portal:
+    build:
+      context: ../..
+      dockerfile: apps/admin-portal/Dockerfile
+    container_name: spot-admin-portal
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:${API_GATEWAY_PORT:-4000}
+      PORT: ${ADMIN_PORTAL_PORT:-3001}
+    ports:
+      - "${ADMIN_PORTAL_PORT:-3001}:3001"
+    depends_on:
+      - api-gateway
+    networks:
+      - spot-network
+
+networks:
+  spot-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
