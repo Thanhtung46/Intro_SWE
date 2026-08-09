@@ -1,0 +1,23 @@
+# Force LF line endings for text files Docker/Compose parse, regardless of
+# each contributor's local core.autocrlf setting (Windows Git defaults to
+# CRLF checkout, which can corrupt .env files consumed by `docker compose
+# --env-file` and is a general footgun for anything shell/Docker-related).
+* text=auto eol=lf
+
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+.dockerignore text eol=lf
+docker-compose*.yml text eol=lf
+*.env text eol=lf
+*.env.* text eol=lf
+*.sh text eol=lf
+*.conf text eol=lf
+
+# Binary assets — never touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

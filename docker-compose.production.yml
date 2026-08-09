@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: spot-postgres-prod
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network-prod
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: spot-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network-prod
+    restart: always
+
+  backend:
+    build:
+      context: ./spot-backend
+      dockerfile: Dockerfile
+    container_name: spot-backend-prod
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      VNPAY_API_URL: ${VNPAY_API_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      RECOMMENDATION_SERVICE_URL: http://recommendation:5001
+      NOSHOW_SERVICE_URL: http://noshow:5002
+      NLP_SERVICE_URL: http://nlp:5003
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - spot-network-prod
+    restart: always
+
+  frontend-web:
+    build:
+      context: ./spot-frontend-web
+      dockerfile: Dockerfile
+    container_name: spot-frontend-web-prod
+    environment:
+      NEXT_PUBLIC_API_URL: ${API_URL}
+      NEXT_PUBLIC_ENV: production
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    networks:
+      - spot-network-prod
+    restart: always
+
+  admin-console:
+    build:
+      context: ./spot-admin-console
+      dockerfile: Dockerfile
+    container_name: spot-admin-prod
+    environment:
+      VITE_API_URL: ${API_URL}
+      VITE_ENV: production
+    ports:
+      - "3002:80"
+    depends_on:
+      - backend
+    networks:
+      - spot-network-prod
+    restart: always
+
+  recommendation:
+    build:
+      context: ./spot-ai-services/recommendation
+    container_name: spot-recommendation-prod
+    environment:
+      API_PORT: 5001
+      BACKEND_URL: http://backend:3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5001:5001"
+    depends_on:
+      - backend
+      - postgres
+    networks:
+      - spot-network-prod
+    restart: always
+
+  noshow:
+    build:
+      context: ./spot-ai-services/noshow-prediction
+    container_name: spot-noshow-prod
+    environment:
+      API_PORT: 5002
+      BACKEND_URL: http://backend:3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5002:5002"
+    depends_on:
+      - backend
+      - postgres
+    networks:
+      - spot-network-prod
+    restart: always
+
+  nlp:
+    build:
+      context: ./spot-ai-services/nlp-assistant
+    container_name: spot-nlp-prod
+    environment:
+      API_PORT: 5003
+      BACKEND_URL: http://backend:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "5003:5003"
+    depends_on:
+      - backend
+    networks:
+      - spot-network-prod
+    restart: always
+
+networks:
+  spot-network-prod:
+    driver: bridge
+
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local

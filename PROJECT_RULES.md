@@ -1,135 +1,226 @@
 # SPOT Engineering - Project Rules & Technology Version Matrix
 
-**Document Version**: 1.0.0-STABLE  
-**Project**: SPOT (Sport Pitch Online Ticketing Platform)  
-**Author / Tech Lead**: Nguyễn Thanh Tùng (24127583)  
-**Target Team**: Group 09 (HCMUS Software Engineering Dept)  
+**Document Version**: 2.0.0 — Polyrepo Realignment
+**Project**: SPOT (Sport Pitch Online Ticketing Platform)
+**Author / Tech Lead**: Nguyễn Thanh Tùng (24127583)
+**Target Team**: Group 09 (HCMUS Software Engineering Dept)
+
+> **v2.0.0 change note**: v1.0.0 specified a pnpm monorepo (`apps/*`,
+> `services/*`, `packages/*`, `infrastructure/`) that was abandoned early in
+> favor of a **polyrepo**: five top-level directories (`spot-frontend-web/`,
+> `spot-frontend-mobile/`, `spot-admin-console/`, `spot-backend/`,
+> `spot-ai-services/`), three of which (`spot-frontend-web`,
+> `spot-frontend-mobile`, `spot-admin-console`) are their own git
+> repositories. This revision realigns the rules and version matrix to that
+> reality. See each app's own `CLAUDE.md` for current implementation status
+> (what's actually built vs. still an empty scaffold) — this document
+> defines the *rules*, not the status.
 
 ---
 
-## 1. Universal Technology Stack & Version Lock Matrix
+## 1. Technology Stack & Version Lock Matrix
 
-To prevent version drift, dependency conflicts, and "works on my machine" issues, all team members MUST use the exact tool and library versions specified below.
+Version locks below reflect what's **actually pinned today** (a
+`package.json` range, a Docker base image tag) where that exists. Where a
+component has no code yet (`spot-backend`, `spot-ai-services/*`), the table
+lists the **intended** stack — install exactly these when scaffolding
+begins, don't drift from them without updating this doc.
 
 ### 1.1. Core Runtime Environment & Tools
-| Technology / Tool | Version Lock | Installation / Enforcement |
+| Technology / Tool | Version Lock | Notes |
 | :--- | :--- | :--- |
-| **Node.js** | **`v20.17.0` (LTS Active)** | Enforced via `.nvmrc` (`nvm use`) |
-| **Package Manager** | **`pnpm@9.7.0`** (or `npm@10.8.2`) | Enforced via `package.json` `packageManager` field |
-| **Python** | **`3.11.9`** | Enforced via `.python-version` |
-| **TypeScript** | **`v5.5.4`** | Monorepo root `devDependencies` |
-| **Docker Engine** | **`v26.x` / Compose `v2.27.x`** | Defined in `infrastructure/docker/` |
-| **PostgreSQL** | **`v16.3`** | Official PostgreSQL 16 Alpine Docker container |
-| **Redis** | **`v7.2.5`** | Official Redis 7 Alpine Docker container |
+| **Node.js** | **`18.x` LTS** | Matches `node:18-alpine` used in every committed Dockerfile. No `.nvmrc` is committed in any app — add one per app if you want `nvm use` to enforce this locally. Local dev machines may have a newer Node installed (e.g. `24.x`) for running scripts outside Docker; that's fine for tooling, but builds should be validated against 18.x via Docker before merging. |
+| **Package Manager** | **`npm`** (whatever ships with your Node install) | Not pnpm — no `pnpm-workspace.yaml` exists, and there's no monorepo workspace to manage. Each app has its own lockfile (`package-lock.json`); commit it. |
+| **Python** | **`3.11.x`** | Target for `spot-ai-services/*` once code exists. No `.python-version` is committed yet. |
+| **TypeScript** | **`^5.3.0`** | Matches `spot-frontend-web` and `spot-admin-console` `package.json`. No root-level TypeScript version exists — each app pins its own. |
+| **Docker Engine / Compose** | **Compose v2 (`docker compose`, not `docker-compose`)** | Compose files live at the repo root (`docker-compose.yml`, `docker-compose.production.yml`), not under `infrastructure/docker/`. |
+| **PostgreSQL** | **`15-alpine`** | Matches `docker-compose.yml`. (v1.0.0 of this doc locked 16.3 — that was never actually deployed; 15-alpine is what's running.) |
+| **Redis** | **`7-alpine`** | Matches `docker-compose.yml`. |
 
 ---
 
-### 1.2. Client Tier Dependencies (`apps/web-client` & `apps/admin-portal`)
+### 1.2. `spot-frontend-web/` (Next.js)
 | Package Name | Locked Version | Description & Usage |
 | :--- | :--- | :--- |
-| **`next`** | **`14.2.5`** | React Framework (App Router enabled) |
-| **`react` / `react-dom`** | **`18.3.1`** | Core React UI runtime |
-| **`tailwindcss`** | **`3.4.7`** | Utility-first CSS framework |
-| **`lucide-react`** | **`0.417.0`** | Modern UI icon library |
-| **`framer-motion`** | **`11.3.19`** | Micro-animations and page transition effects |
-| **`@tanstack/react-query`**| **`5.51.15`** | Server-state management and API caching |
-| **`zustand`** | **`4.5.4`** | Client-state management (Cart, Lock Timer countdown) |
-| **`react-hook-form`** | **`7.52.1`** | High-performance form handling |
-| **`zod`** | **`3.23.8`** | Type-safe schema validation |
+| **`next`** | **`^14.0.0`** | React Framework (App Router) |
+| **`react` / `react-dom`** | **`^18.2.0`** | Core React UI runtime |
+| **`tailwindcss`** | **`^3.3.0`** | Utility-first CSS framework (config file not committed yet — see this app's `CLAUDE.md`) |
+| **`zustand`** | **`^4.4.0`** | Client-state management |
+| **`axios`** | **`^1.6.0`** | HTTP client |
+
+Not currently installed, despite being common Next.js companions — add
+deliberately if/when needed, don't assume they're available:
+`lucide-react`, `framer-motion`, `@tanstack/react-query`,
+`react-hook-form`, `zod`.
 
 ---
 
-### 1.3. Mobile App Dependencies (`apps/mobile-app`)
+### 1.3. `spot-admin-console/` (Vite, not Next.js)
 | Package Name | Locked Version | Description & Usage |
 | :--- | :--- | :--- |
-| **`expo`** | **`~51.0.22`** | Cross-platform React Native framework |
-| **`react-native`** | **`0.74.3`** | Mobile UI runtime |
-| **`@react-navigation/native`**| **`6.1.18`** | Screen stack & tab navigation |
+| **`react` / `react-dom`** | **`^18.2.0`** | Core React UI runtime |
+| **`react-router-dom`** | **`^6.20.0`** | Client-side routing (this app does not use Next.js/App Router) |
+| **`recharts`** | **`^2.10.0`** | Charts for analytics/reporting views |
+| **`zustand`** | **`^4.4.0`** | Client-state management |
+| **`axios`** | **`^1.6.0`** | HTTP client |
+| **`vite`** | **`^5.0.0`** | Build tool |
+
+This app is architecturally distinct from `spot-frontend-web` — Vite +
+React Router, no Tailwind, no App Router. Don't assume the two frontends
+share a stack.
 
 ---
 
-### 1.4. Backend Gateway & Core Services (`services/api-gateway` & `services/core-api`)
+### 1.4. `spot-frontend-mobile/` (Expo)
 | Package Name | Locked Version | Description & Usage |
 | :--- | :--- | :--- |
-| **`express`** | **`4.19.2`** | Node.js web server framework |
-| **`jsonwebtoken`** | **`9.0.2`** | RS256 JWT authentication |
-| **`argon2`** | **`0.40.3`** | OWASP-recommended password hashing |
-| **`express-rate-limit`** | **`7.3.1`** | Token-bucket rate limiting against DDoS |
-| **`helmet`** | **`7.1.0`** | HTTP Security header hardening |
-| **`pg`** | **`8.12.0`** | PostgreSQL client driver |
-| **`@prisma/client` / `prisma`**| **`5.17.0`** | ORM for PostgreSQL 7 Logical Schemas |
-| **`ioredis`** | **`5.4.1`** | High-speed Redis client driver |
-| **`redlock`** | **`5.0.0-beta.2`** | Ephemeral 5-minute Redis slot locking |
-| **`winston`** | **`3.13.1`** | Structured JSON logging |
+| **`expo`** | **`~49.0.0`** | Cross-platform React Native framework |
+| **`react-native`** | **`0.72.6`** | Mobile UI runtime |
+| **`expo-router`** | **`^2.0.0`** | File-based navigation |
+| **`@react-navigation/native`** | **`^6.1.9`** | Also present alongside `expo-router` — pick one as the primary navigation approach when screens are actually built; having both wired in isn't itself a bug, but don't let both grow independent routing logic. |
+| **`zustand`** | **`^4.4.0`** | Client-state management |
+
+`npm install` fails here today on a peer-dependency conflict
+(`react-test-renderer` pulled in at a version `@testing-library/react-native`
+doesn't accept) — use `npm install --legacy-peer-deps` until resolved. See
+this app's `CLAUDE.md`.
 
 ---
 
-### 1.5. AI Microservices Dependencies (`services/ai-services/requirements.txt`)
-| Python Package | Locked Version | Purpose |
+### 1.5. `spot-backend/` — target stack (not installed yet)
+No `package.json` exists in `spot-backend/` yet. The list below is the
+**intended** dependency set for when backend work starts — install exactly
+these, don't drift:
+
+| Package Name | Target Version | Description & Usage |
 | :--- | :--- | :--- |
-| **`fastapi`** | **`0.111.1`** | High-performance ASGI Python framework |
-| **`uvicorn[standard]`** | **`0.30.1`** | Production ASGI server |
-| **`xgboost`** | **`2.1.0`** | Gradient boosting for Smart No-Show Prediction |
-| **`scikit-learn`** | **`1.5.1`** | Collaborative Filtering Recommendation Engine |
-| **`google-generativeai`** | **`0.7.2`** | Gemini LLM SDK for Voice Booking NLP Assistant |
-| **`pandas` / `numpy`** | **`2.2.2` / `1.26.4`** | Data preprocessing & matrix manipulation |
-| **`psycopg2-binary`** | **`2.9.9`** | PostgreSQL database connector |
-| **`redis`** | **`5.0.8`** | Redis cache connector |
+| **`express`** | **`4.19.x`** | Node.js web server framework |
+| **`jsonwebtoken`** | **`9.0.x`** | RS256 JWT authentication |
+| **`argon2`** | **`0.40.x`** | OWASP-recommended password hashing |
+| **`express-rate-limit`** | **`7.3.x`** | Rate limiting |
+| **`helmet`** | **`7.1.x`** | HTTP security headers |
+| **`pg`** | **`8.12.x`** | PostgreSQL client driver |
+| **`@prisma/client` / `prisma`** | **`5.17.x`** | ORM |
+| **`ioredis`** | **`5.4.x`** | Redis client driver |
+| **`redlock`** | **`5.0.0-beta.2`** | Redis slot locking (see §2.3) |
+| **`winston`** | **`3.13.x`** | Structured JSON logging |
+
+There is exactly **one** backend service — not an `api-gateway` +
+`core-api` split. Domain-driven under `src/domains/<name>/{controller,dto,
+entity,repository,service}/`.
 
 ---
 
-## 2. Architecture & Workspace Boundary Rules
+### 1.6. `spot-ai-services/*` — target stack (not installed yet)
+No `requirements.txt` or Python code exists in any of `recommendation/`,
+`noshow-prediction/`, `nlp-assistant/` yet. Target for when code starts:
 
-1. **Strict Monorepo Boundary Isolation**:
-   - `apps/*` CANNOT import directly from other `apps/*`.
-   - `services/*` MUST communicate with each other via HTTP REST or message broker. Direct cross-service code imports are FORBIDDEN.
-   - Shared logic MUST be placed inside `packages/*` (`packages/database`, `packages/redis-client`, `packages/shared-types`, `packages/ui-components`).
+| Python Package | Target Version | Purpose |
+| :--- | :--- | :--- |
+| **`fastapi`** | **`0.111.x`** | ASGI framework |
+| **`uvicorn[standard]`** | **`0.30.x`** | ASGI server |
+| **`xgboost`** | **`2.1.x`** | No-show prediction |
+| **`scikit-learn`** | **`1.5.x`** | Recommendation engine |
+| **`google-generativeai`** | **`0.7.x`** | Gemini SDK for the NLP assistant |
+| **`pandas` / `numpy`** | **`2.2.x` / `1.26.x`** | Data preprocessing |
+| **`psycopg2-binary`** | **`2.9.x`** | PostgreSQL connector |
+| **`redis`** | **`5.0.x`** | Redis connector |
 
-2. **Database Boundary & Schema Scoping Rules**:
-   - PostgreSQL queries MUST specify explicit schema names (e.g. `schema_auth.users`, `schema_booking.bookings`).
-   - No microservice may perform raw SQL mutations on tables outside its owned logical schema.
+Each service builds and runs independently, its own `Dockerfile` (none
+committed yet), no shared Python package between them.
 
-3. **Zero Double-Booking Ephemeral Locking Rule**:
-   - Any booking slot reservation MUST acquire the Redis lock `slot:lock:{field_id}:{date}:{start_time}` (TTL: `300` seconds) BEFORE initiating a database transaction.
-   - Direct PostgreSQL booking inserts without an active Redis lock token are REJECTED.
+---
 
-4. **Security & Data Privacy Rules**:
-   - Passwords MUST be hashed using `argon2id`. Plaintext or MD5/SHA1 hashing is FORBIDDEN.
+## 2. Architecture & Repo Boundary Rules
+
+1. **Polyrepo boundaries, not monorepo workspace boundaries**:
+   - `spot-frontend-web`, `spot-frontend-mobile`, `spot-admin-console` are
+     separate git repositories — there is no shared `packages/*` workspace
+     to pull common code from. If code needs to be shared across them
+     (types, a UI component), either duplicate it deliberately per repo or
+     publish it as a versioned npm package — don't assume a local import
+     path works across repos.
+   - `spot-backend` and `spot-ai-services/*` communicate with each other
+     (and are called by the frontends) over HTTP REST only. Direct code
+     imports between them are not possible anyway (no shared workspace),
+     but call this out explicitly: don't add a build-time dependency from
+     one service's code onto another's.
+
+2. **Database Boundary & Schema Scoping Rules** *(not yet implemented — no
+   migrations exist in `spot-backend/migrations/` yet; this is the target
+   for when they're written)*:
+   - PostgreSQL queries MUST specify explicit schema names matching the
+     domain folder they belong to (e.g. `schema_auth.users` for
+     `src/domains/auth/`, `schema_booking.bookings` for
+     `src/domains/booking/`).
+   - No domain may perform raw SQL mutations on tables outside its own
+     schema.
+
+3. **Zero Double-Booking Ephemeral Locking Rule** *(not yet implemented —
+   `src/domains/booking/` is currently an empty scaffold)*:
+   - Any booking slot reservation MUST acquire the Redis lock
+     `slot:lock:{field_id}:{date}:{start_time}` (TTL: `300` seconds) BEFORE
+     initiating a database transaction.
+   - Direct PostgreSQL booking inserts without an active Redis lock token
+     are REJECTED.
+
+4. **Security & Data Privacy Rules** *(not yet implemented —
+   `src/domains/auth/` is currently an empty scaffold)*:
+   - Passwords MUST be hashed using `argon2id`. Plaintext or MD5/SHA1
+     hashing is FORBIDDEN.
    - JWT tokens MUST be signed with **RS256** asymmetric keys.
-   - Accounts MUST lock automatically for 15 minutes after **5 consecutive failed login attempts**.
-   - Sensitive actions (changing email, phone number) MUST require OTP re-confirmation.
+   - Accounts MUST lock automatically for 15 minutes after **5 consecutive
+     failed login attempts**.
+   - Sensitive actions (changing email, phone number) MUST require OTP
+     re-confirmation.
 
 ---
 
 ## 3. Code Style, Linting & Git Conventions
 
 1. **Coding Style Standards**:
-   - **TypeScript/JS**: ESLint Airbnb config, Prettier formatting (2 spaces, single quotes, trailing commas).
-   - **Python**: PEP8 compliance enforced via `black` (line length 88) and `isort`.
+   - **TypeScript/JS**: ESLint + Prettier, 2 spaces, single quotes, trailing
+     commas. (v1.0.0 specified Airbnb config specifically — no ESLint
+     config file is committed in any app yet, including
+     `spot-admin-console` where `eslint` is already a dependency; `npm run
+     lint` fails there today with "couldn't find a configuration file".
+     Whoever adds the first `.eslintrc*`/`eslint.config.js` should decide
+     then whether to adopt Airbnb or a lighter ruleset.)
+   - **Python**: PEP8 compliance via `black` (line length 88) and `isort` —
+     applies once `spot-ai-services/*` has code.
    - **Naming Conventions**:
      - Variables & Functions: `camelCase` (`lockSlot`, `calculateFee`)
      - Classes & Interfaces: `PascalCase` (`SlotLockManager`, `UserResponse`)
      - Constants: `UPPER_SNAKE_CASE` (`DEFAULT_LOCK_TTL_SECONDS = 300`)
      - Database Tables & Columns: `snake_case` (`booking_date`, `total_amount`)
 
-2. **Git Flow & Branching Rules**:
-   - Direct commits to `main` or `develop` are BLOCKED.
-   - Branch naming: `feature/<dri-name>/<feature-name>` (e.g. `feature/cuong/auth-otp`, `feature/khoa/redis-lock`).
-   - Commit Message format: `<type>(<scope>): <description>` (e.g. `feat(booking): implement 5-min Redis slot lock TTL`).
+2. **Git Flow & Branching Rules** *(target process — the repo currently has
+   only a `master` branch; no `develop` or `feature/*` branches exist yet,
+   and nothing technically enforces this beyond convention)*:
+   - Direct commits to `main`/`master` (once a `develop` branch exists)
+     should be avoided in favor of PRs.
+   - Branch naming: `feature/<dri-name>/<feature-name>` (e.g.
+     `feature/cuong/auth-otp`, `feature/khoa/redis-lock`).
+   - Commit Message format: `<type>(<scope>): <description>` (e.g.
+     `feat(booking): implement 5-min Redis slot lock TTL`).
 
-3. **Pull Request & Review SLA**:
-   - Every PR requires $\ge 1$ approval from the module DRI or Tech Lead.
-   - SLA for code review: **Within 24 hours**.
-   - Automated CI checks (Linter, Unit Tests) MUST pass 100%.
+3. **Pull Request & Review SLA** *(target process — no CI is configured
+   yet; there's no `.github/workflows/` in this repo)*:
+   - Every PR requires ≥1 approval from the module DRI or Tech Lead.
+   - SLA for code review: within 24 hours.
+   - Once CI exists: linter + unit tests MUST pass 100% before merge.
 
 ---
 
 ## 4. Team DRI Responsibility Quick Reference
 
+Folder paths updated to match the actual polyrepo layout (v1.0.0 pointed at
+`apps/*`/`services/*`/`packages/*`, none of which exist):
+
 | Member Name | Role | Primary Folder Boundaries |
 | :--- | :--- | :--- |
-| **Nguyễn Thanh Tùng** | Tech Lead & Architect | `services/api-gateway/`, `services/ai-services/`, Root Architecture Specs |
-| **Nguyễn Thái Cường** | Security Lead | `services/core-api/src/modules/auth/`, `packages/database/schemas/schema_auth.sql` |
-| **Đỗ Trương Khoa** | Core Backend Engineer | `services/core-api/src/modules/booking/`, `social/`, `referee/`, `packages/redis-client/` |
-| **K’Vớn** | Frontend & UX Lead | `apps/web-client/`, `apps/admin-portal/`, `apps/mobile-app/`, `packages/ui-components/` |
-| **Đào Hoàng Phúc** | Database & Infra Lead | `packages/database/`, `infrastructure/docker/`, `infrastructure/scripts/` |
+| **Nguyễn Thanh Tùng** | Tech Lead & Architect | `spot-backend/`, `spot-ai-services/`, root architecture docs (`CLAUDE.md`, this file) |
+| **Nguyễn Thái Cường** | Security Lead | `spot-backend/src/domains/auth/` |
+| **Đỗ Trương Khoa** | Core Backend Engineer | `spot-backend/src/domains/{booking,matchmaking,referee,review}/` |
+| **K'Vớn** | Frontend & UX Lead | `spot-frontend-web/`, `spot-admin-console/`, `spot-frontend-mobile/` |
+| **Đào Hoàng Phúc** | Database & Infra Lead | `spot-backend/migrations/`, `docker-compose.yml`, `docker-compose.production.yml`, `DOCKER.md` |

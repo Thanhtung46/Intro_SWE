@@ -6,11 +6,8 @@ __pycache__/
 
 # Environment
 .env
-.env.*
-!.env.example
-
-# Claude Code
-.claude/settings.local.json
+.env.local
+.env.*.local
 
 # IDE
 .vscode/

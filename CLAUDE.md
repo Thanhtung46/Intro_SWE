@@ -1,8 +1,4 @@
-
-
-
 # CLAUDE.md
-
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
@@ -70,68 +66,142 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-## Project Status
+# SPOT Project Reference
 
-SPOT (Sport Pitch Online Ticketing Platform) is a pnpm monorepo in **early
-scaffold stage**. Most of the architecture described in `PROJECT_RULES.md` is
-not yet implemented — treat that file as the *target* architecture, not the
-current state.
+## Project Overview
 
-What exists today:
-- Root workspace config (`package.json`, `pnpm-workspace.yaml`) — no lockfile yet.
-- `services/ai-services/requirements.txt` — locked Python dependencies, no
-  application code (`main.py`) yet.
-- `infrastructure/docker/` — `docker-compose.yml` + `.env.example` covering the
-  full target architecture (Postgres, Redis, api-gateway, core-api,
-  ai-services, web-client, admin-portal).
-- A `Dockerfile` per app/service (`apps/web-client`, `apps/admin-portal`,
-  `services/api-gateway`, `services/core-api`, `services/ai-services`) —
-  written ahead of the source code they'll build, so the Node-based ones
-  will fail (`pnpm fetch` needs a lockfile; `pnpm --filter <name> run build`
-  needs a `package.json`) and `ai-services` will fail at container *start*
-  (no `main.py`/`app`) until real code lands.
+SPOT (Sport Pitch Online Ticketing) is a sports-pitch booking platform (HCMUS
+Software Engineering coursework, Group 09). It is currently a **polyrepo**
+— the root `package.json`/`pnpm-workspace.yaml`/`infrastructure/` scaffold
+from an earlier pnpm-monorepo attempt has been removed from the working
+tree. `PROJECT_RULES.md` was rewritten (v2.0.0) to match this polyrepo and
+its actual version locks (npm not pnpm, `postgres:15-alpine`, `node:18-alpine`,
+etc.) — read it for the binding rules (version locks, DB/locking/security
+rules, code style, DRI table). Sections there marked "not yet implemented"
+(DB schema rules, Redis slot-locking, auth security rules, backend/AI
+dependency lists) describe domains that are still empty scaffolds — don't
+assume they're built.
 
-Not yet started: `apps/*` and `services/api-gateway` / `services/core-api`
-source code, `packages/*`, and a root `pnpm-lock.yaml`.
+Tech stack per component:
 
-Before assuming any app/service has code, check the directory exists first.
+| Component | Stack | Status |
+| :--- | :--- | :--- |
+| `spot-frontend-web/` | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Zustand, Axios | Scaffolded but **`docker build`/`next build` fail today** — missing `src/app/globals.css`, `tsconfig.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`. `npm run dev` may still work despite this. |
+| `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
+| `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
+| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service) | Source skeleton only — **no `package.json`**, not installable. Has a `Dockerfile` now, but the build still fails at `npm ci` for the same reason. |
+| `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
+| Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified runnable via `docker compose up -d --build`. Other services: see Docker caveat below |
 
-## Running the project
+## Common Commands
 
-Only the database layer is runnable right now:
+There is no root-level build tool — each app manages its own dependencies.
+Run commands from inside the relevant directory.
 
+**Web (`spot-frontend-web/`):**
 ```bash
-cp infrastructure/docker/.env.example infrastructure/docker/.env
-docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
+npm install
+npm run dev      # start dev server
+npm run build && npm run start
+npm run lint
+npm test
 ```
 
-Once an app/service has real code and a `package.json` / `main.py`, bring up
-everything:
-
+**Admin console (`spot-admin-console/`):**
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml up -d --build
+npm install
+npm run dev
+npm run build     # tsc && vite build
+npm run lint      # eslint — fails today, no .eslintrc* committed yet
+npm run lint:fix
 ```
 
-Node/Python toolchains are version-locked via `.nvmrc` / `.python-version` —
-full dependency matrix in `PROJECT_RULES.md` §1.
+**Mobile (`spot-frontend-mobile/`):**
+```bash
+npm install
+npm start          # expo start
+npm run android / ios / web
+npm test
+```
 
-## Structure
+**Backend (`spot-backend/`):** not runnable yet — no `package.json` exists.
+Do not assume `npm install`/`npm run` work here until one is added.
+
+**AI services (`spot-ai-services/*/`):** not runnable yet — no application
+code or `requirements.txt` exists.
+
+**Docker (repo root):**
+```bash
+docker compose up -d postgres redis          # always works
+docker compose up -d --build admin-console   # also works — verified end-to-end
+docker compose build backend frontend-web recommendation noshow nlp  # all fail today, see below
+docker compose logs -f <service>
+docker compose down [-v]
+docker compose -f docker-compose.production.yml --env-file .env.production up -d   # production stack — the --env-file flag is required, see below
+```
+`build.context` for `backend`/`frontend-web`/`admin-console` in both compose files
+points at each app's own directory (`./spot-backend`, `./spot-frontend-web`,
+`./spot-admin-console`) using a `Dockerfile` that lives inside that directory.
+This used to be broken (paths pointed at a nonexistent `packages/...` layout
+and a since-removed top-level `docker/` folder shared across apps), so
+`docker compose build` failed for every service except `postgres`/`redis`
+even when app code existed — that bug is now fixed and verified with a real
+`docker build` per service:
+- `admin-console` — **builds successfully end-to-end.**
+- `backend` — still fails at `npm ci`: no `package.json` in `spot-backend/` yet.
+- `frontend-web` — gets past `npm ci` now (lockfile added) but fails at
+  `next build`: `src/app/globals.css` doesn't exist, and `tsconfig.json`/
+  `next.config.js`/`tailwind.config.js`/`postcss.config.js` are all missing
+  too. This is an app-scaffold gap, not a Docker problem.
+- `recommendation`/`noshow`/`nlp` — still fail immediately: no `Dockerfile`
+  exists under `spot-ai-services/*/` at all (empty scaffolds).
+
+`docker-compose.production.yml` uses `${DB_USER}`/`${DB_PASSWORD}`/
+`${JWT_SECRET}`/etc. with **no defaults**. Compose only auto-loads a file
+literally named `.env` — `.env.production` is a different name, so those
+vars come back blank unless you pass `--env-file .env.production` explicitly
+(reproduced via `docker compose -f docker-compose.production.yml config`).
+`docker-compose.yml` (dev) doesn't have this problem — its values are
+hard-coded inline.
+See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
+
+## Architecture & Project Structure
 
 ```
 .
-├── PROJECT_RULES.md         # Target architecture & version-lock matrix
-├── package.json             # pnpm workspace root
-├── pnpm-workspace.yaml
-├── infrastructure/docker/   # docker-compose.yml + .env.example
-├── services/
-│   ├── ai-services/         # FastAPI (Python) — Dockerfile + requirements.txt, no app code yet
-│   ├── api-gateway/         # Express — Dockerfile only, no source yet
-│   └── core-api/            # Express/Prisma — Dockerfile only, no source yet
-├── apps/
-│   ├── web-client/          # Next.js — Dockerfile only, no source yet
-│   ├── admin-portal/        # Next.js — Dockerfile only, no source yet
-│   └── mobile-app/          # not yet created (Expo, not containerized)
-└── packages/                # not yet created: shared-types, ui-components, database, redis-client
+├── spot-frontend-web/       # Next.js web app (separate git repo)
+├── spot-frontend-mobile/    # Expo mobile app (separate git repo)
+├── spot-admin-console/      # Vite admin dashboard (separate git repo)
+├── spot-backend/            # Express API — domain-driven src/domains/{auth,booking,venue,payment,matchmaking,referee,review,notification,admin}/
+├── spot-ai-services/        # 3 planned FastAPI microservices (empty scaffolds)
+├── docker-compose.yml               # dev stack — each service builds from its own app's Dockerfile
+├── docker-compose.production.yml    # prod stack
+├── .env.development / .env.production   # compose env files (gitignored, contain placeholders)
+├── PROJECT_RULES.md         # target architecture & version-lock matrix (aspirational, see caveat above)
+├── Docs/ , PA/               # HCMUS course assignment materials — reference only, not app code
 ```
 
-Folder ownership boundaries are defined in `PROJECT_RULES.md` §4.
+**Data flow (target, once backend/AI services exist):**
+`spot-frontend-web` / `spot-frontend-mobile` / `spot-admin-console` → `spot-backend` (REST, port 3000) → PostgreSQL (5432) + Redis (6379). `spot-backend` → AI microservices: recommendation (5001), noshow-prediction (5002), nlp-assistant (5003).
+
+## Code Style & Conventions
+
+Per `PROJECT_RULES.md` §3 (target convention; only `spot-admin-console` has a
+linter declared today — ESLint via `npm run lint`, though no `.eslintrc*` is
+committed yet so it currently fails to run):
+
+- **TS/JS**: ESLint + Prettier, 2 spaces, single quotes, trailing commas.
+- **Python** (once written): PEP8 via `black` (line length 88) + `isort`.
+- **Naming**: `camelCase` functions/variables, `PascalCase` classes/interfaces/components, `UPPER_SNAKE_CASE` constants, `snake_case` DB tables/columns.
+- **Backend layering**: each domain under `spot-backend/src/domains/<name>/` follows `controller/ dto/ entity/ repository/ service/` — match this structure when adding backend code.
+- **Commits**: `<type>(<scope>): <description>` (e.g. `feat(booking): add slot lock`).
+
+## Important Guidelines
+
+- **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — they are independent repositories, not git submodules of this repo. A `git status`/`git commit` at this repo's root does **not** track changes inside them.
+- **`spot-backend` has no `package.json`** — check before assuming any npm command works there.
+- **`spot-ai-services/*` are empty directory scaffolds** — check for `requirements.txt`/app code before assuming a service is implemented.
+- **Env files**: `.env.development` and `.env.production` live at the repo root and are gitignored — never let real credentials get committed; verify `git status` shows them untracked before adding secrets. Note `docker-compose.yml` doesn't actually read `.env.development` (its values are hard-coded inline); `docker-compose.production.yml` does need `.env.production`, but only via an explicit `--env-file` flag — see Docker caveat above.
+- **`Docs/` and `PA/`** hold course assignment materials (requirements docs, PDFs) — reference-only, not part of the running application.
+- **`spot-backend/README.md` has corrupted content**: a chunk of the shell script that originally scaffolded the repo (heredocs, `git commit`, etc.) leaked verbatim into the middle of the file — don't treat that section as instructions to run.
+- Each scaffolded app under `spot-*/` now has its own `CLAUDE.md` with app-specific status — read the relevant one before working in that app.

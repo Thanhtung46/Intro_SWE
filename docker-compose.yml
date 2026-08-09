@@ -1,0 +1,206 @@
+version: '3.8'
+
+services:
+  # ==================== DATABASES ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: spot-postgres
+    environment:
+      POSTGRES_USER: spot_user
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: spot_dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spot_user -d spot_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: spot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spot-network
+
+  # ==================== BACKEND API ====================
+  backend:
+    build:
+      context: ./spot-backend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+    container_name: spot-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: spot_dev
+      DB_USER: spot_user
+      DB_PASSWORD: changeme
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-key-change-in-production
+      VNPAY_API_URL: https://sandbox.vnpayment.vn
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your-key}
+      RECOMMENDATION_SERVICE_URL: http://recommendation:5001
+      NOSHOW_SERVICE_URL: http://noshow:5002
+      NLP_SERVICE_URL: http://nlp:5003
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./spot-backend/src:/app/src
+      - ./spot-backend/tests:/app/tests
+    command: npm run dev
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+  # ==================== FRONTEND WEB ====================
+  frontend-web:
+    build:
+      context: ./spot-frontend-web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    container_name: spot-frontend-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+      NEXT_PUBLIC_ENV: development
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./spot-frontend-web/src:/app/src
+      - ./spot-frontend-web/public:/app/public
+    command: npm run dev
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+  # ==================== ADMIN CONSOLE ====================
+  admin-console:
+    build:
+      context: ./spot-admin-console
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000/api
+    container_name: spot-admin
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_ENV: development
+    ports:
+      - "3002:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./spot-admin-console/src:/app/src
+      - ./spot-admin-console/public:/app/public
+    command: npm run dev
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+  # ==================== AI SERVICES ====================
+  recommendation:
+    build:
+      context: ./spot-ai-services/recommendation
+      dockerfile: Dockerfile
+    container_name: spot-recommendation
+    environment:
+      API_PORT: 5001
+      BACKEND_URL: http://backend:3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: spot_dev
+      DB_USER: spot_user
+      DB_PASSWORD: changeme
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5001:5001"
+    depends_on:
+      - backend
+      - postgres
+    volumes:
+      - ./spot-ai-services/recommendation:/app
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+  noshow:
+    build:
+      context: ./spot-ai-services/noshow-prediction
+      dockerfile: Dockerfile
+    container_name: spot-noshow
+    environment:
+      API_PORT: 5002
+      BACKEND_URL: http://backend:3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: spot_dev
+      DB_USER: spot_user
+      DB_PASSWORD: changeme
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "5002:5002"
+    depends_on:
+      - backend
+      - postgres
+    volumes:
+      - ./spot-ai-services/noshow-prediction:/app
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+  nlp:
+    build:
+      context: ./spot-ai-services/nlp-assistant
+      dockerfile: Dockerfile
+    container_name: spot-nlp
+    environment:
+      API_PORT: 5003
+      BACKEND_URL: http://backend:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your-key}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-your-key}
+    ports:
+      - "5003:5003"
+    depends_on:
+      - backend
+    volumes:
+      - ./spot-ai-services/nlp-assistant:/app
+    networks:
+      - spot-network
+    restart: unless-stopped
+
+networks:
+  spot-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
