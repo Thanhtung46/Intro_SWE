@@ -1,7 +1,6 @@
-version: '3.8'
-
 services:
   postgres:
+    profiles: ["local-db"]
     image: postgres:15-alpine
     container_name: spot-postgres-prod
     environment:
@@ -46,11 +45,14 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: postgres
-      DB_PORT: 5432
+      DATABASE_URL: ${DATABASE_URL:-}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSL: ${DB_SSL:-true}
+      DB_POOL_MAX: ${DB_POOL_MAX:-5}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET}
@@ -62,8 +64,6 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -109,8 +109,8 @@ services:
     environment:
       API_PORT: 5001
       BACKEND_URL: http://backend:3000
-      DB_HOST: postgres
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -120,7 +120,6 @@ services:
       - "5001:5001"
     depends_on:
       - backend
-      - postgres
     networks:
       - spot-network-prod
     restart: always
@@ -132,8 +131,8 @@ services:
     environment:
       API_PORT: 5002
       BACKEND_URL: http://backend:3000
-      DB_HOST: postgres
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -143,7 +142,6 @@ services:
       - "5002:5002"
     depends_on:
       - backend
-      - postgres
     networks:
       - spot-network-prod
     restart: always

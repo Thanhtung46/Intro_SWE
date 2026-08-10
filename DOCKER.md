@@ -25,6 +25,22 @@ SPOT Platform is containerized with Docker. All services can run together using 
 - Docker Compose (v2.0+)
 - 8GB RAM (minimum)
 - Git
+- Supabase project credentials in `spot-backend/.env` (default DB for backend)
+
+### Database: Supabase (default)
+
+Backend reads `DB_*` / `DB_SSL` from [`spot-backend/.env`](spot-backend/.env) (Session pooler). Local Postgres is **not** started unless you opt in.
+
+```bash
+# Redis + backend (Supabase)
+docker compose up -d --build redis backend
+
+# Optional: run migrations inside the backend container
+docker compose run --rm backend npm run migrate
+
+# Optional local Postgres instead
+docker compose --profile local-db up -d postgres
+```
 
 ### Quick Start
 
