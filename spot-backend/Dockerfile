@@ -13,6 +13,7 @@ RUN npm ci
 COPY src ./src
 COPY tests ./tests
 COPY migrations ./migrations
+COPY scripts ./scripts
 
 # Stage 2: Production image
 FROM node:18-alpine
@@ -31,6 +32,7 @@ RUN npm ci --only=production
 # Copy application code from builder
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/scripts ./scripts
 
 # Create .env.example
 COPY .env.example ./.env.example
@@ -40,7 +42,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD npm run health-check || exit 1
 
 # Use dumb-init to handle signals properly
-ENTRYPOINT ["/usr/sbin/dumb-init", "--"]
+ENTRYPOINT ["dumb-init", "--"]
 
 EXPOSE 3000
 
