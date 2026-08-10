@@ -1,10 +1,22 @@
 export async function findByEmail(client, email) {
   const { rows } = await client.query(
-    `SELECT user_id, email, phone_number, role, status
+    `SELECT user_id, email, phone_number, role, status, email_verified_at
      FROM schema_auth.users
      WHERE lower(email) = lower($1)
      LIMIT 1`,
     [email],
+  );
+  return rows[0] || null;
+}
+
+export async function markEmailVerified(client, userId) {
+  const { rows } = await client.query(
+    `UPDATE schema_auth.users
+     SET email_verified_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1
+     RETURNING user_id, email, email_verified_at`,
+    [userId],
   );
   return rows[0] || null;
 }

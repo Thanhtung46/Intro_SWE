@@ -25,4 +25,13 @@ export const OTP_PURPOSES = Object.freeze({
 
 export const OTP_TTL_SECONDS = Number(process.env.OTP_TTL_SECONDS) || 300;
 
+export const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS) || 5;
+
+export const OTP_RESEND_COOLDOWN_SECONDS =
+  Number(process.env.OTP_RESEND_COOLDOWN_SECONDS) || 60;
+
 export const OTP_EMAIL_REDIS_PREFIX = 'otp:email:';
+
+export const OTP_ATTEMPTS_REDIS_PREFIX = 'otp:attempts:';
+
+export const OTP_RESEND_REDIS_PREFIX = 'otp:resend:';
