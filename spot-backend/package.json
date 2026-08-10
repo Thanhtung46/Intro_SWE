@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "migrate": "node scripts/migrate.js",
     "smoke:otp": "node scripts/smoke-otp-flow.js",
+    "smoke:login": "node scripts/smoke-login.js",
     "health-check": "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
     "test": "node --test tests/unit/*.test.js"
   },

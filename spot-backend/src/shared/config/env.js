@@ -50,7 +50,8 @@ const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET,
-    expiry: process.env.JWT_EXPIRY,
+    expiry: process.env.JWT_EXPIRY || '15m',
+    refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
   },
 
   otp: {

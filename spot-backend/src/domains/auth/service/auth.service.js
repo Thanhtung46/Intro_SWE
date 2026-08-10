@@ -10,13 +10,20 @@ import {
   OTP_EMAIL_REDIS_PREFIX,
   OTP_ATTEMPTS_REDIS_PREFIX,
   OTP_RESEND_REDIS_PREFIX,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_LOCKOUT_MINUTES,
 } from '../../../shared/constants/auth.js';
-import { hashPassword } from '../../../shared/utils/password.js';
+import { hashPassword, verifyPassword } from '../../../shared/utils/password.js';
 import {
   generateOtpCode,
   hashOtpCode,
   verifyOtpCode,
 } from '../../../shared/utils/otp.js';
+import {
+  signAccessToken,
+  signRefreshToken,
+  getAccessTokenTtlSeconds,
+} from '../../../shared/utils/jwt.js';
 import { sendOtpEmail } from '../../../shared/utils/mailer.js';
 import logger from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
@@ -191,9 +198,10 @@ export async function registerPlayer(input) {
   const publicUser = toPublicUser(user);
   return withDebugOtp(
     {
-      message: 'Registration successful. Please verify the OTP sent to your email.',
+      message: 'Registration successful. Please select your role, then verify OTP.',
       userId: publicUser.userId,
       email: publicUser.email,
+      nextStep: 'SELECT_ROLE',
     },
     otpPlain,
   );
@@ -341,6 +349,130 @@ export async function resendOtp(input) {
       },
       otpPlain,
     );
+  } finally {
+    client.release();
+  }
+}
+
+export async function login(input) {
+  const email = input.email.toLowerCase();
+  const client = await pool.connect();
+
+  try {
+    const user = await userRepository.findAuthByEmail(client, email);
+    if (!user) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    if (user.status === USER_STATUSES.LOCKED) {
+      throw new AppError('Account is locked. Please contact support.', 403);
+    }
+
+    if (user.status === USER_STATUSES.PENDING) {
+      throw new AppError(
+        'Account is pending approval and cannot log in yet.',
+        403,
+      );
+    }
+
+    if (user.lockout_until && new Date(user.lockout_until) > new Date()) {
+      throw new AppError('Account temporarily locked. Try again later.', 403, {
+        lockoutUntil: user.lockout_until,
+      });
+    }
+
+    if (!user.email_verified_at) {
+      throw new AppError('Email is not verified. Please verify OTP first.', 403);
+    }
+
+    if (!user.role_selected_at) {
+      throw new AppError('Please select your role to continue.', 403, {
+        nextStep: 'SELECT_ROLE',
+      });
+    }
+
+    const passwordOk = await verifyPassword(user.password_hash, input.password);
+    if (!passwordOk) {
+      const nextAttempts = Number(user.login_attempts || 0) + 1;
+      let lockoutUntil = null;
+      if (nextAttempts >= LOGIN_MAX_ATTEMPTS) {
+        lockoutUntil = new Date(
+          Date.now() + LOGIN_LOCKOUT_MINUTES * 60 * 1000,
+        );
+      }
+
+      await userRepository.recordFailedLogin(client, user.user_id, {
+        attempts: nextAttempts >= LOGIN_MAX_ATTEMPTS ? 0 : nextAttempts,
+        lockoutUntil,
+      });
+
+      if (lockoutUntil) {
+        throw new AppError(
+          `Too many failed attempts. Account locked for ${LOGIN_LOCKOUT_MINUTES} minutes.`,
+          403,
+          { lockoutUntil },
+        );
+      }
+
+      throw new AppError('Invalid email or password', 401, {
+        attemptsRemaining: LOGIN_MAX_ATTEMPTS - nextAttempts,
+      });
+    }
+
+    await userRepository.resetLoginState(client, user.user_id);
+
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    return {
+      message: 'Login successful',
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: getAccessTokenTtlSeconds(),
+      user: toPublicUser(user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function selectRole(input) {
+  const email = input.email.toLowerCase();
+  const role = input.role;
+  const client = await pool.connect();
+
+  try {
+    const user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (user.role_selected_at) {
+      throw new AppError('Role has already been selected', 409, {
+        role: user.role,
+        status: user.status,
+      });
+    }
+
+    const status =
+      role === USER_ROLES.PLAYER
+        ? USER_STATUSES.ACTIVE
+        : USER_STATUSES.PENDING;
+
+    const updated = await userRepository.selectRole(client, user.user_id, {
+      role,
+      status,
+    });
+
+    return {
+      message:
+        status === USER_STATUSES.PENDING
+          ? 'Role selected. Account is pending approval.'
+          : 'Role selected successfully',
+      nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
+      user: toPublicUser(updated),
+    };
   } finally {
     client.release();
   }

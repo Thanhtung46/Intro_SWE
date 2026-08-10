@@ -5,6 +5,13 @@ export const USER_ROLES = Object.freeze({
   ADMIN: 'ADMIN',
 });
 
+/** Roles a user may choose during Register Step 2 (not ADMIN). */
+export const SELECTABLE_ROLES = Object.freeze([
+  USER_ROLES.PLAYER,
+  USER_ROLES.OWNER,
+  USER_ROLES.REFEREE,
+]);
+
 export const USER_STATUSES = Object.freeze({
   ACTIVE: 'ACTIVE',
   PENDING: 'PENDING',
@@ -35,3 +42,8 @@ export const OTP_EMAIL_REDIS_PREFIX = 'otp:email:';
 export const OTP_ATTEMPTS_REDIS_PREFIX = 'otp:attempts:';
 
 export const OTP_RESEND_REDIS_PREFIX = 'otp:resend:';
+
+export const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS) || 5;
+
+export const LOGIN_LOCKOUT_MINUTES =
+  Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15;
