@@ -50,11 +50,28 @@ const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET,
-    expiry: process.env.JWT_EXPIRY,
+    expiry: process.env.JWT_EXPIRY || '15m',
+    refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
   },
 
   otp: {
     ttlSeconds: Number(process.env.OTP_TTL_SECONDS) || 300,
+    debug:
+      process.env.OTP_DEBUG === 'true' || process.env.OTP_DEBUG === '1',
+  },
+
+  smtp: {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure:
+      process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1',
+    user: (process.env.SMTP_USER || '').trim(),
+    pass: (process.env.SMTP_PASS || '').trim(),
+    from: (
+      process.env.EMAIL_FROM ||
+      process.env.SMTP_USER ||
+      'SPOT <noreply@spot.local>'
+    ).trim(),
   },
 };
 

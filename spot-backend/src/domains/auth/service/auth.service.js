@@ -5,36 +5,133 @@ import {
   USER_STATUSES,
   OTP_PURPOSES,
   OTP_TTL_SECONDS,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_COOLDOWN_SECONDS,
   OTP_EMAIL_REDIS_PREFIX,
+  OTP_ATTEMPTS_REDIS_PREFIX,
+  OTP_RESEND_REDIS_PREFIX,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_LOCKOUT_MINUTES,
 } from '../../../shared/constants/auth.js';
-import { hashPassword } from '../../../shared/utils/password.js';
-import { generateOtpCode, hashOtpCode } from '../../../shared/utils/otp.js';
+import { hashPassword, verifyPassword } from '../../../shared/utils/password.js';
+import {
+  generateOtpCode,
+  hashOtpCode,
+  verifyOtpCode,
+} from '../../../shared/utils/otp.js';
+import {
+  signAccessToken,
+  signRefreshToken,
+  getAccessTokenTtlSeconds,
+} from '../../../shared/utils/jwt.js';
+import { sendOtpEmail } from '../../../shared/utils/mailer.js';
 import logger from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
 import * as userRepository from '../repository/user.repository.js';
 import * as otpRepository from '../repository/otp.repository.js';
 import { toPublicUser } from '../entity/user.entity.js';
+import config from '../../../shared/config/env.js';
 
-async function queueOtpEmail({ userId, email, otp, purpose }) {
-  const key = `${OTP_EMAIL_REDIS_PREFIX}${userId}`;
-  const payload = JSON.stringify({
+async function ensureRedis() {
+  if (redis.status === 'ready') {
+    return;
+  }
+  if (redis.status === 'connecting' || redis.status === 'connect') {
+    return;
+  }
+  if (redis.status === 'wait' || redis.status === 'end' || redis.status === 'close') {
+    await redis.connect();
+  }
+}
+
+function attemptsKey(email, purpose) {
+  return `${OTP_ATTEMPTS_REDIS_PREFIX}${email.toLowerCase()}:${purpose}`;
+}
+
+function resendKey(email, purpose) {
+  return `${OTP_RESEND_REDIS_PREFIX}${email.toLowerCase()}:${purpose}`;
+}
+
+function withDebugOtp(payload, otp) {
+  if (config.otp.debug && config.node_env !== 'production') {
+    return { ...payload, debugOtp: otp };
+  }
+  return payload;
+}
+
+async function deliverOtpEmail({ email, otp, purpose }) {
+  await sendOtpEmail({
     email,
     otp,
     purpose,
-    userId,
-    queuedAt: new Date().toISOString(),
+    ttlSeconds: OTP_TTL_SECONDS,
   });
+}
 
+async function getAttemptCount(email, purpose) {
   try {
-    if (redis.status === 'wait') {
-      await redis.connect();
-    }
-    await redis.set(key, payload, 'EX', OTP_TTL_SECONDS);
+    await ensureRedis();
+    const raw = await redis.get(attemptsKey(email, purpose));
+    return Number(raw) || 0;
   } catch (err) {
-    logger.warn('Failed to queue OTP email in Redis', {
-      userId,
-      error: err.message,
-    });
+    logger.warn('Failed to read OTP attempt count', { error: err.message });
+    return 0;
+  }
+}
+
+async function incrementAttemptCount(email, purpose) {
+  try {
+    await ensureRedis();
+    const key = attemptsKey(email, purpose);
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, OTP_TTL_SECONDS);
+    }
+    return count;
+  } catch (err) {
+    logger.warn('Failed to increment OTP attempt count', { error: err.message });
+    return 0;
+  }
+}
+
+async function clearOtpRedisState(userId, email, purpose) {
+  try {
+    await ensureRedis();
+    await redis.del(
+      `${OTP_EMAIL_REDIS_PREFIX}${userId}`,
+      attemptsKey(email, purpose),
+    );
+  } catch (err) {
+    logger.warn('Failed to clear OTP Redis state', { error: err.message });
+  }
+}
+
+async function assertResendAllowed(email, purpose) {
+  try {
+    await ensureRedis();
+    const ttl = await redis.ttl(resendKey(email, purpose));
+    if (ttl > 0) {
+      throw new AppError('Please wait before requesting a new OTP', 429, {
+        retryAfterSeconds: ttl,
+      });
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    logger.warn('Failed to check OTP resend cooldown', { error: err.message });
+  }
+}
+
+async function setResendCooldown(email, purpose) {
+  try {
+    await ensureRedis();
+    await redis.set(
+      resendKey(email, purpose),
+      '1',
+      'EX',
+      OTP_RESEND_COOLDOWN_SECONDS,
+    );
+  } catch (err) {
+    logger.warn('Failed to set OTP resend cooldown', { error: err.message });
   }
 }
 
@@ -91,17 +188,292 @@ export async function registerPlayer(input) {
     client.release();
   }
 
-  await queueOtpEmail({
-    userId: user.user_id,
+  await deliverOtpEmail({
     email: user.email,
     otp: otpPlain,
     purpose: OTP_PURPOSES.REGISTER,
   });
+  await setResendCooldown(user.email, OTP_PURPOSES.REGISTER);
 
   const publicUser = toPublicUser(user);
-  return {
-    message: 'Registration successful. Please verify the OTP sent to your email.',
-    userId: publicUser.userId,
-    email: publicUser.email,
-  };
+  return withDebugOtp(
+    {
+      message: 'Registration successful. Please select your role, then verify OTP.',
+      userId: publicUser.userId,
+      email: publicUser.email,
+      nextStep: 'SELECT_ROLE',
+    },
+    otpPlain,
+  );
+}
+
+export async function verifyOtp(input) {
+  const email = input.email.toLowerCase();
+  const purpose = input.purpose || OTP_PURPOSES.REGISTER;
+
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (user.email_verified_at) {
+      return {
+        message: 'Email already verified',
+        email: user.email,
+      };
+    }
+
+    const attempts = await getAttemptCount(email, purpose);
+    if (attempts >= OTP_MAX_ATTEMPTS) {
+      throw new AppError(
+        'Too many invalid OTP attempts. Please request a new code.',
+        429,
+      );
+    }
+
+    const otpRow = await otpRepository.findLatestActiveOtp(client, {
+      userId: user.user_id,
+      purpose,
+    });
+    if (!otpRow) {
+      throw new AppError('OTP expired or not found. Please request a new code.', 400);
+    }
+
+    const valid = await verifyOtpCode(otpRow.otp_code, input.otp);
+    if (!valid) {
+      const nextAttempts = await incrementAttemptCount(email, purpose);
+      if (nextAttempts >= OTP_MAX_ATTEMPTS) {
+        await otpRepository.invalidateUnusedOtps(client, {
+          userId: user.user_id,
+          purpose,
+        });
+        throw new AppError(
+          'Too many invalid OTP attempts. Please request a new code.',
+          429,
+        );
+      }
+      throw new AppError('Invalid OTP', 400, {
+        attemptsRemaining: OTP_MAX_ATTEMPTS - nextAttempts,
+      });
+    }
+
+    await client.query('BEGIN');
+    try {
+      await otpRepository.markOtpUsed(client, otpRow.otp_id);
+      await otpRepository.invalidateUnusedOtps(client, {
+        userId: user.user_id,
+        purpose,
+      });
+      await userRepository.markEmailVerified(client, user.user_id);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    await clearOtpRedisState(user.user_id, email, purpose);
+
+    return {
+      message: 'Email verified successfully',
+      email: user.email,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function resendOtp(input) {
+  const email = input.email.toLowerCase();
+  const purpose = input.purpose || OTP_PURPOSES.REGISTER;
+
+  const client = await pool.connect();
+  let user;
+
+  try {
+    user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (user.email_verified_at) {
+      throw new AppError('Email already verified', 400);
+    }
+
+    await assertResendAllowed(email, purpose);
+
+    const otpPlain = generateOtpCode(6);
+    const otpCodeHash = await hashOtpCode(otpPlain);
+    const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+
+    await client.query('BEGIN');
+    try {
+      await otpRepository.invalidateUnusedOtps(client, {
+        userId: user.user_id,
+        purpose,
+      });
+
+      await otpRepository.createOtpVerification(client, {
+        userId: user.user_id,
+        otpCodeHash,
+        expiresAt,
+        purpose,
+      });
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    try {
+      await ensureRedis();
+      await redis.del(attemptsKey(email, purpose));
+    } catch (err) {
+      logger.warn('Failed to reset OTP attempt count', { error: err.message });
+    }
+
+    await deliverOtpEmail({
+      email: user.email,
+      otp: otpPlain,
+      purpose,
+    });
+    await setResendCooldown(email, purpose);
+
+    return withDebugOtp(
+      {
+        message: 'A new OTP has been sent to your email',
+        email: user.email,
+        resendAvailableInSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      },
+      otpPlain,
+    );
+  } finally {
+    client.release();
+  }
+}
+
+export async function login(input) {
+  const email = input.email.toLowerCase();
+  const client = await pool.connect();
+
+  try {
+    const user = await userRepository.findAuthByEmail(client, email);
+    if (!user) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    if (user.status === USER_STATUSES.LOCKED) {
+      throw new AppError('Account is locked. Please contact support.', 403);
+    }
+
+    if (user.status === USER_STATUSES.PENDING) {
+      throw new AppError(
+        'Account is pending approval and cannot log in yet.',
+        403,
+      );
+    }
+
+    if (user.lockout_until && new Date(user.lockout_until) > new Date()) {
+      throw new AppError('Account temporarily locked. Try again later.', 403, {
+        lockoutUntil: user.lockout_until,
+      });
+    }
+
+    if (!user.email_verified_at) {
+      throw new AppError('Email is not verified. Please verify OTP first.', 403);
+    }
+
+    if (!user.role_selected_at) {
+      throw new AppError('Please select your role to continue.', 403, {
+        nextStep: 'SELECT_ROLE',
+      });
+    }
+
+    const passwordOk = await verifyPassword(user.password_hash, input.password);
+    if (!passwordOk) {
+      const nextAttempts = Number(user.login_attempts || 0) + 1;
+      let lockoutUntil = null;
+      if (nextAttempts >= LOGIN_MAX_ATTEMPTS) {
+        lockoutUntil = new Date(
+          Date.now() + LOGIN_LOCKOUT_MINUTES * 60 * 1000,
+        );
+      }
+
+      await userRepository.recordFailedLogin(client, user.user_id, {
+        attempts: nextAttempts >= LOGIN_MAX_ATTEMPTS ? 0 : nextAttempts,
+        lockoutUntil,
+      });
+
+      if (lockoutUntil) {
+        throw new AppError(
+          `Too many failed attempts. Account locked for ${LOGIN_LOCKOUT_MINUTES} minutes.`,
+          403,
+          { lockoutUntil },
+        );
+      }
+
+      throw new AppError('Invalid email or password', 401, {
+        attemptsRemaining: LOGIN_MAX_ATTEMPTS - nextAttempts,
+      });
+    }
+
+    await userRepository.resetLoginState(client, user.user_id);
+
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    return {
+      message: 'Login successful',
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: getAccessTokenTtlSeconds(),
+      user: toPublicUser(user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function selectRole(input) {
+  const email = input.email.toLowerCase();
+  const role = input.role;
+  const client = await pool.connect();
+
+  try {
+    const user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (user.role_selected_at) {
+      throw new AppError('Role has already been selected', 409, {
+        role: user.role,
+        status: user.status,
+      });
+    }
+
+    const status =
+      role === USER_ROLES.PLAYER
+        ? USER_STATUSES.ACTIVE
+        : USER_STATUSES.PENDING;
+
+    const updated = await userRepository.selectRole(client, user.user_id, {
+      role,
+      status,
+    });
+
+    return {
+      message:
+        status === USER_STATUSES.PENDING
+          ? 'Role selected. Account is pending approval.'
+          : 'Role selected successfully',
+      nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
+      user: toPublicUser(updated),
+    };
+  } finally {
+    client.release();
+  }
 }
