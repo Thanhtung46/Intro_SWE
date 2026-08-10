@@ -477,3 +477,142 @@ export async function selectRole(input) {
     client.release();
   }
 }
+
+const FORGOT_PASSWORD_GENERIC_MESSAGE =
+  'If an account exists for this email, an OTP has been sent.';
+
+export async function forgotPassword(input) {
+  const email = input.email.toLowerCase();
+  const purpose = OTP_PURPOSES.FORGOT_PASSWORD;
+  const generic = { message: FORGOT_PASSWORD_GENERIC_MESSAGE };
+
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      return generic;
+    }
+
+    await assertResendAllowed(email, purpose);
+
+    const otpPlain = generateOtpCode(6);
+    const otpCodeHash = await hashOtpCode(otpPlain);
+    const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+
+    await client.query('BEGIN');
+    try {
+      await otpRepository.invalidateUnusedOtps(client, {
+        userId: user.user_id,
+        purpose,
+      });
+
+      await otpRepository.createOtpVerification(client, {
+        userId: user.user_id,
+        otpCodeHash,
+        expiresAt,
+        purpose,
+      });
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    try {
+      await ensureRedis();
+      await redis.del(attemptsKey(email, purpose));
+    } catch (err) {
+      logger.warn('Failed to reset OTP attempt count', { error: err.message });
+    }
+
+    await deliverOtpEmail({
+      email: user.email,
+      otp: otpPlain,
+      purpose,
+    });
+    await setResendCooldown(email, purpose);
+
+    return withDebugOtp(generic, otpPlain);
+  } finally {
+    client.release();
+  }
+}
+
+export async function resetPassword(input) {
+  const email = input.email.toLowerCase();
+  const purpose = OTP_PURPOSES.FORGOT_PASSWORD;
+  const invalidOtpMessage = 'Invalid or expired OTP';
+
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findByEmail(client, email);
+    if (!user) {
+      throw new AppError(invalidOtpMessage, 400);
+    }
+
+    const attempts = await getAttemptCount(email, purpose);
+    if (attempts >= OTP_MAX_ATTEMPTS) {
+      throw new AppError(
+        'Too many invalid OTP attempts. Please request a new code.',
+        429,
+      );
+    }
+
+    const otpRow = await otpRepository.findLatestActiveOtp(client, {
+      userId: user.user_id,
+      purpose,
+    });
+    if (!otpRow) {
+      throw new AppError(invalidOtpMessage, 400);
+    }
+
+    const valid = await verifyOtpCode(otpRow.otp_code, input.otp);
+    if (!valid) {
+      const nextAttempts = await incrementAttemptCount(email, purpose);
+      if (nextAttempts >= OTP_MAX_ATTEMPTS) {
+        await otpRepository.invalidateUnusedOtps(client, {
+          userId: user.user_id,
+          purpose,
+        });
+        throw new AppError(
+          'Too many invalid OTP attempts. Please request a new code.',
+          429,
+        );
+      }
+      throw new AppError(invalidOtpMessage, 400, {
+        attemptsRemaining: OTP_MAX_ATTEMPTS - nextAttempts,
+      });
+    }
+
+    const passwordHash = await hashPassword(input.newPassword);
+
+    await client.query('BEGIN');
+    try {
+      await otpRepository.markOtpUsed(client, otpRow.otp_id);
+      await otpRepository.invalidateUnusedOtps(client, {
+        userId: user.user_id,
+        purpose,
+      });
+      await userRepository.updatePasswordHash(
+        client,
+        user.user_id,
+        passwordHash,
+      );
+      await userRepository.resetLoginState(client, user.user_id);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    await clearOtpRedisState(user.user_id, email, purpose);
+
+    return {
+      message: 'Password has been reset successfully. You can now log in.',
+      email: user.email,
+    };
+  } finally {
+    client.release();
+  }
+}

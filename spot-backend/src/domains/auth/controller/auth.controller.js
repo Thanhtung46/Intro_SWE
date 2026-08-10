@@ -2,6 +2,10 @@ import { parseRegisterDto } from '../dto/register.dto.js';
 import { parseVerifyOtpDto, parseResendOtpDto } from '../dto/otp.dto.js';
 import { parseLoginDto } from '../dto/login.dto.js';
 import { parseSelectRoleDto } from '../dto/role.dto.js';
+import {
+  parseForgotPasswordDto,
+  parseResetPasswordDto,
+} from '../dto/forgot-password.dto.js';
 import * as authService from '../service/auth.service.js';
 
 export async function register(req, res, next) {
@@ -48,6 +52,26 @@ export async function selectRole(req, res, next) {
   try {
     const dto = parseSelectRoleDto(req.body);
     const result = await authService.selectRole(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const dto = parseForgotPasswordDto(req.body);
+    const result = await authService.forgotPassword(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const dto = parseResetPasswordDto(req.body);
+    const result = await authService.resetPassword(dto);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

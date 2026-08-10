@@ -52,6 +52,18 @@ export async function resetLoginState(client, userId) {
   return rows[0] || null;
 }
 
+export async function updatePasswordHash(client, userId, passwordHash) {
+  const { rows } = await client.query(
+    `UPDATE schema_auth.users
+     SET password_hash = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1
+     RETURNING user_id, email`,
+    [userId, passwordHash],
+  );
+  return rows[0] || null;
+}
+
 export async function markEmailVerified(client, userId) {
   const { rows } = await client.query(
     `UPDATE schema_auth.users
