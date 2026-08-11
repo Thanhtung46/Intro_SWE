@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     // Larger than slide 1/3 to match the mockup's w-20 h-20 button here.
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
