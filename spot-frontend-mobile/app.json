@@ -7,7 +7,17 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/Logo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
     ],
     "platforms": [
       "ios",
