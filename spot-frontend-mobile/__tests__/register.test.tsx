@@ -47,6 +47,19 @@ describe('RegisterScreen (mocked authService via USE_MOCK_API)', () => {
     expect(mockPush).not.toHaveBeenCalled();
   }, 10000);
 
+  it('shows a 400 field validation error under the matching field, mapped from the backend field name', async () => {
+    const { getByPlaceholderText, getByText, getByTestId } = render(<RegisterScreen />);
+    fillValidForm(getByPlaceholderText, 'invalid-phone@example.com');
+
+    fireEvent.press(getByTestId('register-button'));
+
+    await waitFor(
+      () => expect(getByText('Phone number must be 10–15 digits (optional leading +)')).toBeTruthy(),
+      { timeout: 3000 }
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  }, 10000);
+
   it('navigates to /auth/otp on a successful registration', async () => {
     const { getByPlaceholderText, getByText, getByTestId } = render(<RegisterScreen />);
     fillValidForm(getByPlaceholderText, 'new-user@example.com');

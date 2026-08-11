@@ -59,11 +59,12 @@ export default function RegisterScreen() {
     setErrors({});
     setSubmitting(true);
     const response = await register({
-      name: result.data.name,
+      fullName: result.data.name,
       email: result.data.email,
-      phone: result.data.phone || undefined,
+      phoneNumber: result.data.phone || undefined,
       gender: result.data.gender,
       password: result.data.password,
+      confirmPassword: result.data.confirmPassword,
     });
     setSubmitting(false);
 
