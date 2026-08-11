@@ -50,6 +50,13 @@ const client: AxiosInstance = axios.create();
 //   otp "000000"               -> verify always fails (400, attemptsRemaining counts down per call, then 429)
 //   email "locked@example.com" -> verify/resend returns 429 immediately (out of attempts already)
 //   resend                     -> always succeeds and resets the mocked attempt counter for that email
+//
+// Manual QA trigger convention for the Login screen while mocked:
+//   password "wrongpass"            -> 401, invalid credentials
+//   email "locked@example.com"      -> 403, account permanently locked
+//   email "pending@example.com"     -> 403, account pending approval
+//   email "noselectrole@example.com"-> 403, role not selected yet (SELECT_ROLE)
+//   any other email/password        -> 200 success with a fake JWT + user object
 if (USE_MOCK_API) {
   const mock = new MockAdapter(client, { delayResponse: 1000 });
   const mockOtpAttempts = new Map<string, number>();
@@ -112,6 +119,49 @@ if (USE_MOCK_API) {
     return [
       200,
       { message: 'A new OTP has been sent to your email', email: body.email, resendAvailableInSeconds: 60 },
+    ];
+  });
+
+  mock.onPost(`${API_URL}/auth/login`).reply((config) => {
+    const body = JSON.parse(config.data) as { email: string; password: string };
+
+    if (body.email === 'locked@example.com') {
+      return [403, { message: 'Account is locked. Please contact support.' }];
+    }
+
+    if (body.email === 'pending@example.com') {
+      return [403, { message: 'Account is pending approval and cannot log in yet.' }];
+    }
+
+    if (body.email === 'noselectrole@example.com') {
+      return [
+        403,
+        { message: 'Please select your role to continue.', details: { nextStep: 'SELECT_ROLE' } },
+      ];
+    }
+
+    if (body.password === 'wrongpass') {
+      return [401, { message: 'Invalid email or password', details: { attemptsRemaining: 4 } }];
+    }
+
+    return [
+      200,
+      {
+        message: 'Login successful',
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+        tokenType: 'Bearer',
+        expiresIn: 900,
+        user: {
+          userId: 'mock-user-id-001',
+          email: body.email,
+          fullName: 'Mock User',
+          role: 'PLAYER',
+          status: 'ACTIVE',
+          roleSelected: true,
+          emailVerified: true,
+        },
+      },
     ];
   });
 }
@@ -235,5 +285,88 @@ export async function resendOtp(
     }
 
     return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginUser {
+  userId?: string;
+  email?: string;
+  fullName?: string;
+  phoneNumber?: string;
+  role?: string;
+  status?: string;
+  roleSelected?: boolean;
+  emailVerified?: boolean;
+}
+
+export interface LoginResult {
+  success: boolean;
+  message?: string;
+  attemptsRemaining?: number;
+  accessToken?: string;
+  refreshToken?: string;
+  user?: LoginUser;
+}
+
+interface LoginErrorBody {
+  message?: string;
+  errors?: { field?: string; message?: string }[];
+  details?: { attemptsRemaining?: number; lockoutUntil?: string; nextStep?: string };
+}
+
+interface LoginSuccessBody {
+  message?: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: LoginUser;
+}
+
+export async function login(payload: LoginPayload): Promise<LoginResult> {
+  try {
+    const res = await client.post<LoginSuccessBody>(`${API_URL}/auth/login`, payload);
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      user: res.data.user,
+    };
+  } catch (err) {
+    const error = err as AxiosError<LoginErrorBody>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    const { status, data } = error.response;
+
+    if (status === 400 && Array.isArray(data?.errors)) {
+      return { success: false, message: data.errors[0]?.message || 'Invalid email or password.' };
+    }
+
+    // "Not selected a role yet" is a setup gap, not a system error — show a friendly message
+    // instead of relaying the backend's technical wording (no "Choose role" screen exists yet).
+    if (status === 403 && data?.details?.nextStep === 'SELECT_ROLE') {
+      return {
+        success: false,
+        message: 'Please finish setting up your account before logging in.',
+      };
+    }
+
+    if (status === 401) {
+      return {
+        success: false,
+        message: data?.message || 'Invalid email or password',
+        attemptsRemaining: data?.details?.attemptsRemaining,
+      };
+    }
+
+    return { success: false, message: data?.message || 'Something went wrong. Please try again.' };
   }
 }

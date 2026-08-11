@@ -8,17 +8,29 @@ interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry'> {
   required?: boolean;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  labelRight?: React.ReactNode;
 }
 
-export function PasswordField({ label, required, error, style, containerStyle, ...inputProps }: PasswordFieldProps) {
+export function PasswordField({
+  label,
+  required,
+  error,
+  style,
+  containerStyle,
+  labelRight,
+  ...inputProps
+}: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
 
   return (
     <View style={[styles.container, containerStyle]}>
-      <Text style={styles.label}>
-        {label}
-        {required ? <Text style={styles.required}> *</Text> : null}
-      </Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>
+          {label}
+          {required ? <Text style={styles.required}> *</Text> : null}
+        </Text>
+        {labelRight}
+      </View>
       <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
         <TextInput
           style={[styles.input, style]}
@@ -44,10 +56,15 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   label: {
     fontSize: 14,
     color: colors.text,
-    marginBottom: 6,
   },
   required: {
     color: colors.required,
