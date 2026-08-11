@@ -51,8 +51,8 @@ const registerBody = {
   email,
   phoneNumber,
   gender: 'male',
-  password: 'Password1',
-  confirmPassword: 'Password1',
+  password: 'Password1!',
+  confirmPassword: 'Password1!',
 };
 
 const registered = await post('/auth/register', registerBody);

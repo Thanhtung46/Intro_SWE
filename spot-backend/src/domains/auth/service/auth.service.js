@@ -23,6 +23,7 @@ import {
   signAccessToken,
   signRefreshToken,
   getAccessTokenTtlSeconds,
+  verifyToken,
 } from '../../../shared/utils/jwt.js';
 import { sendOtpEmail } from '../../../shared/utils/mailer.js';
 import logger from '../../../shared/utils/logger.js';
@@ -430,6 +431,69 @@ export async function login(input) {
       refreshToken,
       tokenType: 'Bearer',
       expiresIn: getAccessTokenTtlSeconds(),
+      user: toPublicUser(user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+function assertUserCanHoldSession(user) {
+  if (!user) {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+  if (user.status === USER_STATUSES.LOCKED) {
+    throw new AppError('Account is locked. Please contact support.', 403);
+  }
+  if (user.status === USER_STATUSES.PENDING) {
+    throw new AppError(
+      'Account is pending approval and cannot log in yet.',
+      403,
+    );
+  }
+}
+
+export async function refreshSession(input) {
+  let payload;
+  try {
+    payload = verifyToken(input.refreshToken);
+  } catch {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+
+  if (payload.type !== 'refresh' || !payload.sub) {
+    throw new AppError('Invalid or expired refresh token', 401);
+  }
+
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, payload.sub);
+    assertUserCanHoldSession(user);
+
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    return {
+      message: 'Token refreshed',
+      accessToken,
+      refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: getAccessTokenTtlSeconds(),
+      user: toPublicUser(user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function getCurrentUser(userId) {
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    return {
       user: toPublicUser(user),
     };
   } finally {

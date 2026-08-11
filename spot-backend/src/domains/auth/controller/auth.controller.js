@@ -6,6 +6,7 @@ import {
   parseForgotPasswordDto,
   parseResetPasswordDto,
 } from '../dto/forgot-password.dto.js';
+import { parseRefreshDto } from '../dto/refresh.dto.js';
 import * as authService from '../service/auth.service.js';
 
 export async function register(req, res, next) {
@@ -72,6 +73,25 @@ export async function resetPassword(req, res, next) {
   try {
     const dto = parseResetPasswordDto(req.body);
     const result = await authService.resetPassword(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function refresh(req, res, next) {
+  try {
+    const dto = parseRefreshDto(req.body);
+    const result = await authService.refreshSession(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function me(req, res, next) {
+  try {
+    const result = await authService.getCurrentUser(req.user.userId);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);
