@@ -57,8 +57,8 @@ function RoleCard({ option, selected, onPress }) {
       accessibilityState={{ selected }}
       style={[styles.roleCard, selected && styles.roleCardSelected]}
     >
-      <View style={styles.roleIconCircle}>
-        {option.renderIcon(COLORS.iconColor)}
+      <View style={[styles.roleIconCircle, selected && styles.roleIconCircleSelected]}>
+        {option.renderIcon(selected ? '#FFFFFF' : COLORS.iconColor)}
       </View>
       <Text style={styles.roleTitle}>{option.title}</Text>
       <Text style={styles.roleDescription}>{option.description}</Text>
@@ -226,6 +226,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
+  },
+  roleIconCircleSelected: {
+    backgroundColor: COLORS.iconColor,
   },
   roleTitle: {
     fontSize: 20,
