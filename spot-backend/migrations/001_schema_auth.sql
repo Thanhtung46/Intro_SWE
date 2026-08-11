@@ -1,3 +1,6 @@
+-- Auth schema (canonical). Replaces former 001–005 chain for fresh installs.
+-- Existing DBs that already applied 001–005: no-op (001 filename already recorded).
+
 CREATE SCHEMA IF NOT EXISTS schema_auth;
 
 CREATE TABLE IF NOT EXISTS schema_auth.users (
@@ -14,6 +17,8 @@ CREATE TABLE IF NOT EXISTS schema_auth.users (
     CHECK (status IN ('ACTIVE', 'PENDING', 'LOCKED')),
   login_attempts INT NOT NULL DEFAULT 0,
   lockout_until TIMESTAMP NULL,
+  email_verified_at TIMESTAMP NULL,
+  role_selected_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,3 +36,7 @@ CREATE TABLE IF NOT EXISTS schema_auth.otp_verifications (
 CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_purpose
   ON schema_auth.otp_verifications (user_id, purpose)
   WHERE is_used = FALSE;
+
+-- Drop legacy table if present (from early scaffold).
+DROP TABLE IF EXISTS schema_auth.user_profiles CASCADE;
+DROP TABLE IF EXISTS schema_auth.otp_tokens CASCADE;
