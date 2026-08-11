@@ -1,18 +1,16 @@
 import { useRouter } from 'expo-router';
 
 import OnboardingSlide2 from '../../src/screens/onboarding/OnboardingSlide2';
+import { setOnboardingCompleted } from '../../src/utils/onboardingStorage';
 
 /**
  * "/onboarding/2" — second screen of onboarding (slide 2/3).
- *
- * TODO (rest of SPOT-33):
- * - onSkip: persist `onboarding_completed=true` via AsyncStorage before
- *   navigating, so onboarding isn't shown again on relaunch.
  */
 export default function OnboardingScreen2() {
   const router = useRouter();
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    await setOnboardingCompleted();
     router.replace('/home');
   };
 

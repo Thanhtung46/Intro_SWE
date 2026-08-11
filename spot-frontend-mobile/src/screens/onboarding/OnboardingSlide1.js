@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../../constants/colors';
 import PaginationDots from '../../components/onboarding/PaginationDots';
+import GlassCard from '../../components/onboarding/GlassCard';
+import useFloatingAnimation from '../../hooks/useFloatingAnimation';
 
 const TOTAL_SLIDES = 3;
 const ACTIVE_INDEX = 0;
@@ -18,6 +20,8 @@ const ACTIVE_INDEX = 0;
  * presentation-only and reusable in tests/storybook-style previews.
  */
 export default function OnboardingSlide1({ onSkip, onNext }) {
+  const floatStyle = useFloatingAnimation();
+
   return (
     <LinearGradient
       colors={[colors.gradientStart, colors.gradientEnd]}
@@ -41,20 +45,20 @@ export default function OnboardingSlide1({ onSkip, onNext }) {
 
         {/* Main Content */}
         <View style={styles.mainContent}>
-          <View style={styles.illustrationCard}>
+          <GlassCard style={styles.illustrationCard}>
             <LinearGradient
               colors={[colors.auraStart, colors.auraEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <View style={styles.iconWrapper}>
+            <Animated.View style={[styles.iconWrapper, floatStyle]}>
               <Ionicons name="calendar" size={96} color={colors.primary} />
               <View style={styles.clockBadge}>
                 <Ionicons name="time" size={20} color={colors.white} />
               </View>
-            </View>
-          </View>
+            </Animated.View>
+          </GlassCard>
 
           <View style={styles.textBlock}>
             <Text style={styles.heading}>Instant Booking</Text>
@@ -122,22 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   illustrationCard: {
-    width: '100%',
-    paddingVertical: 72,
     marginBottom: 32,
-    borderRadius: 40,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardBackground,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    // Blue "floating card" shadow from the design.
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 1,
-    shadowRadius: 25,
-    elevation: 10,
   },
   iconWrapper: {
     width: 192,
@@ -179,6 +168,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.bodyText,
     textAlign: 'center',
+    opacity: 0.8,
   },
 
   // Footer

@@ -25,15 +25,20 @@ Administrator flows belong to `spot-admin-console`, not here — see
 `.specify/memory/constitution.md` for the full rationale.
 
 **Status: real screens exist, not an empty scaffold.** Onboarding (ticket
-`SPOT-33`) is implemented: `app/index.js` → `app/onboarding/2.js` →
-`app/onboarding/3.js`, each a thin route delegating to
-`src/screens/onboarding/OnboardingSlide{1,2,3}.js`, plus a shared
-`src/components/onboarding/PaginationDots.js` and `src/constants/colors.js`.
-`app/home.js` and `app/_layout.js` also exist. Everything else under `src/`
-(`components/` beyond onboarding, `config/`, `hooks/`, `services/`,
-`state/`, `types/`, `utils/`) and `app/auth/`, `app/tabs/` are still empty
-placeholders (only a `.gitignore` in each) — check for actual files before
-assuming a screen, route, or service exists beyond what's listed above.
+`SPOT-33`) is implemented and persists past first launch: `app/index.js` →
+`app/onboarding/2.js` → `app/onboarding/3.js`, each a thin route delegating
+to `src/screens/onboarding/OnboardingSlide{1,2,3}.js`, plus shared
+`src/components/onboarding/PaginationDots.js` and `GlassCard.js` (frosted
+illustration card via `expo-blur`), `src/hooks/useFloatingAnimation.js`
+(shared float-in-place animation), `src/utils/onboardingStorage.js`
+(AsyncStorage-backed `onboarding_completed` flag — `app/index.js` checks it
+on mount and skips straight to `/home` if already set), and
+`src/constants/colors.js`. `app/home.js` and `app/_layout.js` also exist.
+Everything else under `src/` (`components/` beyond onboarding, `config/`,
+`services/`, `state/`, `types/`) and `app/auth/`, `app/tabs/` are still
+empty placeholders (only a `.gitignore` in each) — check for actual files
+before assuming a screen, route, or service exists beyond what's listed
+above.
 
 ## Known Gotchas
 
@@ -108,9 +113,11 @@ app/                       # expo-router routes (file-based)
 └── tabs/                   # route group, currently empty (.gitignore placeholder only)
 src/
 ├── screens/onboarding/     # OnboardingSlide1/2/3.js — actual screen UI
-├── components/onboarding/  # PaginationDots.js — shared UI
+├── components/onboarding/  # PaginationDots.js, GlassCard.js — shared UI
+├── hooks/useFloatingAnimation.js   # shared onboarding float animation
+├── utils/onboardingStorage.js      # AsyncStorage onboarding_completed flag
 ├── constants/colors.js     # shared design tokens
-└── config/ hooks/ services/ state/ types/ utils/   # all empty placeholders
+└── config/ services/ state/ types/   # all still empty placeholders
 ```
 
 Convention (see `.claude/rules/code-style.md` for the full version): each

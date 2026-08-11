@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../../constants/colors';
 import PaginationDots from '../../components/onboarding/PaginationDots';
+import GlassCard from '../../components/onboarding/GlassCard';
+import useFloatingAnimation from '../../hooks/useFloatingAnimation';
 
 const TOTAL_SLIDES = 3;
 const ACTIVE_INDEX = 1;
@@ -18,6 +20,29 @@ const ACTIVE_INDEX = 1;
  * presentation-only and reusable in tests/storybook-style previews.
  */
 export default function OnboardingSlide2({ onSkip, onNext }) {
+  const floatStyle = useFloatingAnimation();
+
+  // Slow spinning dashed ring behind the icon, matching the mockup's
+  // `animate-[spin_20s_linear_infinite]` decoration.
+  const rotateValue = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotateValue, {
+        toValue: 1,
+        duration: 20000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotateValue]);
+  const rotateStyle = {
+    transform: [
+      { rotate: rotateValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+    ],
+  };
+
   return (
     <LinearGradient
       colors={[colors.gradientStart, colors.gradientEnd]}
@@ -41,22 +66,23 @@ export default function OnboardingSlide2({ onSkip, onNext }) {
 
         {/* Main Content */}
         <View style={styles.mainContent}>
-          <View style={styles.illustrationCard}>
+          <GlassCard style={styles.illustrationCard}>
             <LinearGradient
               colors={[colors.auraStart, colors.auraEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <View style={styles.ringDecoration}>
+            <Animated.View style={[styles.iconOuterWrapper, floatStyle]}>
+              <Animated.View style={[styles.ringDecoration, rotateStyle]} />
               <View style={styles.iconWrapper}>
                 <Ionicons name="people" size={96} color={colors.primary} />
                 <View style={styles.iconBadge}>
                   <Ionicons name="person-add" size={18} color={colors.white} />
                 </View>
               </View>
-            </View>
-          </View>
+            </Animated.View>
+          </GlassCard>
 
           <View style={styles.textBlock}>
             <Text style={styles.heading}>Connect with Teammates</Text>
@@ -124,31 +150,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   illustrationCard: {
-    width: '100%',
-    paddingVertical: 72,
     marginBottom: 32,
-    borderRadius: 40,
-    overflow: 'hidden',
+  },
+  iconOuterWrapper: {
+    width: 192,
+    height: 192,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cardBackground,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    // Blue "floating card" shadow from the design.
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 1,
-    shadowRadius: 25,
-    elevation: 10,
   },
   ringDecoration: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 1,
-    borderColor: 'rgba(37, 99, 235, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 96,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.ringBorder,
   },
   iconWrapper: {
     width: 160,
@@ -200,9 +215,10 @@ const styles = StyleSheet.create({
     gap: 32,
   },
   actionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    // Larger than slide 1/3 to match the mockup's w-20 h-20 button here.
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
