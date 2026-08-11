@@ -57,9 +57,15 @@ const client: AxiosInstance = axios.create();
 //   email "pending@example.com"     -> 403, account pending approval
 //   email "noselectrole@example.com"-> 403, role not selected yet (SELECT_ROLE)
 //   any other email/password        -> 200 success with a fake JWT + user object
+//
+// Manual QA trigger convention for the Forgot/Reset Password screens while mocked:
+//   forgotPassword -> always 200 with the same generic message (matches real anti-enumeration behavior)
+//   otp "111111"   -> reset always succeeds
+//   otp anything else -> reset always fails (400, attemptsRemaining counts down per call, then 429)
 if (USE_MOCK_API) {
   const mock = new MockAdapter(client, { delayResponse: 1000 });
   const mockOtpAttempts = new Map<string, number>();
+  const mockResetAttempts = new Map<string, number>();
 
   mock.onPost(`${API_URL}/auth/register`).reply((config) => {
     const body = JSON.parse(config.data) as RegisterPayload;
@@ -163,6 +169,28 @@ if (USE_MOCK_API) {
         },
       },
     ];
+  });
+
+  mock.onPost(`${API_URL}/auth/forgot-password`).reply(() => {
+    return [200, { message: 'If an account exists for this email, an OTP has been sent.' }];
+  });
+
+  mock.onPost(`${API_URL}/auth/reset-password`).reply((config) => {
+    const body = JSON.parse(config.data) as { email: string; otp: string };
+
+    if (body.otp === '111111') {
+      mockResetAttempts.delete(body.email);
+      return [200, { message: 'Password has been reset successfully. You can now log in.', email: body.email }];
+    }
+
+    const attempts = (mockResetAttempts.get(body.email) || 0) + 1;
+    mockResetAttempts.set(body.email, attempts);
+    const attemptsRemaining = OTP_MAX_ATTEMPTS - attempts;
+
+    if (attemptsRemaining <= 0) {
+      return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
+    }
+    return [400, { message: 'Invalid or expired OTP', details: { attemptsRemaining } }];
   });
 }
 
@@ -285,6 +313,94 @@ export async function resendOtp(
     }
 
     return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
+}
+
+export interface ForgotPasswordResult {
+  success: boolean;
+  message?: string;
+}
+
+interface ForgotPasswordErrorBody {
+  message?: string;
+  errors?: { field?: string; message?: string }[];
+}
+
+export async function forgotPassword(email: string): Promise<ForgotPasswordResult> {
+  try {
+    const res = await client.post<{ message?: string }>(`${API_URL}/auth/forgot-password`, { email });
+    return { success: true, message: res.data.message };
+  } catch (err) {
+    const error = err as AxiosError<ForgotPasswordErrorBody>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    const { data } = error.response;
+
+    if (Array.isArray(data?.errors)) {
+      return { success: false, message: data.errors[0]?.message || 'Invalid email.' };
+    }
+
+    return { success: false, message: data?.message || 'Something went wrong. Please try again.' };
+  }
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  otp: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface ResetPasswordResult {
+  success: boolean;
+  message?: string;
+  attemptsRemaining?: number;
+  rateLimited?: boolean;
+}
+
+interface ResetPasswordErrorBody {
+  message?: string;
+  errors?: { field?: string; message?: string }[];
+  details?: { attemptsRemaining?: number };
+}
+
+export async function resetPassword(payload: ResetPasswordPayload): Promise<ResetPasswordResult> {
+  try {
+    const res = await client.post<{ message?: string }>(`${API_URL}/auth/reset-password`, payload);
+    return { success: true, message: res.data.message };
+  } catch (err) {
+    const error = err as AxiosError<ResetPasswordErrorBody>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    const { status, data } = error.response;
+
+    if (status === 429) {
+      return {
+        success: false,
+        rateLimited: true,
+        message: data?.message || 'Too many attempts. Please request a new code.',
+      };
+    }
+
+    if (status === 400 && Array.isArray(data?.errors)) {
+      return { success: false, message: data.errors[0]?.message || 'Invalid request.' };
+    }
+
+    if (status === 400) {
+      return {
+        success: false,
+        message: data?.message || 'Invalid or expired OTP',
+        attemptsRemaining: data?.details?.attemptsRemaining,
+      };
+    }
+
+    return { success: false, message: data?.message || 'Something went wrong. Please try again.' };
   }
 }
 

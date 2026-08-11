@@ -9,6 +9,7 @@ interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry'> {
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
   labelRight?: React.ReactNode;
+  leftIcon?: React.ReactNode;
 }
 
 export function PasswordField({
@@ -18,6 +19,7 @@ export function PasswordField({
   style,
   containerStyle,
   labelRight,
+  leftIcon,
   ...inputProps
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
@@ -32,6 +34,7 @@ export function PasswordField({
         {labelRight}
       </View>
       <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
+        {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
         <TextInput
           style={[styles.input, style]}
           placeholderTextColor={colors.placeholder}
@@ -77,6 +80,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     backgroundColor: colors.white,
+  },
+  leftIcon: {
+    marginRight: 8,
   },
   input: {
     flex: 1,

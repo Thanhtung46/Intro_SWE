@@ -7,20 +7,32 @@ interface FormFieldProps extends TextInputProps {
   required?: boolean;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  leftIcon?: React.ReactNode;
 }
 
-export function FormField({ label, required, error, style, containerStyle, ...inputProps }: FormFieldProps) {
+export function FormField({
+  label,
+  required,
+  error,
+  style,
+  containerStyle,
+  leftIcon,
+  ...inputProps
+}: FormFieldProps) {
   return (
     <View style={[styles.container, containerStyle]}>
       <Text style={styles.label}>
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
-      <TextInput
-        style={[styles.input, error ? styles.inputError : null, style]}
-        placeholderTextColor={colors.placeholder}
-        {...inputProps}
-      />
+      <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
+        {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
+        <TextInput
+          style={[styles.input, style]}
+          placeholderTextColor={colors.placeholder}
+          {...inputProps}
+        />
+      </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
@@ -38,15 +50,23 @@ const styles = StyleSheet.create({
   required: {
     color: colors.required,
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
+    backgroundColor: colors.white,
+  },
+  leftIcon: {
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
     paddingVertical: 12,
     fontSize: 15,
     color: colors.text,
-    backgroundColor: colors.white,
   },
   inputError: {
     borderColor: colors.error,
