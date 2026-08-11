@@ -10,3 +10,6 @@ npm-debug.*
 *.orig.*
 web-build/
 .env
+
+.claude/
+.specify/
