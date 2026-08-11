@@ -66,7 +66,14 @@ describe('RegisterScreen (mocked authService via USE_MOCK_API)', () => {
 
     fireEvent.press(getByTestId('register-button'));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/auth/otp'), { timeout: 3000 });
+    await waitFor(
+      () =>
+        expect(mockPush).toHaveBeenCalledWith({
+          pathname: '/auth/otp',
+          params: { email: 'new-user@example.com' },
+        }),
+      { timeout: 3000 }
+    );
   }, 10000);
 
   it('shows validation errors under fields (not an alert) when submitted empty', async () => {

@@ -69,7 +69,7 @@ export default function RegisterScreen() {
     setSubmitting(false);
 
     if (response.success) {
-      router.push('/auth/otp');
+      router.push({ pathname: '/auth/otp', params: { email: result.data.email } });
       return;
     }
 

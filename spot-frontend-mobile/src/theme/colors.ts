@@ -1,6 +1,8 @@
 export const colors = {
   primary: '#2F4CDD',
+  primarySoft: '#E7ECFB',
   background: '#FFFFFF',
+  screenBackground: '#F3F4F6',
   text: '#1A1A1A',
   subtitle: '#6B7280',
   placeholder: '#9CA3AF',
