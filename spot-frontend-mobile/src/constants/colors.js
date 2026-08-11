@@ -7,7 +7,6 @@ export const colors = {
 
   primary: '#2563EB',
   primaryDark: '#004AC6',
-  accentOrange: '#943700',
 
   headingText: '#0B1C30',
   bodyText: '#434655',
@@ -15,7 +14,6 @@ export const colors = {
   dotInactive: '#D1D5DB',
   white: '#FFFFFF',
 
-  cardBackground: 'rgba(255, 255, 255, 0.7)',
   cardBorder: 'rgba(255, 255, 255, 0.4)',
   cardShadow: 'rgba(37, 99, 235, 0.15)',
   // Tint layered over the BlurView so it reads as white glass, not gray blur.

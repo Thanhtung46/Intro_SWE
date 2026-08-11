@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,13 +53,23 @@ export default function OnboardingSlide3({ onSkip, onGetStarted }) {
               style={StyleSheet.absoluteFill}
             />
             <Animated.View style={[styles.iconWrapper, floatStyle]}>
-              <Ionicons name="sparkles" size={96} color={colors.primary} />
-              <View style={[styles.cornerBadge, styles.badgeTopLeft]}>
-                <Ionicons name="flash" size={16} color={colors.accentOrange} />
-              </View>
-              <View style={[styles.cornerBadge, styles.badgeBottomRight]}>
-                <Ionicons name="pulse" size={18} color={colors.primaryDark} />
-              </View>
+              <Image
+                source={require('../../../assets/onboarding/ai-schedule-3d.png')}
+                style={styles.illustrationImage}
+                resizeMode="contain"
+              />
+              {/* "monitoring" badge — top-right, matches the mockup's position */}
+              <Image
+                source={require('../../../assets/onboarding/trending-badge.png')}
+                style={[styles.cornerBadge, styles.badgeTopRight]}
+                resizeMode="contain"
+              />
+              {/* "bolt" badge — bottom-left, matches the mockup's position */}
+              <Image
+                source={require('../../../assets/onboarding/flash-badge.png')}
+                style={[styles.cornerBadge, styles.badgeBottomLeft]}
+                resizeMode="contain"
+              />
             </Animated.View>
           </GlassCard>
 
@@ -133,35 +143,32 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   iconWrapper: {
-    width: 192,
-    height: 192,
+    width: 208,
+    height: 208,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  illustrationImage: {
+    width: '100%',
+    height: '100%',
+  },
   cornerBadge: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardBackground,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    width: 44,
+    height: 44,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 8,
     elevation: 4,
   },
-  badgeTopLeft: {
-    top: 8,
-    left: 8,
-    borderRadius: 12,
+  badgeTopRight: {
+    top: 4,
+    right: -8,
   },
-  badgeBottomRight: {
-    bottom: 8,
-    right: 8,
-    borderRadius: 16,
+  badgeBottomLeft: {
+    bottom: 16,
+    left: -16,
   },
 
   textBlock: {

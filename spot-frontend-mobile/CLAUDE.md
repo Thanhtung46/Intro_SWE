@@ -33,7 +33,10 @@ illustration card via `expo-blur`), `src/hooks/useFloatingAnimation.js`
 (shared float-in-place animation), `src/utils/onboardingStorage.js`
 (AsyncStorage-backed `onboarding_completed` flag — `app/index.js` checks it
 on mount and skips straight to `/home` if already set), and
-`src/constants/colors.js`. `app/home.js` and `app/_layout.js` also exist.
+`src/constants/colors.js`. Illustrations are real cropped PNGs (with
+transparent backgrounds) under `assets/onboarding/`, sliced from the
+`assets/icons.png` sprite sheet — not icon-font approximations. `app/home.js`
+and `app/_layout.js` also exist.
 Everything else under `src/` (`components/` beyond onboarding, `config/`,
 `services/`, `state/`, `types/`) and `app/auth/`, `app/tabs/` are still
 empty placeholders (only a `.gitignore` in each) — check for actual files

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,10 +53,11 @@ export default function OnboardingSlide1({ onSkip, onNext }) {
               style={StyleSheet.absoluteFill}
             />
             <Animated.View style={[styles.iconWrapper, floatStyle]}>
-              <Ionicons name="calendar" size={96} color={colors.primary} />
-              <View style={styles.clockBadge}>
-                <Ionicons name="time" size={20} color={colors.white} />
-              </View>
+              <Image
+                source={require('../../../assets/onboarding/booking-3d.png')}
+                style={styles.illustrationImage}
+                resizeMode="contain"
+              />
             </Animated.View>
           </GlassCard>
 
@@ -129,23 +130,14 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   iconWrapper: {
-    width: 192,
-    height: 192,
+    width: 220,
+    height: 220,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clockBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderWidth: 3,
-    borderColor: colors.white,
+  illustrationImage: {
+    width: '100%',
+    height: '100%',
   },
 
   textBlock: {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -76,10 +76,16 @@ export default function OnboardingSlide2({ onSkip, onNext }) {
             <Animated.View style={[styles.iconOuterWrapper, floatStyle]}>
               <Animated.View style={[styles.ringDecoration, rotateStyle]} />
               <View style={styles.iconWrapper}>
-                <Ionicons name="people" size={96} color={colors.primary} />
-                <View style={styles.iconBadge}>
-                  <Ionicons name="person-add" size={18} color={colors.white} />
-                </View>
+                <Image
+                  source={require('../../../assets/onboarding/teammates-3d.png')}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
+                <Image
+                  source={require('../../../assets/onboarding/groups-badge.png')}
+                  style={styles.iconBadge}
+                  resizeMode="contain"
+                />
               </View>
             </Animated.View>
           </GlassCard>
@@ -166,23 +172,26 @@ const styles = StyleSheet.create({
     borderColor: colors.ringBorder,
   },
   iconWrapper: {
-    width: 160,
-    height: 160,
+    width: 176,
+    height: 176,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  illustrationImage: {
+    width: '100%',
+    height: '100%',
+  },
   iconBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
-    borderWidth: 3,
-    borderColor: colors.white,
+    bottom: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    shadowColor: colors.buttonShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   textBlock: {
