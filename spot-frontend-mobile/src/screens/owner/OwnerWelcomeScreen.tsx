@@ -6,21 +6,26 @@ import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
-import { colors } from '../../constants/colors';
-import useFloatingAnimation from '../../hooks/useFloatingAnimation';
+import { colors } from '@/constants/colors';
+import { spacing } from '@/constants/spacing';
+import useFloatingAnimation from '@/hooks/useFloatingAnimation';
 
 const OWNER_WEB_URL = 'owner.spot.com';
+
+type Props = {
+  onContinue: () => void;
+};
 
 /**
  * Owner Welcome screen (Figma node 1:634) — shown right after a new user
  * picks the Venue Owner role, explaining that revenue/licensing management
- * happens on the Web Portal and letting them continue into the mobile
- * check-in app (or defer profile setup).
+ * happens on the Web Portal, then continuing into the venue registration
+ * form (`onContinue` -> /owner/register).
  *
- * `onEnterApp` / `onLater` are injected by the route so this component
- * stays presentation-only, matching the onboarding screens' pattern.
+ * `onContinue` is injected by the route so this component stays
+ * presentation-only, matching the onboarding/choose-role screens' pattern.
  */
-export default function OwnerWelcome({ onEnterApp, onLater }) {
+export default function OwnerWelcomeScreen({ onContinue }: Props) {
   const floatStyle = useFloatingAnimation({ distance: 10, duration: 2000 });
   const [copied, setCopied] = useState(false);
 
@@ -42,10 +47,7 @@ export default function OwnerWelcome({ onEnterApp, onLater }) {
           <Text style={styles.logo}>SPOT</Text>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <BlurView intensity={40} tint="light" style={styles.card}>
             <View style={styles.cardOverlay} />
 
@@ -57,7 +59,7 @@ export default function OwnerWelcome({ onEnterApp, onLater }) {
               />
             </Animated.View>
 
-            <Text style={styles.heading}>Welcome Venue Owner!</Text>
+            <Text style={styles.heading}>Welcome, Venue Owner!</Text>
             <Text style={styles.body}>
               To ensure the best management experience,{' '}
               <Text style={styles.bodyStrong}>revenue administration</Text> and{' '}
@@ -81,44 +83,32 @@ export default function OwnerWelcome({ onEnterApp, onLater }) {
                   <MaterialIcons
                     name={copied ? 'check' : 'content-copy'}
                     size={20}
-                    color={copied ? colors.success : colors.primary}
+                    color={copied ? colors.primary : colors.outline}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={onEnterApp}
-                activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityLabel="Enter app, check-in version"
-              >
-                <Text style={styles.primaryButtonText}>Enter App (Check-in Version)</Text>
-                <Ionicons name="arrow-forward" size={20} color={colors.white} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={onLater}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="I will update my profile later"
-              >
-                <Text style={styles.secondaryButtonText}>I will update my profile later</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={onContinue}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Continue to venue registration"
+            >
+              <Text style={styles.primaryButtonText}>Continue to Registration</Text>
+              <Ionicons name="arrow-forward" size={20} color={colors.white} />
+            </TouchableOpacity>
           </BlurView>
 
           <View style={styles.footnote}>
             <View style={styles.footnoteItem}>
-              <MaterialIcons name="verified-user" size={16} color={colors.labelMuted} />
+              <MaterialIcons name="verified-user" size={16} color={colors.outline} />
               <Text style={styles.footnoteText}>256-bit Security</Text>
             </View>
             <View style={styles.footnoteDot} />
             <View style={styles.footnoteItem}>
-              <MaterialIcons name="support-agent" size={16} color={colors.labelMuted} />
+              <MaterialIcons name="support-agent" size={16} color={colors.outline} />
               <Text style={styles.footnoteText}>24/7 Support</Text>
             </View>
           </View>
@@ -138,7 +128,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: spacing.md,
   },
   logo: {
     fontSize: 22,
@@ -150,22 +140,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
   },
 
   card: {
     width: '100%',
     maxWidth: 448,
     borderRadius: 32,
-    padding: 24,
+    padding: spacing.lg,
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
   cardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.cardOverlay,
   },
 
@@ -174,7 +165,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 32,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 1,
@@ -191,9 +182,9 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontWeight: '700',
     letterSpacing: -0.28,
-    color: colors.ownerHeading,
+    color: colors.headingText,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   body: {
     fontSize: 16,
@@ -202,7 +193,7 @@ const styles = StyleSheet.create({
     color: colors.bodyText,
     textAlign: 'center',
     maxWidth: 360,
-    marginBottom: 32,
+    marginBottom: spacing.xl,
   },
   bodyStrong: {
     fontWeight: '700',
@@ -211,16 +202,16 @@ const styles = StyleSheet.create({
   urlSection: {
     width: '100%',
     maxWidth: 360,
-    marginBottom: 40,
+    marginBottom: spacing.xl + spacing.sm,
   },
   urlLabel: {
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
-    color: colors.labelMuted,
+    color: colors.outline,
     textTransform: 'uppercase',
-    marginBottom: 8,
-    paddingHorizontal: 8,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
   urlBox: {
     flexDirection: 'row',
@@ -230,13 +221,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
   urlBoxLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   urlText: {
     fontSize: 14,
@@ -244,16 +235,13 @@ const styles = StyleSheet.create({
     color: colors.headingText,
   },
 
-  actions: {
+  primaryButton: {
     width: '100%',
     maxWidth: 360,
-    gap: 16,
-  },
-  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     height: 56,
     borderRadius: 16,
     backgroundColor: colors.primary,
@@ -268,34 +256,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.white,
   },
-  secondaryButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 56,
-    borderRadius: 16,
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.bodyText,
-  },
 
   footnote: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    marginTop: 32,
+    gap: spacing.md,
+    marginTop: spacing.xl,
   },
   footnoteItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   footnoteText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.labelMuted,
+    color: colors.outline,
   },
   footnoteDot: {
     width: 4,
