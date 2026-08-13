@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 
+type Options = {
+  distance?: number;
+  duration?: number;
+};
+
 /**
  * Loops a subtle up/down float, matching the onboarding mockups' CSS
  * `floating` keyframes (0 -> -distance -> 0, ease-in-out, infinite).
  * Shared by all three onboarding slides' center illustration.
  */
-export default function useFloatingAnimation({ distance = 15, duration = 1500 } = {}) {
+export default function useFloatingAnimation({ distance = 15, duration = 1500 }: Options = {}) {
   const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

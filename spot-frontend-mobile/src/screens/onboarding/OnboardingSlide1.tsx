@@ -4,13 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '../../constants/colors';
-import PaginationDots from '../../components/onboarding/PaginationDots';
-import GlassCard from '../../components/onboarding/GlassCard';
-import useFloatingAnimation from '../../hooks/useFloatingAnimation';
+import { colors } from '@/constants/colors';
+import PaginationDots from '@/components/onboarding/PaginationDots';
+import GlassCard from '@/components/onboarding/GlassCard';
+import useFloatingAnimation from '@/hooks/useFloatingAnimation';
 
 const TOTAL_SLIDES = 3;
 const ACTIVE_INDEX = 0;
+
+type Props = {
+  onSkip: () => void;
+  onNext: () => void;
+};
 
 /**
  * Onboarding slide 1/3 — "Instant Booking".
@@ -19,7 +24,7 @@ const ACTIVE_INDEX = 0;
  * `onSkip` / `onNext` are injected by the route so this component stays
  * presentation-only and reusable in tests/storybook-style previews.
  */
-export default function OnboardingSlide1({ onSkip, onNext }) {
+export default function OnboardingSlide1({ onSkip, onNext }: Props) {
   const floatStyle = useFloatingAnimation();
 
   return (

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 
-import OnboardingSlide2 from '../../src/screens/onboarding/OnboardingSlide2';
-import { setOnboardingCompleted } from '../../src/utils/onboardingStorage';
+import OnboardingSlide2 from '@/screens/onboarding/OnboardingSlide2';
+import { setOnboardingCompleted } from '@/utils/onboardingStorage';
 
 /**
  * "/onboarding/2" — second screen of onboarding (slide 2/3).
@@ -11,7 +11,7 @@ export default function OnboardingScreen2() {
 
   const handleSkip = async () => {
     await setOnboardingCompleted();
-    router.replace('/home');
+    router.replace('/auth/choose-role');
   };
 
   const handleNext = () => {

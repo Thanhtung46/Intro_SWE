@@ -1,26 +1,52 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '../../constants/colors';
-import PaginationDots from '../../components/onboarding/PaginationDots';
-import GlassCard from '../../components/onboarding/GlassCard';
-import useFloatingAnimation from '../../hooks/useFloatingAnimation';
+import { colors } from '@/constants/colors';
+import PaginationDots from '@/components/onboarding/PaginationDots';
+import GlassCard from '@/components/onboarding/GlassCard';
+import useFloatingAnimation from '@/hooks/useFloatingAnimation';
 
 const TOTAL_SLIDES = 3;
-const ACTIVE_INDEX = 2;
+const ACTIVE_INDEX = 1;
+
+type Props = {
+  onSkip: () => void;
+  onNext: () => void;
+};
 
 /**
- * Onboarding slide 3/3 — "Smart Schedule".
- * Ports the Figma "Onboarding 3" frame to React Native.
+ * Onboarding slide 2/3 — "Connect with Teammates".
+ * Ports the Figma "Onboarding 2" frame to React Native.
  *
- * `onSkip` / `onGetStarted` are injected by the route so this component
- * stays presentation-only and reusable in tests/storybook-style previews.
+ * `onSkip` / `onNext` are injected by the route so this component stays
+ * presentation-only and reusable in tests/storybook-style previews.
  */
-export default function OnboardingSlide3({ onSkip, onGetStarted }) {
+export default function OnboardingSlide2({ onSkip, onNext }: Props) {
   const floatStyle = useFloatingAnimation();
+
+  // Slow spinning dashed ring behind the icon, matching the mockup's
+  // `animate-[spin_20s_linear_infinite]` decoration.
+  const rotateValue = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotateValue, {
+        toValue: 1,
+        duration: 20000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotateValue]);
+  const rotateStyle = {
+    transform: [
+      { rotate: rotateValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+    ],
+  };
 
   return (
     <LinearGradient
@@ -52,31 +78,27 @@ export default function OnboardingSlide3({ onSkip, onGetStarted }) {
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <Animated.View style={[styles.iconWrapper, floatStyle]}>
-              <Image
-                source={require('../../../assets/onboarding/ai-schedule-3d.png')}
-                style={styles.illustrationImage}
-                resizeMode="contain"
-              />
-              {/* "monitoring" badge — top-right, matches the mockup's position */}
-              <Image
-                source={require('../../../assets/onboarding/trending-badge.png')}
-                style={[styles.cornerBadge, styles.badgeTopRight]}
-                resizeMode="contain"
-              />
-              {/* "bolt" badge — bottom-left, matches the mockup's position */}
-              <Image
-                source={require('../../../assets/onboarding/flash-badge.png')}
-                style={[styles.cornerBadge, styles.badgeBottomLeft]}
-                resizeMode="contain"
-              />
+            <Animated.View style={[styles.iconOuterWrapper, floatStyle]}>
+              <Animated.View style={[styles.ringDecoration, rotateStyle]} />
+              <View style={styles.iconWrapper}>
+                <Image
+                  source={require('../../../assets/onboarding/teammates-3d.png')}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
+                <Image
+                  source={require('../../../assets/onboarding/groups-badge.png')}
+                  style={styles.iconBadge}
+                  resizeMode="contain"
+                />
+              </View>
             </Animated.View>
           </GlassCard>
 
           <View style={styles.textBlock}>
-            <Text style={styles.heading}>Smart Schedule</Text>
+            <Text style={styles.heading}>Connect with Teammates</Text>
             <Text style={styles.body}>
-              Manage your sports life and schedule{'\n'}with AI.
+              Find opponents and teammates that match{'\n'}your skill level.
             </Text>
           </View>
         </View>
@@ -86,14 +108,13 @@ export default function OnboardingSlide3({ onSkip, onGetStarted }) {
           <PaginationDots total={TOTAL_SLIDES} activeIndex={ACTIVE_INDEX} />
 
           <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={onGetStarted}
+            style={styles.actionButton}
+            onPress={onNext}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Get started"
+            accessibilityLabel="Next slide"
           >
-            <Text style={styles.ctaText}>Get started</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.white} />
+            <Ionicons name="arrow-forward" size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -142,9 +163,22 @@ const styles = StyleSheet.create({
   illustrationCard: {
     marginBottom: 32,
   },
+  iconOuterWrapper: {
+    width: 192,
+    height: 192,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringDecoration: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 96,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.ringBorder,
+  },
   iconWrapper: {
-    width: 208,
-    height: 208,
+    width: 176,
+    height: 176,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -152,23 +186,17 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  cornerBadge: {
+  iconBadge: {
     position: 'absolute',
+    bottom: 0,
+    right: 0,
     width: 44,
     height: 44,
-    shadowColor: colors.cardShadow,
+    shadowColor: colors.buttonShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 8,
     elevation: 4,
-  },
-  badgeTopRight: {
-    top: 4,
-    right: -8,
-  },
-  badgeBottomLeft: {
-    bottom: 16,
-    left: -16,
   },
 
   textBlock: {
@@ -200,24 +228,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 32,
   },
-  ctaButton: {
-    flexDirection: 'row',
-    width: '100%',
-    height: 56,
-    borderRadius: 16,
+  actionButton: {
+    // Larger than slide 1/3 to match the mockup's w-20 h-20 button here.
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     shadowColor: colors.buttonShadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 1,
     shadowRadius: 12.5,
     elevation: 8,
-  },
-  ctaText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
   },
 });
