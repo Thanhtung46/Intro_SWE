@@ -10,4 +10,10 @@ export const colors = {
   error: '#DC2626',
   required: '#DC2626',
   white: '#FFFFFF',
+  pink: '#EC4899',
+  pinkSoft: '#FDF2F8',
+  orange: '#F97316',
+  orangeSoft: '#FFF7ED',
+  amber: '#F59E0B',
+  amberSoft: '#FFFBEB',
 };

@@ -37,6 +37,11 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     router.replace('/auth/login');
   };
 
+  const handleOpenProfile = () => {
+    onClose();
+    router.push('/profile');
+  };
+
   const menuItems: MenuItemConfig[] = [
     { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
     {
@@ -97,7 +102,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.card} testID="profile-menu-card">
-              <View style={styles.header}>
+              <TouchableOpacity testID="profile-menu-header" style={styles.header} onPress={handleOpenProfile}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{(user?.fullName || 'G').charAt(0).toUpperCase()}</Text>
                 </View>
@@ -105,7 +110,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
                   <Text style={styles.name}>{user?.fullName || 'Guest'}</Text>
                   <Text style={styles.email}>{user?.email || ''}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
               {menuItems.map(renderItem)}
 
