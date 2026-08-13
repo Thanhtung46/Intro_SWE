@@ -1,12 +1,13 @@
 import { useRouter } from 'expo-router';
 
-import OnboardingSlide3 from '@/screens/onboarding/OnboardingSlide3';
+import OnboardingScreen from '@/screens/onboarding/OnboardingScreen';
 import { setOnboardingCompleted } from '@/utils/onboardingStorage';
 
 /**
- * "/onboarding/3" — third screen of onboarding (slide 3/3).
+ * "/onboarding" — single-screen onboarding (3 internal steps, see
+ * OnboardingScreen). Replaces the old app/onboarding/{1,2,3}.tsx routes.
  */
-export default function OnboardingScreen3() {
+export default function OnboardingRoute() {
   const router = useRouter();
 
   const handleSkip = async () => {
@@ -19,5 +20,5 @@ export default function OnboardingScreen3() {
     router.replace('/auth/choose-role');
   };
 
-  return <OnboardingSlide3 onSkip={handleSkip} onGetStarted={handleGetStarted} />;
+  return <OnboardingScreen onSkip={handleSkip} onGetStarted={handleGetStarted} />;
 }

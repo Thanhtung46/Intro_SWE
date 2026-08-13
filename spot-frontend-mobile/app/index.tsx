@@ -11,7 +11,7 @@ import { colors } from '@/constants/colors';
  * The real brand Splash screen is a separate ticket (SPOT-28) that owns
  * "/" — this just unblocks testing onboarding on its own branch. Once
  * SPOT-28 merges, this file goes away and Splash takes over "/",
- * redirecting into `/onboarding/1` the same way.
+ * redirecting into `/onboarding` the same way.
  */
 export default function Index() {
   const router = useRouter();
@@ -37,7 +37,7 @@ export default function Index() {
 
   useEffect(() => {
     if (!checking) {
-      router.replace('/onboarding/1');
+      router.replace('/onboarding');
     }
   }, [checking, router]);
 
