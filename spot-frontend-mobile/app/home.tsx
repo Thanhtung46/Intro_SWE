@@ -1,6 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ProfileMenu } from '../src/components/ProfileMenu';
+import { useUser } from '../src/context/UserContext';
 import { colors } from '../src/theme/colors';
 
 // Shared placeholder post-login destination — no per-role dashboards exist
@@ -8,10 +10,23 @@ import { colors } from '../src/theme/colors';
 export default function HomeScreen() {
   const { role: roleParam } = useLocalSearchParams<{ role?: string }>();
   const role = typeof roleParam === 'string' && roleParam ? roleParam : 'user';
+  const { user } = useUser();
+  const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Logged in as {role} — dashboard coming soon</Text>
+      <View style={styles.topBar}>
+        <Image source={require('../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+        <TouchableOpacity testID="avatar-button" style={styles.avatarButton} onPress={() => setMenuVisible(true)}>
+          <Text style={styles.avatarButtonText}>{(user?.fullName || 'G').charAt(0).toUpperCase()}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.text}>Logged in as {role} — dashboard coming soon</Text>
+      </View>
+
+      <ProfileMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
     </View>
   );
 }
@@ -19,9 +34,39 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 12,
+  },
+  logo: {
+    width: 32,
+    height: 32,
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  avatarButtonText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 24,
   },
   text: {

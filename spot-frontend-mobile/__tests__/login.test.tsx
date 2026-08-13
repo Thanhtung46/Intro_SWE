@@ -2,6 +2,15 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Alert } from 'react-native';
 import LoginScreen from '../app/auth/login';
+import { UserProvider } from '../src/context/UserContext';
+
+function renderLoginScreen() {
+  return render(
+    <UserProvider>
+      <LoginScreen />
+    </UserProvider>
+  );
+}
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -34,7 +43,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   });
 
   it('shows a 401 invalid-credentials error with attempts remaining', async () => {
-    const { getByPlaceholderText, getByText, getByTestId } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'someone@example.com', 'wrongpass');
 
     fireEvent.press(getByTestId('login-button'));
@@ -47,7 +56,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   }, 10000);
 
   it('shows the locked-account message on a 403 locked response', async () => {
-    const { getByPlaceholderText, getByText, getByTestId } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'locked@example.com');
 
     fireEvent.press(getByTestId('login-button'));
@@ -60,7 +69,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   }, 10000);
 
   it('shows the pending-approval message on a 403 pending response', async () => {
-    const { getByPlaceholderText, getByText, getByTestId } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'pending@example.com');
 
     fireEvent.press(getByTestId('login-button'));
@@ -73,7 +82,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   }, 10000);
 
   it('shows a friendly message (not the raw backend text) when the role has not been selected yet', async () => {
-    const { getByPlaceholderText, getByText, getByTestId, queryByText } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByText, getByTestId, queryByText } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'noselectrole@example.com');
 
     fireEvent.press(getByTestId('login-button'));
@@ -87,7 +96,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   }, 10000);
 
   it('stores the tokens and navigates to /home on a successful login', async () => {
-    const { getByPlaceholderText, getByTestId } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'new-user@example.com');
 
     fireEvent.press(getByTestId('login-button'));
@@ -101,7 +110,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
   }, 10000);
 
   it('shows validation errors under fields (not an alert) when submitted empty', async () => {
-    const { getByText, getByTestId, queryByText } = render(<LoginScreen />);
+    const { getByText, getByTestId, queryByText } = renderLoginScreen();
 
     fireEvent.press(getByTestId('login-button'));
 
@@ -113,7 +122,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
 
   it('shows a "Coming soon" alert when Login with Google is pressed, without calling authService', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const { getByTestId } = render(<LoginScreen />);
+    const { getByTestId } = renderLoginScreen();
 
     fireEvent.press(getByTestId('google-login-button'));
 
@@ -128,7 +137,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
     ['footer-help', 'Help Center'],
   ])('shows a "Coming soon" alert when the %s footer link is pressed', async (testId, label) => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const { getByTestId } = render(<LoginScreen />);
+    const { getByTestId } = renderLoginScreen();
 
     fireEvent.press(getByTestId(testId));
 

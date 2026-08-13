@@ -15,12 +15,14 @@ import {
 import { FormField } from '../../src/components/FormField';
 import { GoogleIcon } from '../../src/components/GoogleIcon';
 import { PasswordField } from '../../src/components/PasswordField';
+import { useUser } from '../../src/context/UserContext';
 import { LoginFieldErrors, loginSchema } from '../../src/schemas/loginSchema';
 import { login } from '../../src/services/authService';
 import { colors } from '../../src/theme/colors';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { setUser } = useUser();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,6 +58,7 @@ export default function LoginScreen() {
     if (response.success && response.accessToken && response.refreshToken) {
       await SecureStore.setItemAsync('accessToken', response.accessToken);
       await SecureStore.setItemAsync('refreshToken', response.refreshToken);
+      setUser(response.user || null);
 
       // No per-role dashboards exist yet (out of SPOT-116's scope).
       // TODO: replace with real per-role dashboard routes once they exist.
