@@ -1,14 +1,14 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React, { useEffect } from 'react';
-import { Alert } from 'react-native';
 import ProfileScreen from '../app/profile';
 import { LoginUser } from '../src/services/authService';
 import { UserProvider, useUser } from '../src/context/UserContext';
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack, push: jest.fn() }),
+  useRouter: () => ({ back: mockBack, push: mockPush }),
 }));
 
 function Preset({ user }: { user?: LoginUser }) {
@@ -30,6 +30,7 @@ function renderProfile(user?: LoginUser) {
 describe('ProfileScreen', () => {
   beforeEach(() => {
     mockBack.mockClear();
+    mockPush.mockClear();
   });
 
   it('falls back to "Guest" when no user is in context', () => {
@@ -55,12 +56,10 @@ describe('ProfileScreen', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('shows a "Coming soon" alert when Edit is pressed', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('navigates to the Edit Profile screen when Edit is pressed', () => {
     const { getByTestId } = renderProfile();
     fireEvent.press(getByTestId('profile-edit-button'));
-    expect(alertSpy).toHaveBeenCalledWith('Coming soon', 'Edit Profile is not available yet.');
-    alertSpy.mockRestore();
+    expect(mockPush).toHaveBeenCalledWith('/profile/edit');
   });
 
   it('switches the active Favorites tab without changing the empty state', () => {
