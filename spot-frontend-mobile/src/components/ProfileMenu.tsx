@@ -42,6 +42,11 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     router.push('/profile');
   };
 
+  const handleOpenSettings = () => {
+    onClose();
+    router.push('/settings');
+  };
+
   const menuItems: MenuItemConfig[] = [
     { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
     {
@@ -49,14 +54,14 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
       label: 'Appearance',
       icon: 'color-palette-outline',
       secondaryLabel: 'Light >',
-      onPress: () => showComingSoon('Appearance'),
+      onPress: handleOpenSettings,
     },
     {
       key: 'language',
       label: 'Language',
       icon: 'globe-outline',
       secondaryLabel: 'English >',
-      onPress: () => showComingSoon('Language'),
+      onPress: handleOpenSettings,
     },
     {
       key: 'ai-assistant',
