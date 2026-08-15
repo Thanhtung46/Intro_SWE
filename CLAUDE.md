@@ -78,9 +78,8 @@ tree. `PROJECT_RULES.md` was rewritten (v2.0.0) to match this polyrepo and
 its actual version locks (npm not pnpm, `postgres:15-alpine`, `node:18-alpine`,
 etc.) — read it for the binding rules (version locks, DB/locking/security
 rules, code style, DRI table). Sections there marked "not yet implemented"
-(DB schema rules, Redis slot-locking, auth security rules, backend/AI
-dependency lists) describe domains that are still empty scaffolds — don't
-assume they're built.
+may still apply to AI services / some security targets — **don't assume
+backend is empty**; see `spot-backend/CLAUDE.md` for what is actually built.
 
 Tech stack per component:
 
@@ -89,9 +88,20 @@ Tech stack per component:
 | `spot-frontend-web/` | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Zustand, Axios | Scaffolded but **`docker build`/`next build` fail today** — missing `src/app/globals.css`, `tsconfig.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`. `npm run dev` may still work despite this. |
 | `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
-| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service) | Source skeleton only — **no `package.json`**, not installable. Has a `Dockerfile` now, but the build still fails at `npm ci` for the same reason. |
+| `spot-backend/` | Node.js/Express ESM, domain-driven; `pg` + Supabase Session pooler; Redis; argon2; Zod | **Runnable.** Auth, profile/settings, schedule, notifications, reviews. Migrations squashed `001`–`004`. Details: `spot-backend/CLAUDE.md` + `spot-backend/docs/API.md`. |
 | `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
-| Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified runnable via `docker compose up -d --build`. Other services: see Docker caveat below |
+| Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified; **backend** builds with `env_file: spot-backend/.env` + `REDIS_HOST=redis`. Default backend DB is **Supabase**, not compose postgres. |
+
+### Backend snapshot (Sprint 4 Player Core — recent work)
+
+Implemented under `spot-backend/` (do not re-document full API here):
+
+- **Auth:** register → role → OTP → login/refresh; forgot/reset password
+- **Profile Hub:** `user_profiles` (display + prefs); `GET/PATCH /users/me`; Main Profile `GET /users/me/profile` (stats); Settings `GET/PATCH /users/me/preferences`; logged-in password change; local avatar upload
+- **Contact change:** OTP-gated email/phone (FR-1.4) — not via plain PATCH
+- **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders; venue reviews + reply
+- **Migrations:** squashed to `001` auth → `002` notification → `003` venue/booking/social → `004` review. Reset with `npm run migrate:reset` (destructive)
+- **Not yet:** JWT refresh rotate/blacklist; admin approve OWNER/REFEREE; booking CRUD / matchmaking / payment / S3 CDN
 
 ## Common Commands
 
@@ -124,37 +134,36 @@ npm run android / ios / web
 npm test
 ```
 
-**Backend (`spot-backend/`):** not runnable yet — no `package.json` exists.
-Do not assume `npm install`/`npm run` work here until one is added.
+**Backend (`spot-backend/`):**
+```bash
+cd spot-backend
+npm install && cp .env.example .env   # DB_* (Supabase pooler), SMTP_*, JWT_SECRET, OTP_DEBUG
+npm run migrate
+npm run dev                           # http://localhost:3000
+npm test
+npm run smoke:otp|login|profile|schedule|notifications|reviews
+```
 
 **AI services (`spot-ai-services/*/`):** not runnable yet — no application
 code or `requirements.txt` exists.
 
 **Docker (repo root):**
 ```bash
-docker compose up -d postgres redis          # always works
-docker compose up -d --build admin-console   # also works — verified end-to-end
-docker compose build backend frontend-web recommendation noshow nlp  # all fail today, see below
+docker compose up -d postgres redis          # always works (local postgres optional for backend)
+docker compose up -d --build admin-console   # verified end-to-end
+docker compose up -d --build redis backend   # uses spot-backend/.env; REDIS_HOST=redis
+docker compose run --rm backend npm run migrate
+docker compose build frontend-web recommendation noshow nlp  # still fail — see below
 docker compose logs -f <service>
 docker compose down [-v]
-docker compose -f docker-compose.production.yml --env-file .env.production up -d   # production stack — the --env-file flag is required, see below
+docker compose -f docker-compose.production.yml --env-file .env.production up -d   # --env-file required
 ```
-`build.context` for `backend`/`frontend-web`/`admin-console` in both compose files
-points at each app's own directory (`./spot-backend`, `./spot-frontend-web`,
-`./spot-admin-console`) using a `Dockerfile` that lives inside that directory.
-This used to be broken (paths pointed at a nonexistent `packages/...` layout
-and a since-removed top-level `docker/` folder shared across apps), so
-`docker compose build` failed for every service except `postgres`/`redis`
-even when app code existed — that bug is now fixed and verified with a real
-`docker build` per service:
+`build.context` for `backend`/`frontend-web`/`admin-console` points at each
+app directory. Status:
 - `admin-console` — **builds successfully end-to-end.**
-- `backend` — still fails at `npm ci`: no `package.json` in `spot-backend/` yet.
-- `frontend-web` — gets past `npm ci` now (lockfile added) but fails at
-  `next build`: `src/app/globals.css` doesn't exist, and `tsconfig.json`/
-  `next.config.js`/`tailwind.config.js`/`postcss.config.js` are all missing
-  too. This is an app-scaffold gap, not a Docker problem.
-- `recommendation`/`noshow`/`nlp` — still fail immediately: no `Dockerfile`
-  exists under `spot-ai-services/*/` at all (empty scaffolds).
+- `backend` — **builds** when `package.json`/`package-lock.json` present; runtime DB defaults to Supabase via `spot-backend/.env`.
+- `frontend-web` — gets past `npm ci` but fails at `next build` (missing `globals.css` + Next/Tailwind configs).
+- `recommendation`/`noshow`/`nlp` — no `Dockerfile` under `spot-ai-services/*/` yet.
 
 `docker-compose.production.yml` uses `${DB_USER}`/`${DB_PASSWORD}`/
 `${JWT_SECRET}`/etc. with **no defaults**. Compose only auto-loads a file
@@ -181,8 +190,7 @@ See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
 ├── Docs/ , PA/               # HCMUS course assignment materials — reference only, not app code
 ```
 
-**Data flow (target, once backend/AI services exist):**
-`spot-frontend-web` / `spot-frontend-mobile` / `spot-admin-console` → `spot-backend` (REST, port 3000) → PostgreSQL (5432) + Redis (6379). `spot-backend` → AI microservices: recommendation (5001), noshow-prediction (5002), nlp-assistant (5003).
+**Data flow:** frontends → `spot-backend` (REST `:3000`) → Supabase Postgres + Redis. Planned: backend → AI services recommendation (5001), noshow (5002), nlp (5003) — AI not implemented yet.
 
 ## Code Style & Conventions
 
@@ -198,10 +206,10 @@ committed yet so it currently fails to run):
 
 ## Important Guidelines
 
-- **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — they are independent repositories, not git submodules of this repo. A `git status`/`git commit` at this repo's root does **not** track changes inside them.
-- **`spot-backend` has no `package.json`** — check before assuming any npm command works there.
-- **`spot-ai-services/*` are empty directory scaffolds** — check for `requirements.txt`/app code before assuming a service is implemented.
-- **Env files**: `.env.development` and `.env.production` live at the repo root and are gitignored — never let real credentials get committed; verify `git status` shows them untracked before adding secrets. Note `docker-compose.yml` doesn't actually read `.env.development` (its values are hard-coded inline); `docker-compose.production.yml` does need `.env.production`, but only via an explicit `--env-file` flag — see Docker caveat above.
-- **`Docs/` and `PA/`** hold course assignment materials (requirements docs, PDFs) — reference-only, not part of the running application.
-- **`spot-backend/README.md` has corrupted content**: a chunk of the shell script that originally scaffolded the repo (heredocs, `git commit`, etc.) leaked verbatim into the middle of the file — don't treat that section as instructions to run.
-- Each scaffolded app under `spot-*/` now has its own `CLAUDE.md` with app-specific status — read the relevant one before working in that app.
+- **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — independent repos, not submodules. Root `git commit` does **not** track changes inside them. `spot-backend/` **is** tracked by this repo.
+- **`spot-backend` is runnable** — use `spot-backend/CLAUDE.md` + `docs/API.md`. Do not revive old “no package.json / no user_profiles” assumptions.
+- **`schema_auth` split:** `users` = auth identity; `user_profiles` = display + Settings prefs; view `user_prefs`. Prefs sync = same DB row (no Redis profile cache).
+- **`spot-ai-services/*` are empty scaffolds** — check for `requirements.txt`/app code before assuming a service exists.
+- **Env files**: root `.env.development` / `.env.production` are gitignored. Backend secrets live in `spot-backend/.env` (also gitignored). Compose production needs `--env-file .env.production`.
+- **`Docs/` and `PA/`** — course materials only, not app code.
+- Each `spot-*/CLAUDE.md` is the source of truth for that app’s status — read it before editing.
