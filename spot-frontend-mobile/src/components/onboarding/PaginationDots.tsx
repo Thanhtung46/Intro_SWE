@@ -1,12 +1,17 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { colors } from '../../constants/colors';
+import { colors } from '@/constants/colors';
+
+type Props = {
+  total: number;
+  activeIndex: number;
+};
 
 /**
  * Pagination dots for the onboarding pager.
  * The dot at `activeIndex` renders as a wide pill; the rest are small circles.
  */
-export default function PaginationDots({ total, activeIndex }) {
+export default function PaginationDots({ total, activeIndex }: Props) {
   return (
     <View style={styles.row} accessibilityRole="tablist">
       {Array.from({ length: total }).map((_, index) => (

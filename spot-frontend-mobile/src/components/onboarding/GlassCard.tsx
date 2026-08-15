@@ -1,15 +1,19 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { PropsWithChildren } from 'react';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 
-import { colors } from '../../constants/colors';
+import { colors } from '@/constants/colors';
+
+type Props = PropsWithChildren<{
+  style?: StyleProp<ViewStyle>;
+}>;
 
 /**
  * The frosted "glass" illustration card shared by all onboarding slides.
  * Ports the mockups' `.glass-card` (backdrop-blur + translucent white +
  * soft blue shadow) via expo-blur, since RN has no CSS backdrop-filter.
  */
-export default function GlassCard({ children, style }) {
+export default function GlassCard({ children, style }: Props) {
   return (
     <View style={[styles.shadowWrapper, style]}>
       <BlurView intensity={40} tint="light" style={styles.blur}>
@@ -43,7 +47,7 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.cardOverlay,
   },
 });

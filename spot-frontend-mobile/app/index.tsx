@@ -7,11 +7,6 @@ import { getToken } from '@/utils/authStorage';
 
 type Destination = '/onboarding' | '/auth/choose-role' | '/home';
 
-// TEMP: auto-navigate disabled while reviewing the Splash UI in isolation
-// on this branch — the destinations below don't exist here yet anyway
-// (SPOT-33/SPOT-56 not merged), so it would just hit Unmatched Route.
-// Flip back to `true` once ready to wire this up for real; nothing else
-// needs to change.
 const AUTO_NAVIGATE_ENABLED = true;
 
 /**
@@ -19,10 +14,8 @@ const AUTO_NAVIGATE_ENABLED = true;
  *
  * Bootstraps the session (onboarding flag + secure token) while the Splash
  * screen plays its progress animation, then navigates once both are done:
- *  - no token, onboarding not done -> /onboarding (SPOT-33's single-screen
- *    onboarding — not on this branch yet, expect Unmatched Route until it
- *    merges, same cross-branch dependency as choose-role below)
- *  - no token, onboarding done     -> /auth/choose-role (SPOT-56)
+ *  - no token, onboarding not done -> /onboarding
+ *  - no token, onboarding done     -> /auth/choose-role
  *  - token present                 -> /home (Dashboard placeholder — no
  *    real dashboard/tabs entry exists yet)
  *
