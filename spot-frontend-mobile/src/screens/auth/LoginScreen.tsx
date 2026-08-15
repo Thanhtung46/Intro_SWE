@@ -75,7 +75,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Image source={require('../../../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
         <Text style={styles.title}>Login</Text>
         <Text style={styles.subtitle}>Login to join and manage matches</Text>

@@ -96,7 +96,7 @@ export default function RegisterScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Image source={require('../../../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
         <Text style={styles.title}>Register</Text>
         <Text style={styles.subtitle}>Enter basic information</Text>
