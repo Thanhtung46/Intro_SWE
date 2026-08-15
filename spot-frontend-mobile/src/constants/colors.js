@@ -24,10 +24,4 @@ export const colors = {
   auraEnd: 'rgba(0, 74, 198, 0)',
 
   buttonShadow: 'rgba(37, 99, 235, 0.3)',
-
-  // Owner Welcome screen (Figma node 1:634) — not in the shared onboarding
-  // palette above, so added here rather than hardcoded in the screen.
-  ownerHeading: '#1D4ED8',
-  labelMuted: '#737686',
-  success: '#16A34A',
 };
