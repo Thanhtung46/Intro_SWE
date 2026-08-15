@@ -5,7 +5,7 @@ import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
 import { getToken } from '@/utils/authStorage';
 
-type Destination = '/onboarding' | '/auth/choose-role' | '/home';
+type Destination = '/onboarding' | '/auth/login' | '/home';
 
 const AUTO_NAVIGATE_ENABLED = true;
 
@@ -15,9 +15,8 @@ const AUTO_NAVIGATE_ENABLED = true;
  * Bootstraps the session (onboarding flag + secure token) while the Splash
  * screen plays its progress animation, then navigates once both are done:
  *  - no token, onboarding not done -> /onboarding
- *  - no token, onboarding done     -> /auth/choose-role
- *  - token present                 -> /home (Dashboard placeholder — no
- *    real dashboard/tabs entry exists yet)
+ *  - no token, onboarding done     -> /auth/login
+ *  - token present                 -> /home (Dashboard)
  *
  * On bootstrap failure (e.g. expo-secure-store unavailable on `npm run web`)
  * shows the retry state instead of navigating.
@@ -47,7 +46,7 @@ export default function Splash() {
         } else if (!onboardingCompleted) {
           setDestination('/onboarding');
         } else {
-          setDestination('/auth/choose-role');
+          setDestination('/auth/login');
         }
       } catch (error) {
         if (cancelled) return;

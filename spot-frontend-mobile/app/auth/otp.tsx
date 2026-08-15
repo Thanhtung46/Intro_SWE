@@ -51,9 +51,9 @@ export default function OtpScreen() {
 
     if (response.success) {
       verifiedRef.current = true;
-      // Next step after OTP verification is outside SPOT-113's scope.
-      // TODO: navigate to the real post-verification route once that ticket exists.
-      router.push('/auth/login');
+      // Email verified — go straight to the dashboard instead of bouncing
+      // back to Login. `replace` so OTP isn't left in the back stack.
+      router.replace('/home');
       return;
     }
 

@@ -12,12 +12,12 @@ export default function OnboardingRoute() {
 
   const handleSkip = async () => {
     await setOnboardingCompleted();
-    router.replace('/auth/choose-role');
+    router.replace('/auth/login');
   };
 
   const handleGetStarted = async () => {
     await setOnboardingCompleted();
-    router.replace('/auth/choose-role');
+    router.replace('/auth/login');
   };
 
   return <OnboardingScreen onSkip={handleSkip} onGetStarted={handleGetStarted} />;

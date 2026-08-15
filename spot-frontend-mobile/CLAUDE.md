@@ -1,7 +1,7 @@
 # CLAUDE.md — spot-frontend-mobile
 
 Scoped guide for this app. The repo-root `CLAUDE.md` (one level up) is the
-polyrepo map and general behavioral guidelines — read it first for
+cross-project map and general behavioral guidelines — read it first for
 cross-app context. This file is the local layer: what's actually true
 inside `spot-frontend-mobile/` today.
 
@@ -16,12 +16,12 @@ Mobile client for **SPOT** (Sport Pitch Online Ticketing — HCMUS Software
 Engineering coursework, Group 09), built with Expo + React Native +
 `expo-router` for file-based navigation, in TypeScript (`tsconfig.json` +
 `@/*` → `src/*` path alias, wired via `babel-plugin-module-resolver`).
-Despite the polyrepo framing in the root `CLAUDE.md` ("each app has its
-own nested `.git`"), there is **no `.git` inside this directory today** —
-verified directly (`ls -la .git` → not found). `git status`/`git commit`
-run from here operate on the single repo rooted at the polyrepo root; a
-plain-JS, no-TypeScript version of this app may be true history, but it
-isn't the state on disk now.
+There is **no `.git` inside this directory** — verified directly
+(`ls -la .git` → not found); this app was merged into the root repo
+(commit `a2dff26`) and is now tracked there like everything else.
+`git status`/`git commit` run from here operate on the single repo rooted
+at the top of the monorepo; a plain-JS, no-TypeScript version of this app
+may be true history, but it isn't the state on disk now.
 
 Scope: this app targets the **Player / Match Host** actors only (venue
 search, booking, matchmaking, reviews). Venue Owner / Referee / System
@@ -60,9 +60,16 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   `src/screens/common/PendingApprovalScreen.tsx` is the shared
   post-registration waiting screen.
 - **Profile/session**: `app/profile/index.tsx`, `app/profile/edit.tsx`,
-  `app/settings.tsx`, `app/home.tsx`, all reading from
-  `src/context/UserContext.tsx` (wraps the app in `app/_layout.tsx`) and
-  `src/utils/authStorage.ts` (secure-store token helpers).
+  `app/settings.tsx`, all reading from `src/context/UserContext.tsx` (wraps
+  the app in `app/_layout.tsx`) and `src/utils/authStorage.ts`
+  (secure-store token helpers).
+- **Home** (`SPOT-34`, in progress): `app/home.tsx` is now a thin route
+  wrapper around `src/screens/home/HomeScreen.tsx` — a "Football Dashboard"
+  (Figma node `8:2`) with a blurred header (logo + avatar → `ProfileMenu`),
+  a sport toggle (football/badminton), an image carousel, and a venue list
+  built from `src/components/home/{VenueCard,BottomNavItem}.tsx` and assets
+  under `assets/home/`. Previously `app/home.tsx` was just a placeholder;
+  this is real, in-progress UI work, not yet wired to a live venues API.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
   `*.test.ts(x)` next to several schemas/components) but **cannot run
   yet** — no jest config is committed, see Known Gotchas.
@@ -107,10 +114,6 @@ exists beyond what's listed above.
   If `npm start`/`npm run web` looks like it's serving fine but the app
   itself won't render, check for another route file pair like this before
   assuming it's a dependency or config problem.
-- **`README.md` in this directory is stale** — it still says "empty
-  scaffold" and lists the old `@testing-library/react-native@12.9.0`
-  conflict. Don't trust it over this file or `package.json`; update it if
-  you're touching onboarding-adjacent docs.
 - **Version drift from the repo-root docs**: the root `CLAUDE.md` describes
   this app as "Expo 49 / React Native 0.72". `package.json` actually pins
   `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`). Trust
@@ -169,11 +172,11 @@ app/                       # expo-router routes (file-based)
 ├── profile/                 # index (view), edit
 ├── settings.tsx
 ├── pending.tsx               # shared post-registration waiting screen
-├── home.tsx                  # placeholder post-login destination
+├── home.tsx                  # thin route → src/screens/home/HomeScreen.tsx (Football Dashboard, SPOT-34)
 └── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
-├── screens/{splash,onboarding,auth,owner,common}/   # presentational screen components
-├── components/{onboarding,common}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, ...)
+├── screens/{splash,onboarding,auth,owner,common,home}/   # presentational screen components
+├── components/{onboarding,common,home}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, VenueCard, ...)
 ├── services/authService.ts   # axios + axios-mock-adapter, gated by USE_MOCK_API
 ├── schemas/                  # zod validation per form, each with a co-located *.test.ts
 ├── context/UserContext.tsx   # session state, wraps app in _layout.tsx
@@ -195,14 +198,14 @@ backend calls.
 
 ## Code Style & Conventions
 
-2 spaces, single quotes, trailing commas (matches the polyrepo root
+2 spaces, single quotes, trailing commas (matches the repo-root
 convention; not enforced by tooling yet — no ESLint config here). Full
 detail in `.claude/rules/code-style.md`.
 
 ## Important Guidelines
 
-- Despite the root `CLAUDE.md`'s polyrepo description, this directory has
-  no `.git` of its own today — see Project Overview.
+- This directory has no `.git` of its own — it's part of the root monorepo,
+  see Project Overview.
 - Auth, owner-registration, profile, and settings flows are real (see
   Project Overview) — but `src/state/` and `app/tabs/` are still empty;
   verify a store or tab route exists before assuming it does.

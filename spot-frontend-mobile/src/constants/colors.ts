@@ -23,6 +23,9 @@ export const colors = {
   cardShadow: 'rgba(37, 99, 235, 0.15)',
   // Tint layered over the BlurView so it reads as white glass, not gray blur.
   cardOverlay: 'rgba(255, 255, 255, 0.35)',
+  // Slightly more opaque glass tint used by the Home dashboard's cards
+  // (search bar, quick actions, venue cards) — Figma node 8:2.
+  glassBackground: 'rgba(255, 255, 255, 0.6)',
   ringBorder: 'rgba(37, 99, 235, 0.2)',
 
   auraStart: 'rgba(0, 74, 198, 0.08)',
