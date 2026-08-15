@@ -42,3 +42,9 @@ Thumbs.db
 # Cache
 .eslintcache
 .prettierignore
+
+
+.claude/
+.specify/
+specs/
+
