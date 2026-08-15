@@ -14,61 +14,114 @@ quick-reference, not a duplicate of those.
 
 Mobile client for **SPOT** (Sport Pitch Online Ticketing — HCMUS Software
 Engineering coursework, Group 09), built with Expo + React Native +
-`expo-router` for file-based navigation, in plain JavaScript (no
-TypeScript — no `tsconfig.json` here). This is its **own git repository**
-(nested `.git`) — `git status`/`git commit` at the polyrepo root does not
-see changes made here.
+`expo-router` for file-based navigation, in TypeScript (`tsconfig.json` +
+`@/*` → `src/*` path alias, wired via `babel-plugin-module-resolver`).
+Despite the polyrepo framing in the root `CLAUDE.md` ("each app has its
+own nested `.git`"), there is **no `.git` inside this directory today** —
+verified directly (`ls -la .git` → not found). `git status`/`git commit`
+run from here operate on the single repo rooted at the polyrepo root; a
+plain-JS, no-TypeScript version of this app may be true history, but it
+isn't the state on disk now.
 
 Scope: this app targets the **Player / Match Host** actors only (venue
 search, booking, matchmaking, reviews). Venue Owner / Referee / System
 Administrator flows belong to `spot-admin-console`, not here — see
 `.specify/memory/constitution.md` for the full rationale.
 
-**Status: real screens exist, not an empty scaffold.** Onboarding (ticket
-`SPOT-33`) is implemented and persists past first launch: `app/index.js` →
-`app/onboarding/2.js` → `app/onboarding/3.js`, each a thin route delegating
-to `src/screens/onboarding/OnboardingSlide{1,2,3}.js`, plus shared
-`src/components/onboarding/PaginationDots.js` and `GlassCard.js` (frosted
-illustration card via `expo-blur`), `src/hooks/useFloatingAnimation.js`
-(shared float-in-place animation), `src/utils/onboardingStorage.js`
-(AsyncStorage-backed `onboarding_completed` flag — `app/index.js` checks it
-on mount and skips straight to `/home` if already set), and
-`src/constants/colors.js`. Illustrations are real cropped PNGs (with
-transparent backgrounds) under `assets/onboarding/`, sliced from the
-`assets/icons.png` sprite sheet — not icon-font approximations. `app/home.js`
-and `app/_layout.js` also exist.
-Everything else under `src/` (`components/` beyond onboarding, `config/`,
-`services/`, `state/`, `types/`) and `app/auth/`, `app/tabs/` are still
-empty placeholders (only a `.gitignore` in each) — check for actual files
-before assuming a screen, route, or service exists beyond what's listed
-above.
+**Status: a real, mostly-wired auth + onboarding flow exists, not an empty
+scaffold.** Everything below is written in TypeScript (`.tsx`/`.ts`).
+Verified actually rendering end-to-end on web (headless-browser run,
+onboarding → Skip → `/auth/choose-role`, no console page errors) — see
+Known Gotchas for a route-conflict crash that blocked this until fixed.
+
+- **Entry point**: `app/index.tsx` is the brand Splash screen
+  (`src/screens/splash/SplashScreen.tsx`, ticket SPOT-28). It bootstraps
+  onboarding-completed state + a secure token in parallel, then routes to
+  `/onboarding`, `/auth/choose-role`, or `/home`.
+- **Onboarding** (`SPOT-33`, reworked since to a single screen): `/onboarding`
+  → `src/screens/onboarding/OnboardingScreen.tsx` (3 internal animated
+  steps, not 3 separate routes anymore — the old `app/onboarding/{1,2,3}`
+  routes are gone). `src/utils/onboardingStorage.ts` holds the
+  AsyncStorage-backed `onboarding_completed` flag.
+- **Auth** (`app/auth/`): `choose-role`, `register`, `login`, `otp`,
+  `forgot-password`, `reset-password` — each a thin route over
+  `src/services/authService.ts` (axios + `axios-mock-adapter`, gated by
+  `USE_MOCK_API` in `src/config/env.ts` — see that file's header comment
+  for the manual-QA trigger emails/OTPs per endpoint) and
+  `src/schemas/*Schema.ts` (zod validation, each with a co-located
+  `.test.ts`). `src/screens/auth/ChooseRoleScreen.tsx` is the only screen
+  component under `src/screens/auth/`; the others render inline in their
+  `app/auth/*.tsx` route file rather than following the thin-route/
+  presentational-screen split described under Architecture below.
+- **Owner registration** (`app/owner/`): `register` (→
+  `src/screens/owner/OwnerRegisterScreen.tsx`, calls `registerOwner` in
+  authService) and `welcome` (→ `OwnerWelcomeScreen.tsx`, has a
+  copy-to-clipboard action via `expo-clipboard`). `app/pending.tsx` →
+  `src/screens/common/PendingApprovalScreen.tsx` is the shared
+  post-registration waiting screen.
+- **Profile/session**: `app/profile/index.tsx`, `app/profile/edit.tsx`,
+  `app/settings.tsx`, `app/home.tsx`, all reading from
+  `src/context/UserContext.tsx` (wraps the app in `app/_layout.tsx`) and
+  `src/utils/authStorage.ts` (secure-store token helpers).
+- Test coverage exists (`__tests__/*.test.tsx`, plus co-located
+  `*.test.ts(x)` next to several schemas/components) but **cannot run
+  yet** — no jest config is committed, see Known Gotchas.
+
+`src/state/` and `app/tabs/` are still empty placeholders (`.gitignore`
+only) — check for actual files before assuming a store or tab route
+exists beyond what's listed above.
 
 ## Known Gotchas
 
-- **`npm install` fails today** without a flag — verified with a fresh
-  `npm install --dry-run`: `react-test-renderer@19.2.8` (pulled in
-  transitively) requires `react@^19.2.8`, but the root project pins
-  `react@19.2.3`. This is an `ERESOLVE` conflict, not the "React 19 vs.
-  `@testing-library/react-native` wanting ≤18" story you may see in older
-  notes — that's now out of date (`@testing-library/react-native` is on
-  `^13.2.0` here, which does support React 19). Fix:
-  ```bash
-  npm install --legacy-peer-deps
-  ```
-  Don't assume a plain `npm install` or `npm ci` will succeed.
+- **Plain `npm install` works now** — `react` is pinned to `19.2.8`
+  (matching what `react-test-renderer` wants transitively), so the
+  `ERESOLVE` conflict older notes describe is gone; verified with a fresh
+  `npm install --dry-run`. `npm install --legacy-peer-deps` still works
+  too and is harmless if you're used to typing it, but it's no longer
+  required.
+- **`npm start` can silently no-op** if a stale `expo start` process from
+  an earlier session is still holding port 8081 — in non-interactive
+  contexts (scripts, agents) Expo prints "Skipping dev server" instead of
+  prompting to use another port. Check `lsof -i :8081` / kill the old
+  process (or answer the "Use port 8082?" prompt) if `npm start` returns
+  instantly without "Waiting on http://localhost:8081".
+- **`expo-clipboard` was a missing dependency** (used by
+  `OwnerWelcomeScreen.tsx`, not declared in `package.json`) — this made
+  the web/native bundle fail to build (`UnableToResolveError`) even though
+  Metro itself started fine and looked healthy. Fixed via
+  `npx expo install expo-clipboard`, which pins the SDK-57-compatible
+  version. If a screen import 500s the bundle again, check
+  `package.json`'s `dependencies` before assuming it's a code bug — a new
+  screen pulling in an Expo module needs `npx expo install <module>`, not
+  a plain `npm install <module>`, to get the SDK-matched version.
+- **Duplicate route files crashed the app on launch** — `app/_layout.js`
+  and `app/_layout.tsx` both defined the root layout route
+  (`.js` was a pre-TS leftover, never deleted after the `.tsx` rewrite).
+  Expo Router does **not** silently pick one; it throws `Uncaught Error:
+  The layouts "./_layout.tsx" and "./_layout.js" conflict on the route
+  "/_layout". Remove or rename one of these files.` on every platform
+  (verified via a headless-browser run on web: blank page, LogBox overlay
+  with that exact message). `app/home.js`/`app/home.tsx` had the same
+  duplicate-route shape. **Fixed** by deleting both `.js` files — the
+  `.tsx` ones are the live versions (`UserContext`/`ProfileMenu` wiring).
+  If `npm start`/`npm run web` looks like it's serving fine but the app
+  itself won't render, check for another route file pair like this before
+  assuming it's a dependency or config problem.
 - **`README.md` in this directory is stale** — it still says "empty
   scaffold" and lists the old `@testing-library/react-native@12.9.0`
   conflict. Don't trust it over this file or `package.json`; update it if
   you're touching onboarding-adjacent docs.
 - **Version drift from the repo-root docs**: the root `CLAUDE.md` describes
   this app as "Expo 49 / React Native 0.72". `package.json` actually pins
-  `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.3`). Trust
+  `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`). Trust
   `package.json` over that prose.
 - **No `jest` config exists yet** despite `jest` + `jest-expo` +
-  `@testing-library/react-native` being installed — `npm test` needs a
+  `@testing-library/react-native` being installed, and despite real test
+  files now existing (`__tests__/*.test.tsx` + several co-located
+  `*.test.ts(x)` under `src/`) — `npm test` fails immediately with "Jest
+  encountered an unexpected token" (can't parse TSX) until a
   `"jest": {"preset": "jest-expo"}` block (in `package.json` or a
-  `jest.config.js`) added before it will actually run. Zero test files
-  exist yet either.
+  `jest.config.js`) is added.
 - **No ESLint/Prettier config is committed** — style is enforced by hand
   (see `.claude/rules/code-style.md`), not tooling.
 - **`.env.example`'s vars aren't wired up yet.** It lists `API_URL`,
@@ -87,7 +140,7 @@ above.
 ## Common Commands
 
 ```bash
-npm install --legacy-peer-deps   # plain `npm install` currently fails, see above
+npm install           # plain install works now, see Known Gotchas
 npm start            # expo start
 npm run android       # expo start --android
 npm run ios           # expo start --ios
@@ -108,25 +161,34 @@ eas submit
 
 ```
 app/                       # expo-router routes (file-based)
-├── _layout.js              # root Stack layout
-├── index.js                 # "/" — onboarding slide 1
-├── home.js
-├── onboarding/2.js, 3.js
-├── auth/                   # route group, currently empty (.gitignore placeholder only)
-└── tabs/                   # route group, currently empty (.gitignore placeholder only)
+├── _layout.tsx              # root Stack layout (wraps in UserProvider)
+├── index.tsx                 # "/" — Splash screen, bootstraps + redirects
+├── onboarding.tsx            # "/onboarding" — single animated screen
+├── auth/                    # choose-role, register, login, otp, forgot/reset-password
+├── owner/                   # register, welcome
+├── profile/                 # index (view), edit
+├── settings.tsx
+├── pending.tsx               # shared post-registration waiting screen
+├── home.tsx                  # placeholder post-login destination
+└── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
-├── screens/onboarding/     # OnboardingSlide1/2/3.js — actual screen UI
-├── components/onboarding/  # PaginationDots.js, GlassCard.js — shared UI
-├── hooks/useFloatingAnimation.js   # shared onboarding float animation
-├── utils/onboardingStorage.js      # AsyncStorage onboarding_completed flag
-├── constants/colors.js     # shared design tokens
-└── config/ services/ state/ types/   # all still empty placeholders
+├── screens/{splash,onboarding,auth,owner,common}/   # presentational screen components
+├── components/{onboarding,common}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, ...)
+├── services/authService.ts   # axios + axios-mock-adapter, gated by USE_MOCK_API
+├── schemas/                  # zod validation per form, each with a co-located *.test.ts
+├── context/UserContext.tsx   # session state, wraps app in _layout.tsx
+├── config/env.ts             # API_URL / USE_MOCK_API / etc. via expo-constants
+├── utils/{authStorage,onboardingStorage}.ts   # secure-store token + AsyncStorage onboarding flag
+├── hooks/useFloatingAnimation.ts
+├── constants/ theme/          # design tokens
+└── state/ types/               # state/ still empty; types/ has auth.ts only
 ```
 
 Convention (see `.claude/rules/code-style.md` for the full version): each
-screen is a thin `app/<route>.js` (owns navigation, calls `useRouter()`)
-rendering a presentational `src/screens/<flow>/<Screen>.js` (owns UI, takes
-navigation as callback props like `onNext`/`onSkip`). Use the
+screen is a thin `app/<route>.tsx` (owns navigation, calls `useRouter()`)
+rendering a presentational `src/screens/<flow>/<Screen>.tsx` (owns UI, takes
+navigation as callback props like `onNext`/`onSkip`) — not consistently
+followed today, see the Auth bullet under Project Overview. Use the
 `expo-screen-scaffolder` skill to add a new screen following this pattern,
 `zustand-store-generator` for shared state, and `api-service-scaffolder` for
 backend calls.
@@ -139,10 +201,11 @@ detail in `.claude/rules/code-style.md`.
 
 ## Important Guidelines
 
-- This directory has its own `.git` — commits/branches here aren't visible
-  from the polyrepo root.
-- Nothing beyond the onboarding flow (see Project Overview) is implemented
-  — verify a screen/route/service exists before assuming it does.
+- Despite the root `CLAUDE.md`'s polyrepo description, this directory has
+  no `.git` of its own today — see Project Overview.
+- Auth, owner-registration, profile, and settings flows are real (see
+  Project Overview) — but `src/state/` and `app/tabs/` are still empty;
+  verify a store or tab route exists before assuming it does.
 - Auth tokens and other sensitive values must go through `expo-secure-store`
   once auth exists, never `AsyncStorage` — see
   `.claude/rules/api-conventions.md` and the `security-auditor` subagent.
