@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import MockAdapter from 'axios-mock-adapter';
+// import MockAdapter from 'axios-mock-adapter';
 import { API_URL, USE_MOCK_API } from '../config/env';
 import type { RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
 
@@ -63,137 +63,137 @@ const client: AxiosInstance = axios.create();
 //   forgotPassword -> always 200 with the same generic message (matches real anti-enumeration behavior)
 //   otp "111111"   -> reset always succeeds
 //   otp anything else -> reset always fails (400, attemptsRemaining counts down per call, then 429)
-if (USE_MOCK_API) {
-  const mock = new MockAdapter(client, { delayResponse: 1000 });
-  const mockOtpAttempts = new Map<string, number>();
-  const mockResetAttempts = new Map<string, number>();
+// if (USE_MOCK_API) {
+//   const mock = new MockAdapter(client, { delayResponse: 1000 });
+//   const mockOtpAttempts = new Map<string, number>();
+//   const mockResetAttempts = new Map<string, number>();
 
-  mock.onPost(`${API_URL}/auth/register`).reply((config) => {
-    const body = JSON.parse(config.data) as RegisterPayload;
+//   mock.onPost(`${API_URL}/auth/register`).reply((config) => {
+//     const body = JSON.parse(config.data) as RegisterPayload;
 
-    if (body.email === 'taken@example.com') {
-      return [409, { message: 'Email đã được sử dụng' }];
-    }
+//     if (body.email === 'taken@example.com') {
+//       return [409, { message: 'Email đã được sử dụng' }];
+//     }
 
-    if (body.email === 'network@example.com') {
-      return Promise.reject(new Error('Network Error'));
-    }
+//     if (body.email === 'network@example.com') {
+//       return Promise.reject(new Error('Network Error'));
+//     }
 
-    if (body.email === 'invalid-phone@example.com') {
-      return [
-        400,
-        {
-          message: 'Validation failed',
-          errors: [
-            { field: 'phoneNumber', message: 'Phone number must be 10–15 digits (optional leading +)' },
-          ],
-        },
-      ];
-    }
+//     if (body.email === 'invalid-phone@example.com') {
+//       return [
+//         400,
+//         {
+//           message: 'Validation failed',
+//           errors: [
+//             { field: 'phoneNumber', message: 'Phone number must be 10–15 digits (optional leading +)' },
+//           ],
+//         },
+//       ];
+//     }
 
-    return [200, { id: 'mock-user-id-001', email: body.email }];
-  });
+//     return [200, { id: 'mock-user-id-001', email: body.email }];
+//   });
 
-  mock.onPost(`${API_URL}/auth/otp/verify`).reply((config) => {
-    const body = JSON.parse(config.data) as { email: string; otp: string };
+//   mock.onPost(`${API_URL}/auth/otp/verify`).reply((config) => {
+//     const body = JSON.parse(config.data) as { email: string; otp: string };
 
-    if (body.email === 'locked@example.com') {
-      return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
-    }
+//     if (body.email === 'locked@example.com') {
+//       return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
+//     }
 
-    if (body.otp === '111111') {
-      return [200, { message: 'Email verified successfully', email: body.email }];
-    }
+//     if (body.otp === '111111') {
+//       return [200, { message: 'Email verified successfully', email: body.email }];
+//     }
 
-    if (body.otp === '000000') {
-      const attempts = (mockOtpAttempts.get(body.email) || 0) + 1;
-      mockOtpAttempts.set(body.email, attempts);
-      const attemptsRemaining = OTP_MAX_ATTEMPTS - attempts;
+//     if (body.otp === '000000') {
+//       const attempts = (mockOtpAttempts.get(body.email) || 0) + 1;
+//       mockOtpAttempts.set(body.email, attempts);
+//       const attemptsRemaining = OTP_MAX_ATTEMPTS - attempts;
 
-      if (attemptsRemaining <= 0) {
-        return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
-      }
-      return [400, { message: 'Invalid OTP', details: { attemptsRemaining } }];
-    }
+//       if (attemptsRemaining <= 0) {
+//         return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
+//       }
+//       return [400, { message: 'Invalid OTP', details: { attemptsRemaining } }];
+//     }
 
-    return [400, { message: 'OTP expired or not found. Please request a new code.' }];
-  });
+//     return [400, { message: 'OTP expired or not found. Please request a new code.' }];
+//   });
 
-  mock.onPost(`${API_URL}/auth/otp/resend`).reply((config) => {
-    const body = JSON.parse(config.data) as { email: string };
-    mockOtpAttempts.delete(body.email);
+//   mock.onPost(`${API_URL}/auth/otp/resend`).reply((config) => {
+//     const body = JSON.parse(config.data) as { email: string };
+//     mockOtpAttempts.delete(body.email);
 
-    return [
-      200,
-      { message: 'A new OTP has been sent to your email', email: body.email, resendAvailableInSeconds: 60 },
-    ];
-  });
+//     return [
+//       200,
+//       { message: 'A new OTP has been sent to your email', email: body.email, resendAvailableInSeconds: 60 },
+//     ];
+//   });
 
-  mock.onPost(`${API_URL}/auth/login`).reply((config) => {
-    const body = JSON.parse(config.data) as { email: string; password: string };
+//   mock.onPost(`${API_URL}/auth/login`).reply((config) => {
+//     const body = JSON.parse(config.data) as { email: string; password: string };
 
-    if (body.email === 'locked@example.com') {
-      return [403, { message: 'Account is locked. Please contact support.' }];
-    }
+//     if (body.email === 'locked@example.com') {
+//       return [403, { message: 'Account is locked. Please contact support.' }];
+//     }
 
-    if (body.email === 'pending@example.com') {
-      return [403, { message: 'Account is pending approval and cannot log in yet.' }];
-    }
+//     if (body.email === 'pending@example.com') {
+//       return [403, { message: 'Account is pending approval and cannot log in yet.' }];
+//     }
 
-    if (body.email === 'noselectrole@example.com') {
-      return [
-        403,
-        { message: 'Please select your role to continue.', details: { nextStep: 'SELECT_ROLE' } },
-      ];
-    }
+//     if (body.email === 'noselectrole@example.com') {
+//       return [
+//         403,
+//         { message: 'Please select your role to continue.', details: { nextStep: 'SELECT_ROLE' } },
+//       ];
+//     }
 
-    if (body.password === 'wrongpass') {
-      return [401, { message: 'Invalid email or password', details: { attemptsRemaining: 4 } }];
-    }
+//     if (body.password === 'wrongpass') {
+//       return [401, { message: 'Invalid email or password', details: { attemptsRemaining: 4 } }];
+//     }
 
-    return [
-      200,
-      {
-        message: 'Login successful',
-        accessToken: 'mock-access-token',
-        refreshToken: 'mock-refresh-token',
-        tokenType: 'Bearer',
-        expiresIn: 900,
-        user: {
-          userId: 'mock-user-id-001',
-          email: body.email,
-          fullName: 'Mock User',
-          role: 'PLAYER',
-          status: 'ACTIVE',
-          roleSelected: true,
-          emailVerified: true,
-        },
-      },
-    ];
-  });
+//     return [
+//       200,
+//       {
+//         message: 'Login successful',
+//         accessToken: 'mock-access-token',
+//         refreshToken: 'mock-refresh-token',
+//         tokenType: 'Bearer',
+//         expiresIn: 900,
+//         user: {
+//           userId: 'mock-user-id-001',
+//           email: body.email,
+//           fullName: 'Mock User',
+//           role: 'PLAYER',
+//           status: 'ACTIVE',
+//           roleSelected: true,
+//           emailVerified: true,
+//         },
+//       },
+//     ];
+//   });
 
-  mock.onPost(`${API_URL}/auth/forgot-password`).reply(() => {
-    return [200, { message: 'If an account exists for this email, an OTP has been sent.' }];
-  });
+//   mock.onPost(`${API_URL}/auth/forgot-password`).reply(() => {
+//     return [200, { message: 'If an account exists for this email, an OTP has been sent.' }];
+//   });
 
-  mock.onPost(`${API_URL}/auth/reset-password`).reply((config) => {
-    const body = JSON.parse(config.data) as { email: string; otp: string };
+//   mock.onPost(`${API_URL}/auth/reset-password`).reply((config) => {
+//     const body = JSON.parse(config.data) as { email: string; otp: string };
 
-    if (body.otp === '111111') {
-      mockResetAttempts.delete(body.email);
-      return [200, { message: 'Password has been reset successfully. You can now log in.', email: body.email }];
-    }
+//     if (body.otp === '111111') {
+//       mockResetAttempts.delete(body.email);
+//       return [200, { message: 'Password has been reset successfully. You can now log in.', email: body.email }];
+//     }
 
-    const attempts = (mockResetAttempts.get(body.email) || 0) + 1;
-    mockResetAttempts.set(body.email, attempts);
-    const attemptsRemaining = OTP_MAX_ATTEMPTS - attempts;
+//     const attempts = (mockResetAttempts.get(body.email) || 0) + 1;
+//     mockResetAttempts.set(body.email, attempts);
+//     const attemptsRemaining = OTP_MAX_ATTEMPTS - attempts;
 
-    if (attemptsRemaining <= 0) {
-      return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
-    }
-    return [400, { message: 'Invalid or expired OTP', details: { attemptsRemaining } }];
-  });
-}
+//     if (attemptsRemaining <= 0) {
+//       return [429, { message: 'Too many invalid OTP attempts. Please request a new code.' }];
+//     }
+//     return [400, { message: 'Invalid or expired OTP', details: { attemptsRemaining } }];
+//   });
+// }
 
 export async function register(payload: RegisterPayload): Promise<RegisterResult> {
   try {
