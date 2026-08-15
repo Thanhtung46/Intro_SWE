@@ -1,4 +1,12 @@
 import { parseRegisterDto } from '../dto/register.dto.js';
+import { parseVerifyOtpDto, parseResendOtpDto } from '../dto/otp.dto.js';
+import { parseLoginDto } from '../dto/login.dto.js';
+import { parseSelectRoleDto } from '../dto/role.dto.js';
+import {
+  parseForgotPasswordDto,
+  parseResetPasswordDto,
+} from '../dto/forgot-password.dto.js';
+import { parseRefreshDto } from '../dto/refresh.dto.js';
 import * as authService from '../service/auth.service.js';
 
 export async function register(req, res, next) {
@@ -6,6 +14,85 @@ export async function register(req, res, next) {
     const dto = parseRegisterDto(req.body);
     const result = await authService.registerPlayer(dto);
     return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function verifyOtp(req, res, next) {
+  try {
+    const dto = parseVerifyOtpDto(req.body);
+    const result = await authService.verifyOtp(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function resendOtp(req, res, next) {
+  try {
+    const dto = parseResendOtpDto(req.body);
+    const result = await authService.resendOtp(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function login(req, res, next) {
+  try {
+    const dto = parseLoginDto(req.body);
+    const result = await authService.login(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function selectRole(req, res, next) {
+  try {
+    const dto = parseSelectRoleDto(req.body);
+    const result = await authService.selectRole(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const dto = parseForgotPasswordDto(req.body);
+    const result = await authService.forgotPassword(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const dto = parseResetPasswordDto(req.body);
+    const result = await authService.resetPassword(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function refresh(req, res, next) {
+  try {
+    const dto = parseRefreshDto(req.body);
+    const result = await authService.refreshSession(dto);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function me(req, res, next) {
+  try {
+    const result = await authService.getCurrentUser(req.user.userId);
+    return res.status(200).json(result);
   } catch (err) {
     return next(err);
   }

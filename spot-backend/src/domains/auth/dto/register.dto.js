@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { GENDERS } from '../../../shared/constants/auth.js';
 
-const phoneRegex = /^\+?[0-9]{10,15}$/;
+const phoneRegex = /^0(2|3|5|7|8|9)[0-9]{8}$/;
 
 export const registerSchema = z
   .object({
@@ -18,7 +18,10 @@ export const registerSchema = z
     phoneNumber: z
       .string({ required_error: 'Phone number is required' })
       .trim()
-      .regex(phoneRegex, 'Phone number must be 10–15 digits (optional leading +)'),
+      .regex(
+        phoneRegex,
+        'Phone number must be a valid Vietnamese number (10 digits, starting with 02, 03, 05, 07, 08, or 09)',
+      ),
     gender: z.enum(GENDERS, {
       errorMap: () => ({
         message: 'Gender must be one of: male, female, other, prefer_not_to_say',
@@ -29,7 +32,11 @@ export const registerSchema = z
       .min(8, 'Password must be at least 8 characters')
       .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
       .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Password must contain at least one digit'),
+      .regex(/[0-9]/, 'Password must contain at least one digit')
+      .regex(
+        /[^A-Za-z0-9]/,
+        'Password must contain at least one special character',
+      ),
     confirmPassword: z.string({
       required_error: 'Confirm password is required',
     }),

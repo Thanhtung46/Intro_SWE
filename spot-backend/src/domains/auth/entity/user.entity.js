@@ -8,6 +8,9 @@ export function toPublicUser(row) {
     role: row.role,
     status: row.status,
     gender: row.gender ?? undefined,
+    roleSelected: Boolean(row.role_selected_at),
+    roleSelectedAt: row.role_selected_at ?? null,
+    emailVerified: Boolean(row.email_verified_at),
     createdAt: row.created_at,
   };
 }
