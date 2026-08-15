@@ -1,6 +1,6 @@
-// Shared color tokens for the SPOT onboarding flow.
-// Pulled from the Figma design ("Onboarding 1" frame) so slides 2-3 and the
-// role-selection screen can reuse the same palette.
+// Shared color tokens for the SPOT onboarding/role flow.
+// Pulled from the Figma design ("Onboarding 1" frame) so onboarding,
+// choose-role, and the owner/referee screens can reuse the same palette.
 export const colors = {
   gradientStart: '#EFF6FF',
   gradientEnd: '#E0F2FE',
@@ -14,6 +14,11 @@ export const colors = {
   dotInactive: '#D1D5DB',
   white: '#FFFFFF',
 
+  outline: '#737686',
+  progressTrack: '#DCE9FF',
+  error: '#BA1A1A',
+  errorBackground: '#FDECEC',
+
   cardBorder: 'rgba(255, 255, 255, 0.4)',
   cardShadow: 'rgba(37, 99, 235, 0.15)',
   // Tint layered over the BlurView so it reads as white glass, not gray blur.
@@ -25,9 +30,11 @@ export const colors = {
 
   buttonShadow: 'rgba(37, 99, 235, 0.3)',
 
-  // Owner Welcome screen (Figma node 1:634) — not in the shared onboarding
-  // palette above, so added here rather than hardcoded in the screen.
-  ownerHeading: '#1D4ED8',
-  labelMuted: '#737686',
-  success: '#16A34A',
-};
+  // Choose Role / Owner / Referee screens (Figma nodes 1:565, 1:634).
+  screenBackground: '#F8F9FF',
+  cardBackground: 'rgba(255, 255, 255, 0.7)',
+  selectedBackground: '#EFF4FF',
+  iconBackground: '#EFF4FF',
+  primaryDisabled: '#A9C0F5',
+  primaryDisabledText: '#EEEFFF',
+} as const;
