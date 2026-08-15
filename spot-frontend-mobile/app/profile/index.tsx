@@ -2,8 +2,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { ReactNode, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useUser } from '../src/context/UserContext';
-import { colors } from '../src/theme/colors';
+import { useUser } from '../../src/context/UserContext';
+import { colors } from '../../src/theme/colors';
 
 const FAVORITE_TABS = ['Matches', 'Venues', 'Groups', 'Tournaments'];
 const HOSTED_MATCH_TABS = ['Open', 'Ended', 'All'];
@@ -69,7 +69,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             testID="profile-edit-button"
             style={styles.editButton}
-            onPress={() => showComingSoon('Edit Profile')}
+            onPress={() => router.push('/profile/edit')}
           >
             <Ionicons name="create-outline" size={16} color={colors.white} />
             <Text style={styles.editButtonText}>Edit</Text>
