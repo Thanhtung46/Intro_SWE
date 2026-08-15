@@ -16,4 +16,5 @@ export const colors = {
   orangeSoft: '#FFF7ED',
   amber: '#F59E0B',
   amberSoft: '#FFFBEB',
+  success: '#16A34A',
 };
