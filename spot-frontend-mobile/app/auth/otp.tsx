@@ -51,9 +51,9 @@ export default function OtpScreen() {
 
     if (response.success) {
       verifiedRef.current = true;
-      // Email verified — go straight to the dashboard instead of bouncing
-      // back to Login. `replace` so OTP isn't left in the back stack.
-      router.replace('/home');
+      // Email verified — go to role selection before entering the app
+      // (role must be set via POST /auth/role or login is blocked later).
+      router.push({ pathname: '/auth/choose-role', params: { email } });
       return;
     }
 
