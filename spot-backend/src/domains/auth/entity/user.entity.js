@@ -8,9 +8,32 @@ export function toPublicUser(row) {
     role: row.role,
     status: row.status,
     gender: row.gender ?? undefined,
+    avatarUrl: row.avatar_url ?? null,
+    language: row.language ?? 'en',
+    appearance: row.appearance ?? 'light',
+    pushNotificationsEnabled:
+      row.push_notifications_enabled === undefined
+        ? true
+        : Boolean(row.push_notifications_enabled),
+    locationServicesEnabled:
+      row.location_services_enabled === undefined
+        ? true
+        : Boolean(row.location_services_enabled),
     roleSelected: Boolean(row.role_selected_at),
     roleSelectedAt: row.role_selected_at ?? null,
     emailVerified: Boolean(row.email_verified_at),
     createdAt: row.created_at,
+  };
+}
+
+/** Settings prefs subset (sync across devices via DB). */
+export function toPublicPreferences(row) {
+  if (!row) return null;
+  const user = toPublicUser(row);
+  return {
+    language: user.language,
+    appearance: user.appearance,
+    pushNotificationsEnabled: user.pushNotificationsEnabled,
+    locationServicesEnabled: user.locationServicesEnabled,
   };
 }

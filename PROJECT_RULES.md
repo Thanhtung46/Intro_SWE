@@ -87,27 +87,30 @@ this app's `CLAUDE.md`.
 
 ---
 
-### 1.5. `spot-backend/` — target stack (not installed yet)
-No `package.json` exists in `spot-backend/` yet. The list below is the
-**intended** dependency set for when backend work starts — install exactly
-these, don't drift:
+### 1.5. `spot-backend/` — installed stack
+
+`package.json` / `package-lock.json` exist; app is **installable and runnable**.
+Pin close to these versions (see lockfile for exact resolves). Full status:
+`spot-backend/CLAUDE.md`.
 
 | Package Name | Target Version | Description & Usage |
 | :--- | :--- | :--- |
 | **`express`** | **`4.19.x`** | Node.js web server framework |
-| **`jsonwebtoken`** | **`9.0.x`** | RS256 JWT authentication |
-| **`argon2`** | **`0.40.x`** | OWASP-recommended password hashing |
+| **`jsonwebtoken`** | **`9.0.x`** | JWT authentication (access + refresh) |
+| **`argon2`** | **`0.40.x`** | Password + OTP hashing |
 | **`express-rate-limit`** | **`7.3.x`** | Rate limiting |
-| **`helmet`** | **`7.1.x`** | HTTP security headers |
-| **`pg`** | **`8.12.x`** | PostgreSQL client driver |
-| **`@prisma/client` / `prisma`** | **`5.17.x`** | ORM |
-| **`ioredis`** | **`5.4.x`** | Redis client driver |
-| **`redlock`** | **`5.0.0-beta.2`** | Redis slot locking (see §2.3) |
-| **`winston`** | **`3.13.x`** | Structured JSON logging |
+| **`pg`** | **`8.x`** | Postgres client (Supabase Session pooler) |
+| **`ioredis`** | **`5.x`** | OTP counters / reminder ZSET (soft-fail) |
+| **`zod`** | **`3.x`** | Request DTOs |
+| **`nodemailer`** | **`6.x`** | Gmail SMTP for OTP |
+| **`multer`** | **`1.4.x`** | Avatar multipart upload (local disk) |
+| **`dotenv` / `cors` / `helmet` / `winston`** | current | Config / security headers / logging |
+
+Also listed in deps but **not wired for auth**: `@supabase/supabase-js` — use `pg` + `ioredis` directly.
 
 There is exactly **one** backend service — not an `api-gateway` +
 `core-api` split. Domain-driven under `src/domains/<name>/{controller,dto,
-entity,repository,service}/`.
+entity,repository,service}/`. ORM is **`pg` SQL**, not Prisma (do not assume Prisma).
 
 ---
 

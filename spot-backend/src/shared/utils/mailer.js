@@ -43,19 +43,29 @@ function getTransporter() {
   return transporter;
 }
 
+function otpAction(purpose) {
+  if (purpose === 'FORGOT_PASSWORD') return 'reset your password';
+  if (purpose === 'CHANGE_EMAIL') return 'confirm your email change';
+  if (purpose === 'CHANGE_PHONE') return 'confirm your phone number change';
+  return 'verify your email';
+}
+
 function otpSubject(purpose) {
   if (purpose === 'FORGOT_PASSWORD') {
     return 'SPOT password reset code';
+  }
+  if (purpose === 'CHANGE_EMAIL') {
+    return 'SPOT confirm email change';
+  }
+  if (purpose === 'CHANGE_PHONE') {
+    return 'SPOT confirm phone number change';
   }
   return 'SPOT email verification code';
 }
 
 function otpText({ otp, purpose, ttlSeconds }) {
   const minutes = Math.max(1, Math.round(ttlSeconds / 60));
-  const action =
-    purpose === 'FORGOT_PASSWORD'
-      ? 'reset your password'
-      : 'verify your email';
+  const action = otpAction(purpose);
   return [
     `Your SPOT verification code is: ${otp}`,
     '',
@@ -67,10 +77,7 @@ function otpText({ otp, purpose, ttlSeconds }) {
 
 function otpHtml({ otp, purpose, ttlSeconds }) {
   const minutes = Math.max(1, Math.round(ttlSeconds / 60));
-  const action =
-    purpose === 'FORGOT_PASSWORD'
-      ? 'reset your password'
-      : 'verify your email';
+  const action = otpAction(purpose);
   return `<!doctype html>
 <html>
   <body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#111;">
@@ -146,5 +153,63 @@ export async function sendOtpEmail({ email, otp, purpose, ttlSeconds }) {
       error: err.message,
     });
     throw new AppError('Failed to send OTP email. Please try again.', 503);
+  }
+}
+
+/**
+ * Sends a transactional notification email (booking / reminder / system).
+ * In development without SMTP, logs instead of failing.
+ */
+export async function sendNotificationEmail({ email, subject, text, html }) {
+  const safeSubject = subject || 'SPOT notification';
+  const safeText = text || '';
+  const safeHtml =
+    html ||
+    `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#111;">
+      <p>${safeText.replace(/\n/g, '<br/>')}</p>
+    </body></html>`;
+
+  if (!isSmtpConfigured()) {
+    if (config.node_env === 'production') {
+      throw new AppError('Email service is not configured', 503);
+    }
+    logger.info('SMTP not configured — notification email (dev only)', {
+      email,
+      subject: safeSubject,
+      text: safeText,
+    });
+    return { delivered: false, mode: 'dev-log' };
+  }
+
+  try {
+    const tx = getTransporter();
+    if (!verified) {
+      await tx.verify();
+      verified = true;
+    }
+
+    const info = await tx.sendMail({
+      from: config.smtp.from,
+      to: email,
+      subject: safeSubject,
+      text: safeText,
+      html: safeHtml,
+    });
+
+    logger.info('Notification email sent', {
+      email,
+      subject: safeSubject,
+      messageId: info.messageId,
+    });
+
+    return { delivered: true, mode: 'smtp', messageId: info.messageId };
+  } catch (err) {
+    verified = false;
+    logger.error('Failed to send notification email', {
+      email,
+      subject: safeSubject,
+      error: err.message,
+    });
+    throw new AppError('Failed to send notification email. Please try again.', 503);
   }
 }
