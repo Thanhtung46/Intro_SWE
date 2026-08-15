@@ -11,8 +11,8 @@ const email = domain
   ? `${local}+forgot${stamp}@${domain}`
   : `forgot_${stamp}@example.com`;
 const phoneNumber = `09${String(stamp).slice(-8)}`;
-const password = 'Password1';
-const newPassword = 'NewPass2';
+const password = 'Password1!';
+const newPassword = 'NewPass2!';
 
 async function post(path, body) {
   const res = await fetch(`${baseUrl}${path}`, {

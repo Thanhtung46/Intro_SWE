@@ -16,6 +16,7 @@ Domain-driven layout under
 | Auth crypto | `argon2id` passwords + OTPs; JWT access/refresh (`jsonwebtoken`) |
 | Validation | Zod DTOs |
 | Agent notes | See [`CLAUDE.md`](./CLAUDE.md) |
+| **API cho FE / Tester** | See [`API.md`](./API.md) — request/response, lỗi, curl, checklist |
 
 ---
 
@@ -33,31 +34,34 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 | **OTP verify** `POST /auth/otp/verify` | Verify 6-digit code, set `email_verified_at`, mark OTP used | Done |
 | **OTP resend** `POST /auth/otp/resend` | New OTP; 60s cooldown; max 5 wrong attempts | Done |
 | **Login** `POST /auth/login` | Access + refresh JWT (`sub`, `role`); lockout after 5 failed passwords / 15 min | Done |
+| **Refresh** `POST /auth/refresh` | Exchange refresh JWT → new access + refresh | Done |
+| **Me** `GET /auth/me` | Protected sample (`authenticate` + Bearer access) | Done |
 | **Forgot password** `POST /auth/forgot-password` | OTP with `purpose=FORGOT_PASSWORD`; anti-enumeration (always same 200 message) | Done |
 | **Reset password** `POST /auth/reset-password` | Verify forgot OTP → update `password_hash`, clear lockout | Done |
 | **Email delivery** | `nodemailer` + Gmail SMTP; HTML + text; without SMTP in dev, OTP is logged | Done |
 | **Rate limiting** | IP + email limiters on OTP / login / forgot / reset (`express-rate-limit`) | Done |
 | **Zod validation** | DTOs: register, role, otp, login, forgot-password | Done |
-| **Migrations** | `001`–`005` tracked in `public.schema_migrations` | Done |
+| **Migrations** | `001_schema_auth.sql` tracked in `public.schema_migrations` | Done |
 | **Docker ↔ Supabase** | Compose `env_file: spot-backend/.env`; `REDIS_HOST=redis`; Session pooler + SSL; optional local Postgres via profile `local-db` | Done |
 | **Smoke / unit tests** | DTO unit tests + smoke scripts for register / otp / login / forgot-password | Done |
 
 ### Schema decisions
 
-- `gender` lives on **`schema_auth.users`** (migration `003` dropped `user_profiles`).
+- `gender` lives on **`schema_auth.users`** (no `user_profiles`).
 - OTP rows live in **`schema_auth.otp_verifications`** (not `otp_tokens`), filtered by `purpose`.
-- Added `email_verified_at` (`004`) and `role_selected_at` (`005`).
+- `email_verified_at` and `role_selected_at` on `users` (see `001_schema_auth.sql`).
 
 ### Still out of scope
 
-- `authenticate` / `requireRole` middleware for protected APIs
-- Refresh-token rotation / Redis JWT blacklist
+- Refresh-token rotation / Redis JWT blacklist (old refresh valid until TTL)
 - Admin approve `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`)
 - Non-auth domains (`booking`, `venue`, `payment`, …) — empty scaffolds only
 
 ---
 
 ## Auth API reference
+
+> Chi tiết đầy đủ (body, response mẫu, bảng lỗi, checklist Postman): **[`API.md`](./API.md)**.
 
 All routes are mounted at **`/auth/*`** and **`/api/auth/*`**.
 
@@ -68,6 +72,8 @@ All routes are mounted at **`/auth/*`** and **`/api/auth/*`**.
 | `POST` | `/auth/otp/verify` | `email`, `otp` (6 digits), `purpose?` (default `REGISTER`) | `200` `{ message, email }` |
 | `POST` | `/auth/otp/resend` | `email`, `purpose?` | `200` `{ message, email, resendAvailableInSeconds }` |
 | `POST` | `/auth/login` | `email`, `password` | `200` `{ accessToken, refreshToken, tokenType, expiresIn, user }` |
+| `POST` | `/auth/refresh` | `refreshToken` | `200` new access + refresh |
+| `GET` | `/auth/me` | `Authorization: Bearer <access>` | `200` `{ user }` |
 | `POST` | `/auth/forgot-password` | `email` | `200` same message whether or not email exists |
 | `POST` | `/auth/reset-password` | `email`, `otp`, `newPassword`, `confirmPassword` | `200` password updated |
 
@@ -112,15 +118,18 @@ curl -s -X POST http://localhost:3000/auth/register \
     "email": "player@example.com",
     "phoneNumber": "0901234567",
     "gender": "male",
-    "password": "Secret123",
-    "confirmPassword": "Secret123"
+    "password": "Secret123!",
+    "confirmPassword": "Secret123!"
   }'
 ```
 
 `gender`: `male` | `female` | `other` | `prefer_not_to_say`.
 
 Password rules (register + reset): min 8 characters, at least one lowercase,
-uppercase, and digit; confirm must match.
+uppercase, digit, **and special character**; confirm must match.
+
+Phone: Vietnamese **10 digits** starting with `02` / `03` / `05` / `07` / `08` / `09`
+(e.g. `0901234567`, landline `0241234567`).
 
 ### JWT
 
@@ -205,11 +214,9 @@ console instead of emailed.
 
 | Migration | Purpose |
 | :--- | :--- |
-| `001_schema_auth.sql` | `users` + `otp_verifications` (canonical create) |
-| `002_align_schema_auth.sql` | Historical realign of empty tables |
-| `003_users_gender_drop_profiles.sql` | Move `gender` onto `users`; drop `user_profiles` |
-| `004_users_email_verified_at.sql` | `email_verified_at` |
-| `005_users_role_selected_at.sql` | `role_selected_at` |
+| File | Purpose |
+| :--- | :--- |
+| `001_schema_auth.sql` | `schema_auth.users` + `otp_verifications` (full auth schema) |
 
 Applied migrations are recorded in `public.schema_migrations`
 (`scripts/migrate.js` skips already-applied files).
@@ -245,7 +252,7 @@ src/
     ├── database/{config,pool,redis}.js
     ├── middleware/{errorHandler,otpRateLimit}.js
     └── utils/{logger,otp,password,jwt,mailer}.js
-migrations/                       # 001–005
+migrations/                       # 001_schema_auth.sql
 scripts/
 ├── migrate.js / check-db.js
 ├── smoke-register.js

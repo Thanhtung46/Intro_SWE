@@ -10,6 +10,18 @@ export async function findByEmail(client, email) {
   return rows[0] || null;
 }
 
+export async function findById(client, userId) {
+  const { rows } = await client.query(
+    `SELECT user_id, email, full_name, phone_number, gender, role, status,
+            email_verified_at, role_selected_at, created_at
+     FROM schema_auth.users
+     WHERE user_id = $1
+     LIMIT 1`,
+    [userId],
+  );
+  return rows[0] || null;
+}
+
 export async function findAuthByEmail(client, email) {
   const { rows } = await client.query(
     `SELECT user_id, email, full_name, phone_number, gender, role, status,

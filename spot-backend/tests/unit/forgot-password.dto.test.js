@@ -31,19 +31,19 @@ describe('resetPasswordSchema', () => {
     const parsed = resetPasswordSchema.parse({
       email: 'player@example.com',
       otp: '123456',
-      newPassword: 'Password1',
-      confirmPassword: 'Password1',
+      newPassword: 'Password1!',
+      confirmPassword: 'Password1!',
     });
     assert.equal(parsed.otp, '123456');
-    assert.equal(parsed.newPassword, 'Password1');
+    assert.equal(parsed.newPassword, 'Password1!');
   });
 
   it('rejects non-digit OTP', () => {
     const result = resetPasswordSchema.safeParse({
       email: 'player@example.com',
       otp: '12ab56',
-      newPassword: 'Password1',
-      confirmPassword: 'Password1',
+      newPassword: 'Password1!',
+      confirmPassword: 'Password1!',
     });
     assert.equal(result.success, false);
   });
@@ -58,12 +58,22 @@ describe('resetPasswordSchema', () => {
     assert.equal(result.success, false);
   });
 
-  it('rejects mismatched confirm password', () => {
+  it('rejects password without special character', () => {
     const result = resetPasswordSchema.safeParse({
       email: 'player@example.com',
       otp: '123456',
       newPassword: 'Password1',
-      confirmPassword: 'Password2',
+      confirmPassword: 'Password1',
+    });
+    assert.equal(result.success, false);
+  });
+
+  it('rejects mismatched confirm password', () => {
+    const result = resetPasswordSchema.safeParse({
+      email: 'player@example.com',
+      otp: '123456',
+      newPassword: 'Password1!',
+      confirmPassword: 'Password2!',
     });
     assert.equal(result.success, false);
   });

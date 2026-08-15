@@ -12,7 +12,7 @@ const email = domain
   ? `${local}+login${stamp}@${domain}`
   : `login_${stamp}@example.com`;
 const phoneNumber = `08${String(stamp).slice(-8)}`;
-const password = 'Password1';
+const password = 'Password1!';
 
 async function post(path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
@@ -92,5 +92,57 @@ log('JWT claims', {
 
 if (access.type !== 'access' || refresh.type !== 'refresh') process.exit(1);
 if (access.role !== 'PLAYER') process.exit(1);
+
+async function get(path, token) {
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = { raw: text };
+  }
+  return { status: res.status, json };
+}
+
+const noAuth = await get('/auth/me');
+log('GET /auth/me without token', noAuth);
+if (noAuth.status !== 401) process.exit(1);
+
+const me = await get('/auth/me', ok.json.accessToken);
+log('GET /auth/me', {
+  status: me.status,
+  email: me.json.user?.email,
+  role: me.json.user?.role,
+});
+if (me.status !== 200 || me.json.user?.email !== email) process.exit(1);
+
+const withAccessAsRefresh = await post('/auth/refresh', {
+  refreshToken: ok.json.accessToken,
+});
+log('Refresh with access token (expect 401)', {
+  status: withAccessAsRefresh.status,
+});
+if (withAccessAsRefresh.status !== 401) process.exit(1);
+
+const refreshed = await post('/auth/refresh', {
+  refreshToken: ok.json.refreshToken,
+});
+log('Refresh', {
+  status: refreshed.status,
+  hasAccess: Boolean(refreshed.json.accessToken),
+  hasRefresh: Boolean(refreshed.json.refreshToken),
+  expiresIn: refreshed.json.expiresIn,
+});
+if (refreshed.status !== 200) process.exit(1);
+
+const me2 = await get('/auth/me', refreshed.json.accessToken);
+log('GET /auth/me after refresh', {
+  status: me2.status,
+  email: me2.json.user?.email,
+});
+if (me2.status !== 200) process.exit(1);
 
 console.log('\nSmoke login OK');
