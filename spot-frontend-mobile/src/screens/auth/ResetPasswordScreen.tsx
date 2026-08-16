@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,7 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { OtpInput } from '../../components/OtpInput';
 import { PasswordField } from '../../components/PasswordField';
 import { ResetPasswordFieldErrors, resetPasswordSchema } from '../../schemas/resetPasswordSchema';
 import { resetPassword } from '../../services/authService';
@@ -18,14 +16,17 @@ import { colors } from '../../theme/colors';
 
 export default function ResetPasswordScreen({
   email,
+  otp,
   onBack,
   onResetComplete,
 }: {
   email: string;
+  /** Collected on the previous OTP screen — this screen only asks for the
+   * new password, per the split-flow design (SPOT flow fix, 2026-08-16). */
+  otp: string;
   onBack: () => void;
   onResetComplete: () => void;
 }) {
-  const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<ResetPasswordFieldErrors>({});
@@ -59,11 +60,7 @@ export default function ResetPasswordScreen({
     setSubmitting(false);
 
     if (response.success) {
-      Alert.alert(
-        'Success',
-        response.message || 'Password has been reset successfully. You can now log in.',
-        [{ text: 'OK', onPress: onResetComplete }]
-      );
+      onResetComplete();
       return;
     }
 
@@ -94,10 +91,6 @@ export default function ResetPasswordScreen({
           <Text style={styles.subtitle}>
             Your new password must be different from previous used passwords.
           </Text>
-
-          <Text style={styles.otpLabel}>OTP Code</Text>
-          <OtpInput value={otp} onChange={setOtp} error={!!errors.otp} containerStyle={styles.otpRow} />
-          {errors.otp ? <Text style={styles.otpError}>{errors.otp}</Text> : null}
 
           <PasswordField
             label="New Password"
@@ -199,20 +192,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 24,
-  },
-  otpLabel: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 6,
-  },
-  otpRow: {
-    marginBottom: 4,
-  },
-  otpError: {
-    marginTop: 4,
-    marginBottom: 12,
-    fontSize: 12,
-    color: colors.error,
   },
   formError: {
     color: colors.error,
