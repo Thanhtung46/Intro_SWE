@@ -1,8 +1,44 @@
-import { JOIN_REQUEST_STATUSES, LISTABLE_MATCH_STATUSES, MATCH_STATUSES, MINE_TABS } from '../../../shared/constants/matchmaking.js';
+import {
+  JOIN_REQUEST_STATUSES,
+  LISTABLE_MATCH_STATUSES,
+  MATCH_SEARCH,
+  MATCH_STATUSES,
+  MINE_TABS,
+} from '../../../shared/constants/matchmaking.js';
+
+const FOLD = 'schema_matchmaking.fold_search_text';
+
+function locationPredicate(locationSlot) {
+  const q = `${FOLD}(${locationSlot})`;
+  const title = `${FOLD}(m.title)`;
+  const venue = `${FOLD}(m.venue_name)`;
+  const hay = `(${title} || ' ' || ${venue})`;
+  return `(
+    ${q} <> ''
+    AND (
+      position(${q} in ${title}) > 0
+      OR position(${q} in ${venue}) > 0
+      OR (
+        length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+        AND GREATEST(similarity(${title}, ${q}), similarity(${venue}, ${q}))
+          >= ${MATCH_SEARCH.LIST_SIMILARITY}
+      )
+      OR (
+        ${q} LIKE '% %'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
+          WHERE length(tok.t) > 0
+            AND position(tok.t in ${hay}) = 0
+        )
+      )
+    )
+  )`;
+}
 
 const MATCH_SELECT = `
   m.match_id, m.host_user_id, m.sport, m.format, m.title, m.notes, m.cover_url,
-  m.venue_name, m.venue_address, m.venue_lat, m.venue_lng,
+  m.venue_name, m.venue_address, m.province, m.city, m.venue_lat, m.venue_lng,
   m.starts_at, m.ends_at, m.is_multi_day, m.is_recurring,
   m.max_players, m.filled_count, m.skill_min, m.skill_max,
   m.skill_min_rank, m.skill_max_rank, m.all_levels, m.fee_type,
@@ -22,21 +58,21 @@ export async function createMatch(client, input) {
   const { rows } = await client.query(
     `INSERT INTO schema_matchmaking.matches (
        host_user_id, sport, format, title, notes, cover_url,
-       venue_name, venue_address, venue_lat, venue_lng,
+       venue_name, venue_address, province, city, venue_lat, venue_lng,
        starts_at, ends_at, is_multi_day, is_recurring,
        max_players, filled_count, skill_min, skill_max,
        skill_min_rank, skill_max_rank, all_levels, fee_type,
        price_min, price_max, join_mode, status
      ) VALUES (
        $1, $2, $3, $4, $5, $6,
-       $7, $8, $9, $10,
-       $11, $12, $13, $14,
-       $15, 1, $16, $17,
-       $18, $19, $20, $21,
-       $22, $23, $24, 'OPEN'
+       $7, $8, $9, $10, $11, $12,
+       $13, $14, $15, $16,
+       $17, 1, $18, $19,
+       $20, $21, $22, $23,
+       $24, $25, $26, 'OPEN'
      )
      RETURNING match_id, host_user_id, sport, format, title, notes, cover_url,
-               venue_name, venue_address, venue_lat, venue_lng,
+               venue_name, venue_address, province, city, venue_lat, venue_lng,
                starts_at, ends_at, is_multi_day, is_recurring,
                max_players, filled_count, skill_min, skill_max,
                skill_min_rank, skill_max_rank, all_levels, fee_type,
@@ -50,6 +86,8 @@ export async function createMatch(client, input) {
       input.coverUrl ?? null,
       input.venueName,
       input.venueAddress,
+      input.province,
+      input.city,
       input.latitude ?? null,
       input.longitude ?? null,
       input.startsAt,
@@ -134,7 +172,10 @@ export async function findById(client, matchId, viewerUserId = null) {
   return rows[0] || null;
 }
 
-function buildListMatchWhere(filters, { bindViewer = false } = {}) {
+function buildListMatchWhere(
+  filters,
+  { bindViewer = false, omitLocation = false } = {},
+) {
   const where = [
     `m.status = ANY($1::text[])`,
     `m.ends_at > NOW()`,
@@ -208,12 +249,16 @@ function buildListMatchWhere(filters, { bindViewer = false } = {}) {
             AND CEIL(m.price_min::numeric / NULLIF(m.max_players, 0)) >= ${slot}))`,
     );
   }
-  if (filters.location) {
-    const slot = add(filters.location);
-    where.push(
-      `(position(lower(${slot}) in lower(m.venue_name)) > 0
-        OR position(lower(${slot}) in lower(m.venue_address)) > 0)`,
-    );
+  let locationSlot = null;
+  if (filters.location && !omitLocation) {
+    locationSlot = add(filters.location);
+    where.push(locationPredicate(locationSlot));
+  }
+  if (filters.province) {
+    where.push(`m.province = ${add(filters.province)}`);
+  }
+  if (filters.city) {
+    where.push(`m.city = ${add(filters.city)}`);
   }
   if (
     filters.latitude != null &&
@@ -254,15 +299,22 @@ function buildListMatchWhere(filters, { bindViewer = false } = {}) {
     where.push(`m.host_user_id = ${add(filters.hostUserId)}`);
   }
 
-  return { where, params, add, viewerSlot };
+  return { where, params, add, viewerSlot, locationSlot };
 }
 
 export async function listMatches(client, filters) {
-  const { where, params, add, viewerSlot } = buildListMatchWhere(filters, {
-    bindViewer: true,
-  });
+  const { where, params, add, viewerSlot, locationSlot } = buildListMatchWhere(
+    filters,
+    { bindViewer: true },
+  );
   const limitSlot = add(filters.limit);
   const offsetSlot = add(filters.offset);
+  const orderBy = locationSlot
+    ? `GREATEST(
+         similarity(${FOLD}(m.title), ${FOLD}(${locationSlot})),
+         similarity(${FOLD}(m.venue_name), ${FOLD}(${locationSlot}))
+       ) DESC, m.starts_at ASC`
+    : 'm.starts_at ASC';
 
   const { rows } = await client.query(
     `SELECT ${MATCH_SELECT},
@@ -276,8 +328,58 @@ export async function listMatches(client, filters) {
      JOIN schema_auth.users u ON u.user_id = m.host_user_id
      LEFT JOIN schema_auth.user_profiles p ON p.user_id = u.user_id
      WHERE ${where.join(' AND ')}
-     ORDER BY m.starts_at ASC
+     ORDER BY ${orderBy}
      LIMIT ${limitSlot} OFFSET ${offsetSlot}`,
+    params,
+  );
+  return rows;
+}
+
+export async function listSearchSuggestions(client, filters) {
+  if (!filters.location) {
+    return [];
+  }
+  const { where, params, add } = buildListMatchWhere(filters, {
+    omitLocation: true,
+  });
+  const qSlot = add(filters.location);
+  const q = `${FOLD}(${qSlot})`;
+  const title = `${FOLD}(m.title)`;
+  const venue = `${FOLD}(m.venue_name)`;
+
+  const { rows } = await client.query(
+    `SELECT text, kind
+     FROM (
+       SELECT s.text,
+              s.kind,
+              s.score,
+              ROW_NUMBER() OVER (
+                PARTITION BY ${FOLD}(s.text)
+                ORDER BY s.score DESC, s.text
+              ) AS rn
+       FROM (
+         SELECT m.title AS text,
+                'title'::text AS kind,
+                similarity(${title}, ${q})::float AS score
+         FROM schema_matchmaking.matches m
+         WHERE ${where.join(' AND ')}
+           AND ${q} <> ''
+           AND ${title} <> ${q}
+           AND similarity(${title}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+         UNION ALL
+         SELECT m.venue_name,
+                'venueName',
+                similarity(${venue}, ${q})::float
+         FROM schema_matchmaking.matches m
+         WHERE ${where.join(' AND ')}
+           AND ${q} <> ''
+           AND ${venue} <> ${q}
+           AND similarity(${venue}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+       ) s
+     ) ranked
+     WHERE rn = 1
+     ORDER BY score DESC, text ASC
+     LIMIT ${MATCH_SEARCH.SUGGEST_LIMIT}`,
     params,
   );
   return rows;
@@ -400,28 +502,30 @@ export async function updateMatch(client, matchId, input) {
          notes = $5,
          venue_name = $6,
          venue_address = $7,
-         venue_lat = $8,
-         venue_lng = $9,
-         starts_at = $10,
-         ends_at = $11,
-         is_multi_day = $12,
-         is_recurring = $13,
-         max_players = $14,
-         skill_min = $15,
-         skill_max = $16,
-         skill_min_rank = $17,
-         skill_max_rank = $18,
-         all_levels = $19,
-         fee_type = $20,
-         price_min = $21,
-         price_max = $22,
-         join_mode = $23,
-         status = $24,
-         cover_url = $25,
+         province = $8,
+         city = $9,
+         venue_lat = $10,
+         venue_lng = $11,
+         starts_at = $12,
+         ends_at = $13,
+         is_multi_day = $14,
+         is_recurring = $15,
+         max_players = $16,
+         skill_min = $17,
+         skill_max = $18,
+         skill_min_rank = $19,
+         skill_max_rank = $20,
+         all_levels = $21,
+         fee_type = $22,
+         price_min = $23,
+         price_max = $24,
+         join_mode = $25,
+         status = $26,
+         cover_url = $27,
          updated_at = CURRENT_TIMESTAMP
      WHERE match_id = $1
      RETURNING match_id, host_user_id, sport, format, title, notes, cover_url,
-               venue_name, venue_address, venue_lat, venue_lng,
+               venue_name, venue_address, province, city, venue_lat, venue_lng,
                starts_at, ends_at, is_multi_day, is_recurring,
                max_players, filled_count, skill_min, skill_max,
                skill_min_rank, skill_max_rank, all_levels, fee_type,
@@ -434,6 +538,8 @@ export async function updateMatch(client, matchId, input) {
       input.notes ?? null,
       input.venueName,
       input.venueAddress,
+      input.province,
+      input.city,
       input.latitude ?? null,
       input.longitude ?? null,
       input.startsAt,

@@ -9,6 +9,7 @@ import {
   isFormatForSport,
 } from '../../../shared/constants/matchmaking.js';
 import { optionalHttpUrl } from '../../../shared/validation/httpUrl.js';
+import { isVnCityInProvince } from '../../../shared/constants/vn-admin.js';
 
 const courtSchema = z.object({
   name: z
@@ -51,6 +52,16 @@ export const createMatchSchema = z
       .trim()
       .min(1, 'venueAddress is required')
       .max(500, 'venueAddress must be at most 500 characters'),
+    province: z
+      .string({ required_error: 'province is required' })
+      .trim()
+      .min(1, 'province is required')
+      .max(5, 'province must be at most 5 characters'),
+    city: z
+      .string({ required_error: 'city is required' })
+      .trim()
+      .min(1, 'city is required')
+      .max(5, 'city must be at most 5 characters'),
     latitude: z
       .number({ invalid_type_error: 'latitude must be a number' })
       .gte(-90, 'latitude must be >= -90')
@@ -126,6 +137,14 @@ export const createMatchSchema = z
         code: z.ZodIssueCode.custom,
         path: hasLat ? ['longitude'] : ['latitude'],
         message: 'latitude and longitude must be sent together',
+      });
+    }
+
+    if (!isVnCityInProvince(data.province, data.city)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['city'],
+        message: 'city must belong to province (pre-2025 tỉnh / quận-huyện codes)',
       });
     }
 

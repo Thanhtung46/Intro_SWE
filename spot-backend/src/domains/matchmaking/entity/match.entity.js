@@ -2,6 +2,10 @@ import {
   computeYourShare,
   MATCH_STATUSES,
 } from '../../../shared/constants/matchmaking.js';
+import {
+  vnCityName,
+  vnProvinceName,
+} from '../../../shared/constants/vn-admin.js';
 
 export function toPublicMatch(
   row,
@@ -45,6 +49,10 @@ export function toPublicMatch(
     notes: row.notes ?? null,
     venueName: row.venue_name,
     venueAddress: row.venue_address,
+    province: row.province ?? null,
+    provinceName: vnProvinceName(row.province),
+    city: row.city ?? null,
+    cityName: vnCityName(row.province, row.city),
     latitude: row.venue_lat == null ? null : Number(row.venue_lat),
     longitude: row.venue_lng == null ? null : Number(row.venue_lng),
     startsAt: row.starts_at,

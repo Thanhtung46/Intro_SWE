@@ -13,6 +13,8 @@ function footballPayload(overrides = {}) {
     title: 'Saturday 7v7',
     venueName: 'San ABC',
     venueAddress: '123 Nguyen Van Linh, Q7, TP.HCM',
+    province: '79',
+    city: '778',
     startsAt: hoursFromNow(24),
     endsAt: hoursFromNow(26),
     maxPlayers: 14,
@@ -42,6 +44,8 @@ describe('createMatchSchema', () => {
       title: 'Evening doubles',
       venueName: 'Cau long Q3',
       venueAddress: '12 Cach Mang Thang 8, Q3, TP.HCM',
+      province: '79',
+      city: '770',
       startsAt: hoursFromNow(12),
       endsAt: hoursFromNow(14),
       maxPlayers: 8,
@@ -173,6 +177,20 @@ describe('createMatchSchema', () => {
   it('rejects missing venueAddress', () => {
     const payload = footballPayload();
     delete payload.venueAddress;
+    const result = createMatchSchema.safeParse(payload);
+    assert.equal(result.success, false);
+  });
+
+  it('rejects city that does not belong to province', () => {
+    const result = createMatchSchema.safeParse(
+      footballPayload({ province: '79', city: '001' }),
+    );
+    assert.equal(result.success, false);
+  });
+
+  it('rejects missing province', () => {
+    const payload = footballPayload();
+    delete payload.province;
     const result = createMatchSchema.safeParse(payload);
     assert.equal(result.success, false);
   });

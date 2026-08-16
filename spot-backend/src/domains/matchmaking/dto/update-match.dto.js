@@ -6,6 +6,7 @@ import {
   MATCH_FORMATS,
 } from '../../../shared/constants/matchmaking.js';
 import { optionalHttpUrl } from '../../../shared/validation/httpUrl.js';
+import { isVnCityInProvince, isVnProvince } from '../../../shared/constants/vn-admin.js';
 
 const courtSchema = z.object({
   name: z
@@ -24,6 +25,8 @@ export const updateMatchSchema = z
     coverUrl: optionalHttpUrl('coverUrl'),
     venueName: z.string().trim().min(1).max(255).optional(),
     venueAddress: z.string().trim().min(1).max(500).optional(),
+    province: z.string().trim().min(1).max(5).optional(),
+    city: z.string().trim().min(1).max(5).optional(),
     latitude: z.number().gte(-90).lte(90).nullish(),
     longitude: z.number().gte(-180).lte(180).nullish(),
     startsAt: z.coerce.date().optional(),
@@ -61,6 +64,28 @@ export const updateMatchSchema = z
         code: z.ZodIssueCode.custom,
         path: hasLat ? ['longitude'] : ['latitude'],
         message: 'latitude and longitude must be sent together',
+      });
+    }
+
+    if (data.province && !isVnProvince(data.province)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is not a valid pre-2025 tỉnh/thành phố code',
+      });
+    }
+    if (data.city && data.province && !isVnCityInProvince(data.province, data.city)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['city'],
+        message: 'city must belong to province (pre-2025 quận/huyện codes)',
+      });
+    }
+    if (data.city && !data.province) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is required when updating city',
       });
     }
 

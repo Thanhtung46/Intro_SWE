@@ -112,6 +112,8 @@ function matchBody({ title, joinMode, courtName, startsAt, endsAt }) {
     title,
     venueName: `Smoke San ${stamp}`,
     venueAddress: `1 Smoke Street ${stamp}, Q7, TP.HCM`,
+    province: '79',
+    city: '778',
     startsAt,
     endsAt,
     maxPlayers: 14,
@@ -383,6 +385,9 @@ if (publicIds.includes(approvalId)) {
 }
 if (!publicIds.includes(autoId)) {
   fail('AUTO match missing from public list', publicList.json);
+}
+if (!Array.isArray(publicList.json.suggestions)) {
+  fail('public list missing suggestions[]', publicList.json);
 }
 
 const hostProfile = await request('GET', `/users/${host.userId}`, {

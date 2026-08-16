@@ -147,6 +147,20 @@ describe('listMatchesQuerySchema', () => {
     });
     assert.equal(result.success, false);
   });
+
+  it('accepts province and city', () => {
+    const parsed = listMatchesQuerySchema.parse({
+      province: '79',
+      city: '778',
+    });
+    assert.equal(parsed.province, '79');
+    assert.equal(parsed.city, '778');
+  });
+
+  it('rejects city without province', () => {
+    const result = listMatchesQuerySchema.safeParse({ city: '778' });
+    assert.equal(result.success, false);
+  });
 });
 
 describe('computeYourShare', () => {

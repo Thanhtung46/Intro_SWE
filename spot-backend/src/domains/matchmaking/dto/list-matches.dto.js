@@ -4,6 +4,10 @@ import {
   isSkillForSport,
 } from '../../../shared/constants/sports.js';
 import { PG_INT4_MAX } from '../../../shared/constants/auth.js';
+import {
+  isVnCityInProvince,
+  isVnProvince,
+} from '../../../shared/constants/vn-admin.js';
 
 const blankToUndefined = (value) =>
   value === '' || value === undefined || value === null ? undefined : value;
@@ -100,6 +104,14 @@ export const listMatchesQuerySchema = z
     location: z.preprocess(
       blankToUndefined,
       z.string().trim().min(1).max(255).optional(),
+    ),
+    province: z.preprocess(
+      blankToUndefined,
+      z.string().trim().min(1).max(5).optional(),
+    ),
+    city: z.preprocess(
+      blankToUndefined,
+      z.string().trim().min(1).max(5).optional(),
     ),
     latitude: z.preprocess(
       blankToUndefined,
@@ -200,6 +212,31 @@ export const listMatchesQuerySchema = z
         code: z.ZodIssueCode.custom,
         path: ['location'],
         message: 'Use location or distance (latitude, longitude, radiusKm), not both',
+      });
+    }
+    if (data.city && !data.province) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is required when filtering by city',
+      });
+    }
+    if (data.province && !isVnProvince(data.province)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is not a valid pre-2025 tỉnh/thành phố code',
+      });
+    }
+    if (
+      data.province &&
+      data.city &&
+      !isVnCityInProvince(data.province, data.city)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['city'],
+        message: 'city must belong to province (pre-2025 quận/huyện codes)',
       });
     }
   });

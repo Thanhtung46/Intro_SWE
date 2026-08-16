@@ -202,6 +202,8 @@ npm run dev            # http://localhost:3000
 | `npm run dev` | `node --watch src/server.js` |
 | `npm start` | `node src/server.js` |
 | `npm run migrate` | Apply pending `migrations/*.sql` |
+| `npm run apply:match-search` | Re-apply `004` fold + GIN (when `004` already migrated) |
+| `npm run apply:match-admin` | Re-apply `005` province/city (when `005` already migrated) |
 | `npm test` | `node --test tests/unit/**/*.test.js` |
 | `npm run smoke:otp` | Register → verify OTP |
 | `npm run smoke:login` | Register → role → verify → login |
@@ -234,7 +236,9 @@ console instead of emailed.
 | :--- | :--- |
 | `001_schema_auth.sql` | `schema_auth.users` + `user_profiles` + `otp_verifications` |
 | `002_user_sport_skills.sql` | `schema_auth.user_sport_skills` (one skill per sport) |
-| `003_schema_matchmaking.sql` | matches, courts, join requests, guests |
+| `003_schema_matchmaking.sql` | matches, courts, joins, guests, favorites, `fold_search_text` |
+| `004_match_search_fold.sql` | Idempotent search function + GIN (if `003` already applied) |
+| `005_match_admin_units.sql` | `province` + `city` on matches (pre-2025 map) |
 
 Applied migrations are recorded in `public.schema_migrations`
 (`scripts/migrate.js` skips already-applied files).
@@ -276,6 +280,8 @@ migrations/
 ├── 001_schema_auth.sql
 ├── 002_user_sport_skills.sql
 ├── 003_schema_matchmaking.sql
+├── 004_match_search_fold.sql
+├── 005_match_admin_units.sql
 scripts/                          # migrate, check-db, smoke-*
 docs/
 ├── API.md                        # FE / tester contract
