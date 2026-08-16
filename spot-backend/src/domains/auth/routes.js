@@ -15,6 +15,7 @@ router.post('/role', authController.selectRole);
 router.post('/login', loginRateLimiter, authController.login);
 router.post('/refresh', loginRateLimiter, authController.refresh);
 router.get('/me', authenticate, authController.me);
+router.patch('/me', authenticate, authController.updateMe);
 router.post('/otp/verify', otpRateLimiter, authController.verifyOtp);
 router.post('/otp/resend', otpRateLimiter, authController.resendOtp);
 router.post(

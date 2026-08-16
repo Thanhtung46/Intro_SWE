@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   forgotPasswordSchema,
   resetPasswordSchema,
-} from '../../src/domains/auth/dto/forgot-password.dto.js';
+} from '../../../src/domains/auth/dto/forgot-password.dto.js';
 
 describe('forgotPasswordSchema', () => {
   it('accepts a valid email', () => {

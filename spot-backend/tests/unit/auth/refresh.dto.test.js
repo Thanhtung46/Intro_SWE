@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { refreshSchema } from '../../src/domains/auth/dto/refresh.dto.js';
+import { refreshSchema } from '../../../src/domains/auth/dto/refresh.dto.js';
 
 describe('refreshSchema', () => {
   it('accepts a valid refresh token string', () => {

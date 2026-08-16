@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import authRoutes from './domains/auth/routes.js';
+import userRoutes from './domains/auth/user.routes.js';
+import matchRoutes from './domains/matchmaking/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const app = express();
@@ -20,6 +22,10 @@ app.get('/api', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/users', userRoutes);
+app.use('/api/users', userRoutes);
+app.use('/matches', matchRoutes);
+app.use('/api/matches', matchRoutes);
 
 app.use(errorHandler);
 

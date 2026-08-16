@@ -8,10 +8,13 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "migrate": "node scripts/migrate.js",
+    "apply:homepage-card": "node scripts/apply-homepage-card.js",
+    "reset:matches": "node scripts/reset-matches.js",
     "smoke:otp": "node scripts/smoke-otp-flow.js",
     "smoke:login": "node scripts/smoke-login.js",
+    "smoke:matches": "node scripts/smoke-matches.js",
     "health-check": "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
-    "test": "node --test tests/unit/*.test.js"
+    "test": "node --test tests/unit/**/*.test.js"
   },
   "engines": {
     "node": ">=18"

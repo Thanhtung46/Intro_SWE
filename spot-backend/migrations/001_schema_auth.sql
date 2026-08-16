@@ -1,5 +1,5 @@
--- Auth schema (canonical). Replaces former 001–005 chain for fresh installs.
--- Existing DBs that already applied 001–005: no-op (001 filename already recorded).
+-- Auth schema (canonical for fresh installs).
+-- Name/gender live on schema_auth.user_profiles, not on users.
 
 CREATE SCHEMA IF NOT EXISTS schema_auth;
 
@@ -7,10 +7,7 @@ CREATE TABLE IF NOT EXISTS schema_auth.users (
   user_id SERIAL PRIMARY KEY,
   email VARCHAR(150) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  full_name VARCHAR(100) NOT NULL,
   phone_number VARCHAR(15) NOT NULL UNIQUE,
-  gender VARCHAR(30) NOT NULL
-    CHECK (gender IN ('male', 'female', 'other', 'prefer_not_to_say')),
   role VARCHAR(20) NOT NULL DEFAULT 'PLAYER'
     CHECK (role IN ('PLAYER', 'OWNER', 'REFEREE', 'ADMIN')),
   status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
@@ -19,6 +16,17 @@ CREATE TABLE IF NOT EXISTS schema_auth.users (
   lockout_until TIMESTAMP NULL,
   email_verified_at TIMESTAMP NULL,
   role_selected_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS schema_auth.user_profiles (
+  user_id INT PRIMARY KEY
+    REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
+  full_name VARCHAR(100) NOT NULL,
+  gender VARCHAR(30) NOT NULL
+    CHECK (gender IN ('male', 'female', 'other', 'prefer_not_to_say')),
+  avatar_url VARCHAR(2048) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,6 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_purpose
   ON schema_auth.otp_verifications (user_id, purpose)
   WHERE is_used = FALSE;
 
--- Drop legacy table if present (from early scaffold).
-DROP TABLE IF EXISTS schema_auth.user_profiles CASCADE;
+ALTER TABLE schema_auth.user_profiles
+  ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(2048) NULL;
+
+-- Legacy scaffold only. Do not drop user_profiles.
 DROP TABLE IF EXISTS schema_auth.otp_tokens CASCADE;

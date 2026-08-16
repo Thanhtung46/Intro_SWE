@@ -1,3 +1,14 @@
+const USER_SELECT = `
+  u.user_id, u.email, u.phone_number, u.role, u.status,
+  u.email_verified_at, u.role_selected_at, u.created_at,
+  p.full_name, p.gender, p.avatar_url
+`;
+
+const USER_FROM = `
+  FROM schema_auth.users u
+  LEFT JOIN schema_auth.user_profiles p ON p.user_id = u.user_id
+`;
+
 export async function findByEmail(client, email) {
   const { rows } = await client.query(
     `SELECT user_id, email, phone_number, role, status,
@@ -12,10 +23,9 @@ export async function findByEmail(client, email) {
 
 export async function findById(client, userId) {
   const { rows } = await client.query(
-    `SELECT user_id, email, full_name, phone_number, gender, role, status,
-            email_verified_at, role_selected_at, created_at
-     FROM schema_auth.users
-     WHERE user_id = $1
+    `SELECT ${USER_SELECT}
+     ${USER_FROM}
+     WHERE u.user_id = $1
      LIMIT 1`,
     [userId],
   );
@@ -24,11 +34,10 @@ export async function findById(client, userId) {
 
 export async function findAuthByEmail(client, email) {
   const { rows } = await client.query(
-    `SELECT user_id, email, full_name, phone_number, gender, role, status,
-            password_hash, login_attempts, lockout_until,
-            email_verified_at, role_selected_at
-     FROM schema_auth.users
-     WHERE lower(email) = lower($1)
+    `SELECT ${USER_SELECT},
+            u.password_hash, u.login_attempts, u.lockout_until
+     ${USER_FROM}
+     WHERE lower(u.email) = lower($1)
      LIMIT 1`,
     [email],
   );
@@ -96,8 +105,7 @@ export async function selectRole(client, userId, { role, status }) {
          role_selected_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
      WHERE user_id = $1
-     RETURNING user_id, email, full_name, phone_number, gender, role, status,
-               role_selected_at, email_verified_at, created_at`,
+     RETURNING user_id`,
     [userId, role, status],
   );
   return rows[0] || null;
@@ -125,12 +133,35 @@ export async function createUser(client, {
 }) {
   const { rows } = await client.query(
     `INSERT INTO schema_auth.users
-      (email, password_hash, full_name, phone_number, gender, role, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING user_id, email, full_name, phone_number, gender, role, status,
+      (email, password_hash, phone_number, role, status)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING user_id, email, phone_number, role, status,
                role_selected_at, email_verified_at, created_at`,
-    [email, passwordHash, fullName, phoneNumber, gender, role, status],
+    [email, passwordHash, phoneNumber, role, status],
   );
+  const user = rows[0];
+  await client.query(
+    `INSERT INTO schema_auth.user_profiles (user_id, full_name, gender)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id) DO UPDATE
+       SET full_name = EXCLUDED.full_name,
+           gender = EXCLUDED.gender,
+           updated_at = CURRENT_TIMESTAMP`,
+    [user.user_id, fullName, gender],
+  );
+  user.full_name = fullName;
+  user.gender = gender;
+  return user;
+}
 
-  return rows[0];
+export async function updateAvatarUrl(client, userId, avatarUrl) {
+  const { rows } = await client.query(
+    `UPDATE schema_auth.user_profiles
+     SET avatar_url = $2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1
+     RETURNING user_id, avatar_url`,
+    [userId, avatarUrl],
+  );
+  return rows[0] || null;
 }
