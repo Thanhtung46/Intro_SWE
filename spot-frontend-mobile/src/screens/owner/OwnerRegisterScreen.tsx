@@ -94,7 +94,7 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+          <Image source={require('../../../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
 
           <View style={styles.headingBlock}>
             <Text style={styles.heading}>Register Your Venue</Text>
