@@ -133,9 +133,9 @@ exists beyond what's listed above.
   extra bundler config. `expo-constants` **is** already a dependency, so
   the intended path is `app.json`'s `expo.extra` + `Constants.expoConfig.extra`,
   not a `.env` loader — see `.claude/rules/api-conventions.md`.
-- **`spot-backend` has no `package.json` and isn't runnable yet** — don't
-  block UI work on it being live; mock or clearly flag backend-dependent
-  behavior instead (same rule file).
+- **`spot-backend` is runnable** (tracked by the root repo) — see
+  `../spot-backend/CLAUDE.md` + `docs/API.md`. Mobile UI can call real APIs
+  when the backend is up; mock only when working offline.
 - A `Dockerfile` exists here but isn't wired into any root
   `docker-compose.yml` — Expo's dev workflow (device/simulator, Metro) runs
   via `npm start`/EAS, not Docker.

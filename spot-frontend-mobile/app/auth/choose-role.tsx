@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import ChooseRoleScreen from '@/screens/auth/ChooseRoleScreen';
+import { selectRole } from '@/services/authService';
 import type { Role } from '@/types/auth';
 
 const DESTINATION: Record<Role, string> = {
@@ -18,14 +19,30 @@ const DESTINATION: Record<Role, string> = {
  */
 export default function ChooseRoleRoute() {
   const router = useRouter();
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const email = typeof emailParam === 'string' ? emailParam : '';
+
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
   };
 
-  const handleContinue = () => {
-    if (!selectedRole) return;
+  const handleContinue = async () => {
+    if (!selectedRole || submitting) return;
+
+    setError(null);
+    setSubmitting(true);
+    const result = await selectRole(email, selectedRole);
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.message || 'Something went wrong. Please try again.');
+      return;
+    }
+
     if (selectedRole === 'player') {
       router.replace('/home');
     } else {
@@ -39,6 +56,8 @@ export default function ChooseRoleRoute() {
       onSelectRole={setSelectedRole}
       onBack={handleBack}
       onContinue={handleContinue}
+      submitting={submitting}
+      error={error}
     />
   );
 }

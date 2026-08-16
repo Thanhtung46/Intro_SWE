@@ -4,51 +4,47 @@ Nền tảng đặt sân thể thao trực tuyến (HCMUS Software Engineering c
 
 ## Repository Structure
 
-This is a **monorepo** — every app below is tracked by this repo's git
-history (no nested `.git` anywhere), and branches/PRs (e.g. `develop`,
-`SPOT-NNN-...`) live here at the root:
+**Polyrepo** — no root monorepo workspace. Each app manages its own dependencies; three frontends have their own `.git`:
 
-| Directory | Stack | Status |
-| :--- | :--- | :--- |
-| `spot-frontend-web/` | Next.js 14, React 18, TypeScript, Tailwind | Scaffolded — `next build`/Docker build fail, missing `globals.css` + config files |
-| `spot-frontend-mobile/` | Expo, React Native, expo-router | Real, mostly-wired auth/onboarding/home flow — not an empty scaffold. `npm install` works (no `--legacy-peer-deps` needed) |
-| `spot-admin-console/` | Vite, React 18, TypeScript, React Router | Scaffolded, **builds successfully end-to-end** (Docker verified) |
-| `spot-backend/` | Node.js/Express, domain-driven | Installable & runnable — `auth` domain fully implemented, other domains still empty scaffolds |
-| `spot-ai-services/` | Python/FastAPI (recommendation, no-show, NLP) | Empty scaffolds, no code yet |
+| Directory | Stack | Own `.git`? | Status |
+| :--- | :--- | :---: | :--- |
+| `spot-frontend-web/` | Next.js 14, React 18, TypeScript, Tailwind | ✅ | Scaffolded — `next build`/Docker fail (missing configs/`globals.css`) |
+| `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router | ✅ | Scaffolded — use `npm install --legacy-peer-deps` |
+| `spot-admin-console/` | Vite, React 18, TypeScript, React Router | ✅ | Runnable; Docker build verified |
+| `spot-backend/` | Node.js/Express ESM, domain-driven | — (this repo) | **Runnable** — auth, profile/settings, schedule, notifications, reviews |
+| `spot-ai-services/` | Python/FastAPI (planned) | — (this repo) | Empty scaffolds |
 
-See each app's own `README.md` and `CLAUDE.md` for details, and the
-repo-root `CLAUDE.md` for the full cross-project status and known gotchas.
+See each app’s `README.md` / `CLAUDE.md`. Cross-project status: root [`CLAUDE.md`](CLAUDE.md).
 
 ## Getting Started
 
 ```bash
 git clone <repo>
-cd Intro_SoftWare_Engineering
+cd Intro_SWE
 
-# Each app installs and runs independently, e.g.:
+# Admin / web / mobile (examples)
 cd spot-admin-console && npm install && npm run dev
 cd spot-frontend-web && npm install && npm run dev
-cd spot-frontend-mobile && npm install && npm start
-cd spot-backend && npm install && cp .env.example .env && npm run migrate && npm run dev
+cd spot-frontend-mobile && npm install --legacy-peer-deps && npm start
+
+# Backend
+cd spot-backend
+npm install && cp .env.example .env   # Supabase DB_*, SMTP_*, JWT_SECRET
+npm run migrate && npm run dev        # http://localhost:3000
 ```
 
-`spot-ai-services/*` aren't installable yet (no `requirements.txt`) — see
-its `README.md` for what's planned.
+API reference: `spot-backend/docs/API.md`. Agent notes: `spot-backend/CLAUDE.md`.
 
 ## Docker
 
 ```bash
-docker compose up -d postgres redis          # always works
-docker compose up -d --build admin-console   # also works
+docker compose up -d postgres redis
+docker compose up -d --build admin-console
+docker compose up -d --build redis backend   # env_file: spot-backend/.env
+docker compose run --rm backend npm run migrate
 ```
 
-`frontend-web` and the three AI services don't build yet; `backend` has a
-`Dockerfile` and is documented as runnable but its Docker build hasn't been
-re-verified recently (see table above and `DOCKER.md`/root `CLAUDE.md` for
-exact reasons and status).
-
-For the full guide — all services, ports, health checks, production
-deployment, backup/restore — see **[DOCKER.md](DOCKER.md)**.
+Default backend DB is **Supabase** (not compose postgres). Full guide: [`DOCKER.md`](DOCKER.md).
 
 ## Project Structure
 
@@ -69,6 +65,4 @@ deployment, backup/restore — see **[DOCKER.md](DOCKER.md)**.
 
 ## Contributing
 
-Each app's `README.md` has its own quick-start. Read the repo-root
-`CLAUDE.md` before making cross-cutting changes — it tracks what's actually
-implemented vs. still scaffolded, so you don't have to rediscover it.
+Read root `CLAUDE.md` before cross-cutting changes — it tracks what is implemented vs scaffolded. Backend work: follow `spot-backend/CLAUDE.md`.

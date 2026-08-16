@@ -40,6 +40,8 @@ type Props = {
   onSelectRole: (role: Role) => void;
   onBack: () => void;
   onContinue: () => void;
+  submitting?: boolean;
+  error?: string | null;
 };
 
 /**
@@ -53,7 +55,14 @@ type Props = {
 // blank while at the top, appears once content scrolls under the header).
 const TITLE_FADE_RANGE = 40;
 
-export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, onContinue }: Props) {
+export default function ChooseRoleScreen({
+  selectedRole,
+  onSelectRole,
+  onBack,
+  onContinue,
+  submitting,
+  error,
+}: Props) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [0, TITLE_FADE_RANGE],
@@ -111,15 +120,17 @@ export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, o
           ))}
         </View>
 
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
         <TouchableOpacity
-          style={[styles.completeButton, !selectedRole && styles.completeButtonDisabled]}
+          style={[styles.completeButton, (!selectedRole || submitting) && styles.completeButtonDisabled]}
           onPress={onContinue}
-          disabled={!selectedRole}
+          disabled={!selectedRole || submitting}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Continue"
         >
-          <Text style={styles.completeButtonText}>Continue</Text>
+          <Text style={styles.completeButtonText}>{submitting ? 'Saving...' : 'Continue'}</Text>
         </TouchableOpacity>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -190,6 +201,12 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
     marginBottom: spacing.xl + spacing.sm,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   completeButton: {
     width: '100%',
