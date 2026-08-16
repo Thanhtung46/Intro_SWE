@@ -4,17 +4,17 @@ Nền tảng đặt sân thể thao trực tuyến (HCMUS Software Engineering c
 
 ## Repository Structure
 
-This is a **polyrepo**, not a monorepo — there are no `feature/*` branches
-here, and each app below manages its own dependencies and (for three of
-them) its own git history:
+This is a **monorepo** — every app below is tracked by this repo's git
+history (no nested `.git` anywhere), and branches/PRs (e.g. `develop`,
+`SPOT-NNN-...`) live here at the root:
 
-| Directory | Stack | Own `.git`? | Status |
-| :--- | :--- | :---: | :--- |
-| `spot-frontend-web/` | Next.js 14, React 18, TypeScript, Tailwind | ✅ | Scaffolded — `next build`/Docker build fail, missing `globals.css` + config files |
-| `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router | ✅ | Scaffolded — `npm install` fails on a peer-dependency conflict |
-| `spot-admin-console/` | Vite, React 18, TypeScript, React Router | ✅ | Scaffolded, **builds successfully end-to-end** (Docker verified) |
-| `spot-backend/` | Node.js/Express, domain-driven | — (tracked here) | Source skeleton only, no `package.json` yet |
-| `spot-ai-services/` | Python/FastAPI (recommendation, no-show, NLP) | — (tracked here) | Empty scaffolds, no code yet |
+| Directory | Stack | Status |
+| :--- | :--- | :--- |
+| `spot-frontend-web/` | Next.js 14, React 18, TypeScript, Tailwind | Scaffolded — `next build`/Docker build fail, missing `globals.css` + config files |
+| `spot-frontend-mobile/` | Expo, React Native, expo-router | Real, mostly-wired auth/onboarding/home flow — not an empty scaffold. `npm install` works (no `--legacy-peer-deps` needed) |
+| `spot-admin-console/` | Vite, React 18, TypeScript, React Router | Scaffolded, **builds successfully end-to-end** (Docker verified) |
+| `spot-backend/` | Node.js/Express, domain-driven | Installable & runnable — `auth` domain fully implemented, other domains still empty scaffolds |
+| `spot-ai-services/` | Python/FastAPI (recommendation, no-show, NLP) | Empty scaffolds, no code yet |
 
 See each app's own `README.md` and `CLAUDE.md` for details, and the
 repo-root `CLAUDE.md` for the full cross-project status and known gotchas.
@@ -28,12 +28,12 @@ cd Intro_SoftWare_Engineering
 # Each app installs and runs independently, e.g.:
 cd spot-admin-console && npm install && npm run dev
 cd spot-frontend-web && npm install && npm run dev
-cd spot-frontend-mobile && npm install --legacy-peer-deps && npm start
+cd spot-frontend-mobile && npm install && npm start
+cd spot-backend && npm install && cp .env.example .env && npm run migrate && npm run dev
 ```
 
-`spot-backend` and `spot-ai-services/*` aren't installable yet (no
-`package.json` / `requirements.txt`) — see their `README.md` for what's
-planned.
+`spot-ai-services/*` aren't installable yet (no `requirements.txt`) — see
+its `README.md` for what's planned.
 
 ## Docker
 
@@ -42,8 +42,10 @@ docker compose up -d postgres redis          # always works
 docker compose up -d --build admin-console   # also works
 ```
 
-`backend`, `frontend-web`, and the three AI services don't build yet (see
-table above and `DOCKER.md`/root `CLAUDE.md` for exact reasons and status).
+`frontend-web` and the three AI services don't build yet; `backend` has a
+`Dockerfile` and is documented as runnable but its Docker build hasn't been
+re-verified recently (see table above and `DOCKER.md`/root `CLAUDE.md` for
+exact reasons and status).
 
 For the full guide — all services, ports, health checks, production
 deployment, backup/restore — see **[DOCKER.md](DOCKER.md)**.
@@ -52,11 +54,11 @@ deployment, backup/restore — see **[DOCKER.md](DOCKER.md)**.
 
 ```
 .
-├── spot-frontend-web/       # Next.js web app (own git repo)
-├── spot-frontend-mobile/    # Expo mobile app (own git repo)
-├── spot-admin-console/      # Vite admin dashboard (own git repo)
-├── spot-backend/            # Express API (tracked by this repo)
-├── spot-ai-services/        # 3 planned FastAPI microservices (tracked by this repo)
+├── spot-frontend-web/       # Next.js web app
+├── spot-frontend-mobile/    # Expo mobile app
+├── spot-admin-console/      # Vite admin dashboard
+├── spot-backend/            # Express API — auth domain implemented
+├── spot-ai-services/        # 3 planned FastAPI microservices (empty scaffolds)
 ├── docker-compose.yml               # dev stack
 ├── docker-compose.production.yml    # prod stack
 ├── .env.development / .env.production   # compose env files (gitignored)

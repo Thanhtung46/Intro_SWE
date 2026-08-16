@@ -240,7 +240,7 @@ src/
 ├── domains/auth/                 # implemented
 │   ├── routes.js
 │   ├── controller/auth.controller.js
-│   ├── dto/{register,otp,login,role,forgot-password}.dto.js
+│   ├── dto/{register,otp,login,role,forgot-password,refresh}.dto.js
 │   ├── entity/user.entity.js
 │   ├── repository/{user,otp}.repository.js
 │   └── service/auth.service.js
@@ -250,7 +250,7 @@ src/
     ├── config/env.js
     ├── constants/auth.js
     ├── database/{config,pool,redis}.js
-    ├── middleware/{errorHandler,otpRateLimit}.js
+    ├── middleware/{errorHandler,otpRateLimit,authenticate}.js
     └── utils/{logger,otp,password,jwt,mailer}.js
 migrations/                       # 001_schema_auth.sql
 scripts/

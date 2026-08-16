@@ -10,11 +10,19 @@
 > favor of a **polyrepo**: five top-level directories (`spot-frontend-web/`,
 > `spot-frontend-mobile/`, `spot-admin-console/`, `spot-backend/`,
 > `spot-ai-services/`), three of which (`spot-frontend-web`,
-> `spot-frontend-mobile`, `spot-admin-console`) are their own git
-> repositories. This revision realigns the rules and version matrix to that
-> reality. See each app's own `CLAUDE.md` for current implementation status
-> (what's actually built vs. still an empty scaffold) — this document
-> defines the *rules*, not the status.
+> `spot-frontend-mobile`, `spot-admin-console`) were their own git
+> repositories. This revision realigned the rules and version matrix to that
+> reality.
+>
+> **Update (2026-08-16, not yet a version bump)**: as of commit `a2dff26`,
+> those three apps were merged into this repo and no longer have a nested
+> `.git` — this is a **monorepo** again in practice, even though this
+> document's title still says "Polyrepo Realignment." The version-lock
+> matrix, architecture rules, and DRI table below remain accurate; only the
+> "separate git repositories" framing (here and in §2.1) is stale. See each
+> app's own `CLAUDE.md` for current implementation status (what's actually
+> built vs. still an empty scaffold) — this document defines the *rules*,
+> not the status.
 
 ---
 
@@ -72,25 +80,33 @@ share a stack.
 ---
 
 ### 1.4. `spot-frontend-mobile/` (Expo)
-| Package Name | Locked Version | Description & Usage |
+| Package Name | Locked Version (this table, original) | Description & Usage |
 | :--- | :--- | :--- |
-| **`expo`** | **`~49.0.0`** | Cross-platform React Native framework |
-| **`react-native`** | **`0.72.6`** | Mobile UI runtime |
-| **`expo-router`** | **`^2.0.0`** | File-based navigation |
+| **`expo`** | **`~49.0.0`** (superseded — `package.json` now pins `^57.0.12`) | Cross-platform React Native framework |
+| **`react-native`** | **`0.72.6`** (superseded — now `^0.86.2`) | Mobile UI runtime |
+| **`expo-router`** | **`^2.0.0`** (superseded — now tracks the Expo 57 SDK version) | File-based navigation |
 | **`@react-navigation/native`** | **`^6.1.9`** | Also present alongside `expo-router` — pick one as the primary navigation approach when screens are actually built; having both wired in isn't itself a bug, but don't let both grow independent routing logic. |
 | **`zustand`** | **`^4.4.0`** | Client-state management |
 
-`npm install` fails here today on a peer-dependency conflict
-(`react-test-renderer` pulled in at a version `@testing-library/react-native`
-doesn't accept) — use `npm install --legacy-peer-deps` until resolved. See
-this app's `CLAUDE.md`.
+This table's version locks are stale — the app was upgraded past them (see
+`package.json` for ground truth, or `spot-frontend-mobile/CLAUDE.md` which
+already flags the same drift). The peer-dependency conflict this section
+used to describe (`react-test-renderer` vs. `@testing-library/react-native`)
+no longer reproduces: `react` is now pinned to `19.2.8`, which satisfies
+both sides, so plain `npm install` works without `--legacy-peer-deps`.
 
 ---
 
-### 1.5. `spot-backend/` — target stack (not installed yet)
-No `package.json` exists in `spot-backend/` yet. The list below is the
-**intended** dependency set for when backend work starts — install exactly
-these, don't drift:
+### 1.5. `spot-backend/` — implemented stack (auth domain) vs. target
+`package.json` now exists and the `auth` domain is implemented and running
+on it — see `spot-backend/CLAUDE.md`/`README.md` for the exact, current
+dependency set (`express`, `pg`, `ioredis`, `argon2`, `jsonwebtoken`,
+`nodemailer`, `zod`, `helmet`, `cors`, `express-rate-limit`, `winston`,
+`dotenv`; no ORM/Prisma or `redlock` in use yet). The table below is this
+document's **original target list** for domains still unbuilt — treat rows
+that diverge from what's actually installed (e.g. `@prisma/client`,
+`redlock`) as aspirational until those domains (booking's slot-locking,
+in particular) are actually written:
 
 | Package Name | Target Version | Description & Usage |
 | :--- | :--- | :--- |
@@ -100,9 +116,9 @@ these, don't drift:
 | **`express-rate-limit`** | **`7.3.x`** | Rate limiting |
 | **`helmet`** | **`7.1.x`** | HTTP security headers |
 | **`pg`** | **`8.12.x`** | PostgreSQL client driver |
-| **`@prisma/client` / `prisma`** | **`5.17.x`** | ORM |
+| **`@prisma/client` / `prisma`** | **`5.17.x`** | ORM (not adopted — auth domain uses raw `pg`, no Prisma installed) |
 | **`ioredis`** | **`5.4.x`** | Redis client driver |
-| **`redlock`** | **`5.0.0-beta.2`** | Redis slot locking (see §2.3) |
+| **`redlock`** | **`5.0.0-beta.2`** | Redis slot locking (see §2.3) — not installed yet, `booking` domain is still an empty scaffold |
 | **`winston`** | **`3.13.x`** | Structured JSON logging |
 
 There is exactly **one** backend service — not an `api-gateway` +
@@ -133,13 +149,14 @@ committed yet), no shared Python package between them.
 
 ## 2. Architecture & Repo Boundary Rules
 
-1. **Polyrepo boundaries, not monorepo workspace boundaries**:
-   - `spot-frontend-web`, `spot-frontend-mobile`, `spot-admin-console` are
-     separate git repositories — there is no shared `packages/*` workspace
-     to pull common code from. If code needs to be shared across them
-     (types, a UI component), either duplicate it deliberately per repo or
-     publish it as a versioned npm package — don't assume a local import
-     path works across repos.
+1. **App boundaries stay separate, even though the repos are now merged**:
+   - `spot-frontend-web`, `spot-frontend-mobile`, `spot-admin-console` no
+     longer have their own `.git` (merged into this repo, see the update
+     note above), but there is still no shared `packages/*` workspace to
+     pull common code from between them. If code needs to be shared across
+     them (types, a UI component), either duplicate it deliberately per app
+     or publish it as a versioned npm package — don't assume a local import
+     path works across app directories.
    - `spot-backend` and `spot-ai-services/*` communicate with each other
      (and are called by the frontends) over HTTP REST only. Direct code
      imports between them are not possible anyway (no shared workspace),
@@ -194,13 +211,19 @@ committed yet), no shared Python package between them.
      - Constants: `UPPER_SNAKE_CASE` (`DEFAULT_LOCK_TTL_SECONDS = 300`)
      - Database Tables & Columns: `snake_case` (`booking_date`, `total_amount`)
 
-2. **Git Flow & Branching Rules** *(target process — the repo currently has
-   only a `master` branch; no `develop` or `feature/*` branches exist yet,
-   and nothing technically enforces this beyond convention)*:
-   - Direct commits to `main`/`master` (once a `develop` branch exists)
-     should be avoided in favor of PRs.
-   - Branch naming: `feature/<dri-name>/<feature-name>` (e.g.
-     `feature/cuong/auth-otp`, `feature/khoa/redis-lock`).
+2. **Git Flow & Branching Rules** *(the repo now has `main` and `develop`
+   branches plus per-ticket branches merged via PR — e.g.
+   `SPOT-113-fe-otp-screen`, `SPOT-194-fe-settings-...` — so the
+   PR-into-`develop` half of this is already in practice; only the
+   `feature/<dri-name>/<feature-name>` naming convention below isn't
+   actually followed, branches are named `SPOT-<ticket-number>-...` instead;
+   nothing technically enforces either beyond convention)*:
+   - Direct commits to `main`/`develop` should be avoided in favor of PRs.
+   - Branch naming target: `feature/<dri-name>/<feature-name>` (e.g.
+     `feature/cuong/auth-otp`, `feature/khoa/redis-lock`) — actual practice
+     today is `SPOT-<ticket-number>-<short-description>`; update this rule
+     to match practice, or start enforcing it, but don't assume either until
+     the team agrees.
    - Commit Message format: `<type>(<scope>): <description>` (e.g.
      `feat(booking): implement 5-min Redis slot lock TTL`).
 
@@ -214,8 +237,8 @@ committed yet), no shared Python package between them.
 
 ## 4. Team DRI Responsibility Quick Reference
 
-Folder paths updated to match the actual polyrepo layout (v1.0.0 pointed at
-`apps/*`/`services/*`/`packages/*`, none of which exist):
+Folder paths updated to match the actual `spot-*/` directory layout (v1.0.0
+pointed at `apps/*`/`services/*`/`packages/*`, none of which exist):
 
 | Member Name | Role | Primary Folder Boundaries |
 | :--- | :--- | :--- |
