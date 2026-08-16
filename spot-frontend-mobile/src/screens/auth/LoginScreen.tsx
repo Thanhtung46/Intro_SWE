@@ -55,8 +55,13 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
     setSubmitting(false);
 
     if (response.success && response.accessToken && response.refreshToken) {
-      await SecureStore.setItemAsync('accessToken', response.accessToken);
-      await SecureStore.setItemAsync('refreshToken', response.refreshToken);
+      try {
+        await SecureStore.setItemAsync('accessToken', response.accessToken);
+        await SecureStore.setItemAsync('refreshToken', response.refreshToken);
+      } catch (error) {
+        // SecureStore isn't available on every platform (e.g. web) — token
+        // persistence is best-effort and shouldn't block navigation.
+      }
       setUser(response.user || null);
 
       // No per-role dashboards exist yet (out of SPOT-116's scope).

@@ -43,7 +43,8 @@ Docker from **repo root** `Intro_SWE/`:
 
 ```bash
 docker compose up -d --build redis backend
-docker compose run --rm backend npm run migrate
+
+
 ```
 
 Compose uses `env_file: ./spot-backend/.env`, forces `REDIS_HOST=redis`. Optional local Postgres: `docker compose --profile local-db up -d postgres` (do not `depends_on` it while on that profile).
