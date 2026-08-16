@@ -262,7 +262,8 @@ Muốn gửi lại OTP quên MK: gọi lại `POST /auth/forgot-password` (chị
 
 ```
 POST /matches            Bearer + body host
-GET  /matches            ?sport&date&timeFrom&timeTo&skill&priceMin&priceMax&location&favorited&hostUserId&latitude&longitude&radiusKm
+GET  /matches            ?sport&date&timeFrom&timeTo&skill&priceMin&priceMax&location&province&city&favorited&hostUserId&latitude&longitude&radiusKm
+GET  /geo/vn             dropdown 63 tỉnh/TP + quận/huyện (bản đồ **trước 2025**, không API ngoài)
 GET  /matches/:id        squad, spotsLeft, yourShare, canJoin, yourRequest, participants
 GET  /users/:id          public host profile (no email/phone)
 ```
@@ -945,7 +946,9 @@ Tạo kèo tự do (không cần booking).
 | `title` | string | ✓ | ≤ 150 |
 | `notes` | string | | ≤ 2000 |
 | `venueName` | string | ✓ | Tên sân (vd. `San ABC`) |
-| `venueAddress` | string | ✓ | Địa chỉ để mở map (≤ 500) |
+| `venueAddress` | string | ✓ | Số nhà / đường (≤ 500). Không thay dropdown tỉnh/quận |
+| `province` | string | ✓ | Mã tỉnh/TP **bản đồ cũ** (63 đơn vị). Vd. HCM = `79`. List: `GET /geo/vn` |
+| `city` | string | ✓ | Mã quận/huyện/thị xã/TP thuộc tỉnh, **phải thuộc** `province`. Vd. Quận 7 = `778` |
 | `latitude` / `longitude` | number | | Optional, phải gửi cặp. Pin map; không dùng cho occupancy |
 | `startsAt` | datetime | ✓ | ISO, phải ở tương lai |
 | `endsAt` | datetime | ✓ | Sau `startsAt`; kéo dài **tối thiểu 1 giờ**, không trần |
@@ -987,6 +990,10 @@ Tạo kèo tự do (không cần booking).
     "notes": null,
     "venueName": "San ABC",
     "venueAddress": "123 Nguyen Van Linh, Q7, TP.HCM",
+    "province": "79",
+    "provinceName": "Thành phố Hồ Chí Minh",
+    "city": "778",
+    "cityName": "Quận 7",
     "latitude": 10.729,
     "longitude": 106.721,
     "startsAt": "2026-09-01T02:00:00.000Z",
@@ -1042,8 +1049,18 @@ Map / chỉ đường (**FE + [Geoapify](https://apidocs.geoapify.com/docs/routi
 curl -s -X POST http://localhost:3000/matches \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d "{\"sport\":\"FOOTBALL\",\"format\":\"SEVEN_A_SIDE\",\"title\":\"Saturday 7v7\",\"venueName\":\"San ABC\",\"venueAddress\":\"123 Nguyen Van Linh, Q7, TP.HCM\",\"latitude\":10.729,\"longitude\":106.721,\"startsAt\":\"2026-09-01T09:00:00+07:00\",\"endsAt\":\"2026-09-01T11:00:00+07:00\",\"maxPlayers\":14,\"skillMin\":\"REC_BASIC\",\"skillMax\":\"SEMI_PRO\",\"feeType\":\"SPLIT_EVENLY\",\"priceMin\":1400000,\"joinMode\":\"APPROVAL\",\"courts\":[{\"name\":\"1\"}]}"
+  -d "{\"sport\":\"FOOTBALL\",\"format\":\"SEVEN_A_SIDE\",\"title\":\"Saturday 7v7\",\"venueName\":\"San ABC\",\"venueAddress\":\"123 Nguyen Van Linh, Q7, TP.HCM\",\"province\":\"79\",\"city\":\"778\",\"latitude\":10.729,\"longitude\":106.721,\"startsAt\":\"2026-09-01T09:00:00+07:00\",\"endsAt\":\"2026-09-01T11:00:00+07:00\",\"maxPlayers\":14,\"skillMin\":\"REC_BASIC\",\"skillMax\":\"SEMI_PRO\",\"feeType\":\"SPLIT_EVENLY\",\"priceMin\":1400000,\"joinMode\":\"APPROVAL\",\"courts\":[{\"name\":\"1\"}]}"
 ```
+
+---
+
+### `GET /geo/vn`
+
+Dropdown 2 cấp **bản đồ hành chính trước 1/7/2025**: 63 tỉnh/thành phố + 705 quận/huyện/thị xã/TP thuộc tỉnh. JSON tĩnh trong backend, **không** gọi API ngoài. Cần Bearer.
+
+**Success `200`:** `{ "map": "pre-2025", "provinces": [ { "code": "79", "name": "Thành phố Hồ Chí Minh", "cities": [ { "code": "778", "name": "Quận 7" } ] } ] }`
+
+FE: chọn `province` rồi `city` từ list này; gửi đúng `code` lúc `POST /matches` và `GET /matches?province=&city=`.
 
 ---
 
@@ -1060,7 +1077,9 @@ List kèo `OPEN`/`FULL` chưa kết thúc (`endsAt > now`), sort `startsAt` tăn
 | `timeFrom` / `timeTo` | `HH:mm` (24h, timezone `Asia/Ho_Chi_Minh`). Có `date`: kèo **chồng giờ** với cửa sổ `[date+from, date+to]` (`startsAt < to` và `endsAt > from`; thiếu from → `00:00`, thiếu to → `23:59:59`). Không `date`: lọc **giờ bắt đầu** kèo (`startsAt::time >= timeFrom`, `< timeTo`). `timeTo` phải sau `timeFrom`. |
 | `skill` | Cần kèm `sport`. Một hoặc nhiều code (lặp `skill=` hoặc `skill=A,B`). Kèo **chứa ít nhất một** rank đã chọn trong `[skillMin, skillMax]` (OR). Tối đa 10. |
 | `priceMin` / `priceMax` | Integer **VND** (FE đổi `$20–$150` trước khi gửi). Cả hai: `GENDER_RANGE` nếu khoảng `[price_min, price_max]` **chồng** `[priceMin, priceMax]`; `SPLIT_EVENLY` nếu `ceil(price_min / maxPlayers)` nằm trong khoảng. Chỉ `priceMax`: như cũ (`price_min` hoặc share-khi-đầy `<= priceMax`). Chỉ `priceMin`: giá kèo `>= priceMin`. `priceMin <= priceMax`. |
-| `location` | Substring `venueName` **hoặc** `venueAddress` (không phân biệt hoa thường). Radio **Location** trên Figma. **Không** gửi cùng `latitude`/`longitude`/`radiusKm`. |
+| `location` | Tên kèo **hoặc** tên sân. **Không dấu** (`san` = `Sân`), **gần đúng** (typo / lệch chữ, ≥ 3 ký tự), hoặc **mọi từ** đều xuất hiện trong title+venue. **Không** khớp `venueAddress`. **Không** Geoapify. Có `location` thì `suggestions` (tối đa 5 `{ text, kind: title\|venueName }`). Radio **Location**. **Không** gửi cùng `latitude`/`longitude`/`radiusKm`. |
+| `province` | Mã tỉnh/TP bản đồ **trước 2025** (exact). Kết hợp được với `location` hoặc Distance. Kèo cũ `province` null thì không khớp filter này. |
+| `city` | Mã quận/huyện, **phải kèm** `province`. Exact. |
 | `favorited` | `true` → chỉ kèo caller đã tim (`match_favorites`). Kết hợp được với `location` **hoặc** distance (không cả hai). Bỏ trống / `false` = không lọc tim. |
 | `hostUserId` | Chỉ kèo do user này host. Dùng cho màn profile host (Hosted Matches). Kết hợp được với filter khác. User không tồn tại → `total: 0`. |
 | `latitude` / `longitude` / `radiusKm` | Radio **Distance**. Cả ba **cùng lúc**. GPS user + bán kính 1–20 km. Haversine; kèo không có toạ độ bị loại. **Không** gửi cùng `location`. |
@@ -1074,11 +1093,15 @@ List kèo `OPEN`/`FULL` chưa kết thúc (`endsAt > now`), sort `startsAt` tăn
   "total": 2,
   "limit": 20,
   "offset": 0,
-  "matches": [ { "matchId": 1, "spotsLeft": 13, "yourShare": 1400000 } ]
+  "matches": [ { "matchId": 1, "spotsLeft": 13, "yourShare": 1400000 } ],
+  "suggestions": [
+    { "text": "Sân ABC", "kind": "venueName" },
+    { "text": "Saturday 7v7", "kind": "title" }
+  ]
 }
 ```
 
-Mỗi phần tử cùng shape với `match` ở 7.1, **trừ** `hostPhoneNumber` (không lộ trên list).
+Mỗi phần tử cùng shape với `match` ở 7.1, **trừ** `hostPhoneNumber` (không lộ trên list). `suggestions` luôn là mảng (rỗng nếu không gửi `location` hoặc không có tên gần). `kind` = `title` \| `venueName`. Không Geoapify.
 
 ---
 

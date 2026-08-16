@@ -1,7 +1,10 @@
 -- Pickup matches (kèo) — free listing, no booking_id.
--- Includes courts, join requests, guests, venue address + optional map coords.
+-- Courts, join requests, guests, favorites, venue + optional map coords.
+-- Search: pg_trgm + fold_search_text (Vietnamese unaccent; no Geoapify).
 
 CREATE SCHEMA IF NOT EXISTS schema_matchmaking;
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS schema_matchmaking.matches (
   match_id SERIAL PRIMARY KEY,
@@ -14,6 +17,8 @@ CREATE TABLE IF NOT EXISTS schema_matchmaking.matches (
   cover_url VARCHAR(2048) NULL,
   venue_name VARCHAR(255) NOT NULL,
   venue_address VARCHAR(500) NOT NULL,
+  province VARCHAR(5) NULL,
+  city VARCHAR(5) NULL,
   venue_lat DOUBLE PRECISION NULL
     CHECK (venue_lat IS NULL OR (venue_lat >= -90 AND venue_lat <= 90)),
   venue_lng DOUBLE PRECISION NULL
@@ -42,6 +47,9 @@ CREATE TABLE IF NOT EXISTS schema_matchmaking.matches (
   CONSTRAINT matches_venue_coords CHECK (
     (venue_lat IS NULL AND venue_lng IS NULL)
     OR (venue_lat IS NOT NULL AND venue_lng IS NOT NULL)
+  ),
+  CONSTRAINT matches_admin_pair CHECK (
+    (province IS NULL) = (city IS NULL)
   ),
   CONSTRAINT matches_time_order CHECK (ends_at > starts_at),
   CONSTRAINT matches_skill_rank_order CHECK (skill_min_rank <= skill_max_rank),
@@ -134,6 +142,10 @@ CREATE INDEX IF NOT EXISTS idx_matches_status_ends
 CREATE INDEX IF NOT EXISTS idx_matches_host
   ON schema_matchmaking.matches (host_user_id);
 
+CREATE INDEX IF NOT EXISTS idx_matches_listable_starts
+  ON schema_matchmaking.matches (starts_at)
+  WHERE status IN ('OPEN', 'FULL');
+
 CREATE INDEX IF NOT EXISTS idx_match_courts_match
   ON schema_matchmaking.match_courts (match_id, sort_order);
 
@@ -177,15 +189,6 @@ CREATE TABLE IF NOT EXISTS schema_matchmaking.match_guests (
 CREATE INDEX IF NOT EXISTS idx_match_guests_request
   ON schema_matchmaking.match_guests (request_id, sort_order);
 
-ALTER TABLE schema_matchmaking.match_join_requests
-  ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(15) NULL;
-
-ALTER TABLE schema_matchmaking.match_guests
-  ADD COLUMN IF NOT EXISTS phone VARCHAR(15) NULL;
-
-ALTER TABLE schema_matchmaking.matches
-  ADD COLUMN IF NOT EXISTS cover_url VARCHAR(2048) NULL;
-
 CREATE TABLE IF NOT EXISTS schema_matchmaking.match_favorites (
   user_id INT NOT NULL
     REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
@@ -198,3 +201,36 @@ CREATE TABLE IF NOT EXISTS schema_matchmaking.match_favorites (
 CREATE INDEX IF NOT EXISTS idx_match_favorites_match
   ON schema_matchmaking.match_favorites (match_id);
 
+CREATE INDEX IF NOT EXISTS idx_matches_province_city
+  ON schema_matchmaking.matches (province, city)
+  WHERE province IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION schema_matchmaking.fold_search_text(input text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+STRICT
+AS $$
+  SELECT btrim(regexp_replace(
+    lower(translate(
+      regexp_replace(normalize(input, NFD), U&'[\0300-\036F]', '', 'g'),
+      'đĐ',
+      'dd'
+    )),
+    '\s+',
+    ' ',
+    'g'
+  ))
+$$;
+
+COMMENT ON FUNCTION schema_matchmaking.fold_search_text(text) IS
+  'Lowercase, strip Vietnamese diacritics and đ. Used by GET /matches?location=.';
+
+CREATE INDEX IF NOT EXISTS idx_matches_title_fold_trgm
+  ON schema_matchmaking.matches
+  USING gin ((schema_matchmaking.fold_search_text(title)) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_matches_venue_name_fold_trgm
+  ON schema_matchmaking.matches
+  USING gin ((schema_matchmaking.fold_search_text(venue_name)) gin_trgm_ops);

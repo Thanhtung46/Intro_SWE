@@ -34,8 +34,9 @@ Implemented so far:
 
 | Area | Status |
 | :--- | :--- |
-| `POST /matches` | Done — PLAYER **free listing** (no `booking_id`); optional `coverUrl` |
-| `GET /matches` | Done — see **List filters** below; list/detail card: `coverUrl`, `host`, `isFavorited`, `participantAvatars` |
+| `POST /matches` | Done — PLAYER **free listing** (no `booking_id`); required `province`+`city` (pre-2025); optional `coverUrl` |
+| `GET /matches` | Done — see **List filters** below; card: `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names |
+| `GET /geo/vn` | Done — static 63 tỉnh + 705 quận/huyện (pre-2025). **No** 3rd-party geo API |
 | `GET /matches/mine` | Done — host’s kèo; `?tab=active\|completed` (**route before** `GET /:id`) |
 | `GET /matches/:id` | Done — squad, `spotsLeft`, `yourShare`, `canJoin`, `yourRequest`, `participants` |
 | `POST` / `DELETE /matches/:id/favorite` | Done — heart; `isFavorited` on list/detail |
@@ -61,7 +62,9 @@ Implemented so far:
 | Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Not implemented yet** |
 | Other domains | Still empty scaffolds (`booking`, `venue`, `payment`, …) |
 
-Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Public users also under `/users` and `/api/users`. Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
+Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
+under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
+Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
 
 Default database is **Supabase**, not the compose `postgres` service. Use
 Session pooler (IPv4) — direct `db.*.supabase.co` is often IPv6-only and
@@ -85,6 +88,8 @@ npm run smoke:otp      # register → verify (needs server + OTP_DEBUG=true)
 npm run smoke:login    # register → role → verify → login JWT
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
+npm run apply:match-search   # live DB: re-apply 004 fold + GIN (004 already migrated)
+npm run apply:match-admin    # live DB: re-apply 005 province/city (005 already migrated)
 node scripts/smoke-forgot-password.js  # register → role → verify → forgot → reset → login
 ```
 
@@ -121,6 +126,7 @@ src/
 │   └── service/auth.service.js
 ├── domains/matchmaking/
 │   ├── routes.js
+│   ├── geo.routes.js             # GET /geo/vn (pre-2025 admin tree)
 │   ├── controller/match.controller.js
 │   ├── dto/{create-match,list-matches,join-match,list-mine,update-match}.dto.js
 │   ├── entity/match.entity.js
@@ -133,17 +139,22 @@ src/
     ├── constants/auth.js         # roles, statuses, OTP/login limits
     ├── constants/sports.js       # badminton / football skill ladders
     ├── constants/matchmaking.js  # formats, fee/join/status, occupancy helpers
+    ├── constants/vn-admin.js     # pre-2025 63 tỉnh + 705 quận/huyện lookups
+    ├── constants/vn-admin.json   # static dataset (no Geoapify)
     ├── database/{config,pool,redis}.js
     ├── middleware/{errorHandler,otpRateLimit,authenticate}.js
     ├── validation/httpUrl.js     # coverUrl / avatarUrl
     ├── types/                    # reserved
-    └── utils/{logger,otp,password,jwt,mailer}.js
+    └── utils/{logger,otp,password,jwt,mailer,foldSearchText}.js
 migrations/
 ├── 001_schema_auth.sql           # users + user_profiles + otp
 ├── 002_user_sport_skills.sql     # schema_auth.user_sport_skills
-├── 003_schema_matchmaking.sql    # matches, courts, join requests, guests, favorites
+├── 003_schema_matchmaking.sql    # canonical kèo + fold_search_text + GIN + province/city
+├── 004_match_search_fold.sql     # live delta if 003 ran without search (idempotent)
+├── 005_match_admin_units.sql     # live delta: province + city + matches_admin_pair
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
+├── apply-homepage-card.js / apply-match-search.js / apply-match-admin.js
 ├── smoke-register.js / smoke-otp-flow.js / smoke-login.js
 ├── smoke-forgot-password.js / smoke-matches.js
 docs/
@@ -152,13 +163,15 @@ docs/
 tests/unit/
 ├── auth/*.dto.test.js
 ├── matchmaking/*.dto.test.js
+├── matchmaking/{fold-search-text,vn-admin}.test.js
 └── shared/{sports,pitch,share}.test.js
 Dockerfile / .dockerignore / .env.example
 ```
 
 Match domain layering when adding code. Mount auth at `/auth` and `/api/auth`,
-users at `/users` and `/api/users`, matches at `/matches` and `/api/matches`
-(see `app.js`). `GET /matches/mine` is registered **before** `GET /matches/:id`.
+users at `/users` and `/api/users`, matches at `/matches` and `/api/matches`,
+geo at `/geo` and `/api/geo` (see `app.js`). `GET /matches/mine` is registered
+**before** `GET /matches/:id`.
 
 `req.user` after `authenticate`: `{ userId, role, email }`. JWT `sub` is a
 **string** — coerce with `Number` when comparing to DB ids.
@@ -237,12 +250,12 @@ Host is a **free listing** — no `booking_id`, no venue catalog lock.
 Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
 
-**Figma Matches screens → API (no extra routes needed)**
+**Figma Matches screens → API**
 
 | Screen | Node | FE uses |
 | :--- | :--- | :--- |
-| Homepage list | `95:2417` | `GET /matches` (+ `location=` = venue substring, **not** Geoapify/NLP). Map button = FE tiles + `latitude`/`longitude`. Paper-plane = **directions**, not share. |
-| Filter sheet | `87:1903` | Same `GET /matches` query (below). Background “Book Field” = Booking — **locked**. |
+| Homepage list | `95:2417` | `GET /matches` (`location=` = unaccent + fuzzy `title` **or** `venueName`, `suggestions[]`, **not** Geoapify/NLP). Map = FE tiles + `latitude`/`longitude`. Paper-plane = **directions**, not share. |
+| Filter sheet | `87:1903` | Same `GET /matches` query. Tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025** map, not Geoapify). Background “Book Field” = Booking — **locked**. |
 | Match detail | `100:401` | `GET /matches/:id` + favorite + `POST .../join`. Map = FE Geoapify. |
 | Join Match sheet | `100:551` | Detail + `GET /auth/me` + `POST /matches/:id/join`. No enum endpoint for skill/gender. |
 | Check Profile (host) | `432:1211` | `GET /users/:id` + `GET /matches?hostUserId=`. Hide Groups / verified / reviews. Phone **not** on this endpoint. |
@@ -251,8 +264,9 @@ Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 
 | Method | Path | Notes |
 | :--- | :--- | :--- |
-| `POST` | `/matches` | PLAYER host; `coverUrl` URL-only |
+| `POST` | `/matches` | PLAYER host; required `province`+`city`; `coverUrl` URL-only |
 | `GET` | `/matches` | List `OPEN`/`FULL`, `endsAt > now` |
+| `GET` | `/geo/vn` | Pre-2025 63 tỉnh + 705 quận/huyện (static JSON, Bearer) |
 | `GET` | `/matches/mine` | Host only; `tab=active\|completed` |
 | `GET` | `/matches/:id` | Detail + join context |
 | `POST` / `DELETE` | `/matches/:id/favorite` | Heart |
@@ -271,25 +285,46 @@ Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 `timeTo` after `timeFrom`), `skill` (needs `sport`; repeat or comma; OR —
 match range contains at least one selected rank; max 10), `priceMin`/`priceMax`
 (VND; both = GENDER_RANGE band overlap / SPLIT_EVENLY `ceil(price_min/maxPlayers)`
-in range), `location` (substring `venueName` **or** `venueAddress`),
+in range), `location` (unaccent + fuzzy `title` **or** `venueName`; not
+`venueAddress`; `suggestions[]`; Postgres only), `province` / `city` (pre-2025
+GSO codes, exact; `city` requires `province`; HCM `79`, Quận 7 `778`),
 `favorited=true` (caller’s hearts), `hostUserId` (that host’s active kèo),
 `latitude`+`longitude`+`radiusKm` (1–20, haversine; all three together;
 matches without coords excluded), `limit` (default 20, max 50), `offset`.
 
 **Location XOR Distance:** `location` together with lat/lng/radiusKm → `400`
-(`Use location or distance, not both`). Football filter chips: Beginner→`LEARNING`,
-Basic Amateur→`REC_BASIC`, Advanced Amateur→`REC_ADVANCED`, Semi-pro→`SEMI_PRO`,
-Professional→`PROFESSIONAL`, Elite→`ELITE`.
+(`Use location or distance, not both`). `province`/`city` **may** combine with
+either. Football filter chips: Beginner→`LEARNING`, Basic Amateur→`REC_BASIC`,
+Advanced Amateur→`REC_ADVANCED`, Semi-pro→`SEMI_PRO`, Professional→`PROFESSIONAL`,
+Elite→`ELITE`.
+
+**Search / admin units (no 3rd-party API)**
+
+- Homepage search is SQL on `schema_matchmaking.fold_search_text` + `pg_trgm`.
+  Unaccent (`san` = `Sân`), fuzzy if query ≥ 3 chars, or all tokens in
+  title+venue. Response `suggestions` = up to 5 `{ text, kind: title\|venueName }`
+  from **our** kèo, not Geoapify Autocomplete/Geocoding/Reverse.
+- Filter tỉnh/quận: host and filter pick the **same codes** from `GET /geo/vn`
+  (`vn-admin.json`). Map is **pre-2025** (63 tỉnh/TP + quận/huyện). Do **not**
+  switch to the 2025 34-tỉnh / xã-phường list.
+- `venueAddress` is the free-text street line. Occupancy still uses
+  `venueName`+`venueAddress`+court, not `province`/`city`.
+- Match card also returns `provinceName` / `cityName` (lookup from JSON).
+  Old rows may have `province`/`city` `null` (excluded by those filters).
+- Constraint `matches_admin_pair`: both NULL or both set.
 
 **Public match card** (list + detail): `coverUrl`, `host: { userId, fullName,
-avatarUrl, matchCount, rating }`, `isFavorited`, `participantAvatars` (max 3).
-`host.rating` always `null`. `matchCount` = hosted kèo except `CANCELLED`.
-No `hostPhoneNumber` on list / mine / `GET /users/:id`.
+avatarUrl, matchCount, rating }`, `isFavorited`, `participantAvatars` (max 3),
+`province`, `provinceName`, `city`, `cityName`. `host.rating` always `null`.
+`matchCount` = hosted kèo except `CANCELLED`. No `hostPhoneNumber` on list /
+mine / `GET /users/:id`.
 
 **Listing rules**
 
 - `startsAt` in the future; duration **≥ 1 hour** (no max).
 - Courts required and **named**; unique names per match.
+- `province` + `city` **required** on create (codes from `GET /geo/vn`).
+  `venueAddress` is street/venue line, not a substitute for those codes.
 - Pitch occupancy is **global**: normalized `venueName` + `venueAddress` + court
   name + overlapping time → `409`. Adjacent 9–11 then 11–13 is OK. Different
   court names at the same venue+time are OK. Optional `latitude`/`longitude`
@@ -357,19 +392,25 @@ is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
 - `POST cancel` — pending → `REJECTED`; match `CANCELLED` (frees pitch).
   ACCEPTED rows stay as history.
 
-**Schema (`schema_matchmaking`)** — `003_schema_matchmaking.sql`: `matches`,
-`match_courts`, `match_join_requests`, `match_guests`, `match_favorites`.
-`user_profiles.avatar_url` in `001`. Do **not** pile ALTER-only migration
-files; fold into `001`/`003` for fresh installs. Live DB: `npm run apply:homepage-card`.
-`schema_migrations` may contain leftover filenames from other work — do not
-delete those ledger rows. Do not `INSERT` name/gender on `users`.
+**Schema (`schema_matchmaking`)** — `003` is canonical for fresh installs:
+`matches` (incl. `province`/`city`, `matches_admin_pair`, `fold_search_text`,
+GIN + partial `idx_matches_province_city`), `match_courts`,
+`match_join_requests`, `match_guests`, `match_favorites`. `004` / `005` are
+**idempotent live deltas** (`CREATE OR REPLACE` / `IF NOT EXISTS`) for DBs
+that already applied an older `003`. `migrate.js` skips filenames already in
+`schema_migrations` — re-apply with `npm run apply:match-search` (`004`) or
+`npm run apply:match-admin` (`005`). Do **not** add `006+` ALTER-only files.
+`user_profiles.avatar_url` in `001`. Live homepage-card columns:
+`npm run apply:homepage-card`. Leftover `schema_migrations` rows — do not
+delete. Do not `INSERT` name/gender on `users`.
 
 **Out of scope (do not add in this domain):** waitlist, Zalo, real MoMo/VNPay,
 `booking_id`, Groups/Tournaments, join-by-code, cover **file upload**/S3
 (URL-only `coverUrl` / `avatarUrl` is in), user profile **hero/cover** image,
 verified-host badge, recurring generation, AI chatbot, notifications (bell),
 Booking/Schedule tabs, **host rating/review** (keep `rating: null`), Geoapify
-on backend (homepage search is `GET /matches?location=` venue substring).
+**on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
+2025 34-tỉnh / xã-phường map.
 
 Reset kèo data:
 `npm run reset:matches` (or `docker compose run --rm backend npm run reset:matches`).
@@ -425,8 +466,10 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
   `other` / `prefer_not_to_say`).
 - **Matchmaking:** one join request per `(match, user)`; kick is per-kèo not
   per-host; waiting list is PENDING only; `GET /mine` before `GET /:id`.
-  List: Location XOR Distance; `hostUserId` for host profile kèo.
-  Do not add waitlist / Zalo / real payment / `booking_id` / Groups / rating.
+  List: Location XOR Distance; `province`/`city` may combine with either;
+  `hostUserId` for host profile kèo. Search = DB only. Admin dropdown =
+  `GET /geo/vn` (pre-2025). Do not add waitlist / Zalo / real payment /
+  `booking_id` / Groups / rating / Geoapify-on-backend / 2025 ward map.
 - UI “Venue Owner” maps to DB/API role `OWNER`.
 - FE role-based navigation reads `role` from login JWT / `user`. Protect later
   APIs with `authenticate` / `requireRole` from `shared/middleware/authenticate.js`.

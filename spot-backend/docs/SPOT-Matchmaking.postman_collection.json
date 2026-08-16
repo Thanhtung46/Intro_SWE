@@ -123,7 +123,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sport\": \"FOOTBALL\",\n  \"format\": \"SEVEN_A_SIDE\",\n  \"title\": \"Saturday 7v7 AUTO\",\n  \"notes\": \"Bring both shirts\",\n  \"coverUrl\": \"{{coverUrl}}\",\n  \"venueName\": \"San ABC\",\n  \"venueAddress\": \"123 Nguyen Van Linh, Q7, TP.HCM\",\n  \"latitude\": 10.729,\n  \"longitude\": 106.721,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 14,\n  \"skillMin\": \"REC_BASIC\",\n  \"skillMax\": \"SEMI_PRO\",\n  \"feeType\": \"SPLIT_EVENLY\",\n  \"priceMin\": 1400000,\n  \"joinMode\": \"AUTO\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
+              "raw": "{\n  \"sport\": \"FOOTBALL\",\n  \"format\": \"SEVEN_A_SIDE\",\n  \"title\": \"Saturday 7v7 AUTO\",\n  \"notes\": \"Bring both shirts\",\n  \"coverUrl\": \"{{coverUrl}}\",\n  \"venueName\": \"San ABC\",\n  \"venueAddress\": \"123 Nguyen Van Linh, Q7, TP.HCM\",\n  \"province\": \"79\",\n  \"city\": \"778\",\n  \"latitude\": 10.729,\n  \"longitude\": 106.721,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 14,\n  \"skillMin\": \"REC_BASIC\",\n  \"skillMax\": \"SEMI_PRO\",\n  \"feeType\": \"SPLIT_EVENLY\",\n  \"priceMin\": 1400000,\n  \"joinMode\": \"AUTO\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/matches"
@@ -155,7 +155,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sport\": \"FOOTBALL\",\n  \"format\": \"SEVEN_A_SIDE\",\n  \"title\": \"Sunday 7v7 APPROVAL\",\n  \"notes\": \"Host will approve\",\n  \"coverUrl\": \"{{coverUrl}}\",\n  \"venueName\": \"San ABC\",\n  \"venueAddress\": \"123 Nguyen Van Linh, Q7, TP.HCM\",\n  \"latitude\": 10.729,\n  \"longitude\": 106.721,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 14,\n  \"skillMin\": \"REC_BASIC\",\n  \"skillMax\": \"SEMI_PRO\",\n  \"feeType\": \"SPLIT_EVENLY\",\n  \"priceMin\": 1400000,\n  \"joinMode\": \"APPROVAL\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
+              "raw": "{\n  \"sport\": \"FOOTBALL\",\n  \"format\": \"SEVEN_A_SIDE\",\n  \"title\": \"Sunday 7v7 APPROVAL\",\n  \"notes\": \"Host will approve\",\n  \"coverUrl\": \"{{coverUrl}}\",\n  \"venueName\": \"San ABC\",\n  \"venueAddress\": \"123 Nguyen Van Linh, Q7, TP.HCM\",\n  \"province\": \"79\",\n  \"city\": \"778\",\n  \"latitude\": 10.729,\n  \"longitude\": 106.721,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 14,\n  \"skillMin\": \"REC_BASIC\",\n  \"skillMax\": \"SEMI_PRO\",\n  \"feeType\": \"SPLIT_EVENLY\",\n  \"priceMin\": 1400000,\n  \"joinMode\": \"APPROVAL\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/matches"
@@ -187,7 +187,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sport\": \"BADMINTON\",\n  \"format\": \"DOUBLES\",\n  \"title\": \"Evening doubles\",\n  \"coverUrl\": \"https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800\",\n  \"venueName\": \"San Cau Long Q7\",\n  \"venueAddress\": \"45 Nguyen Thi Thap, Q7, TP.HCM\",\n  \"latitude\": 10.741,\n  \"longitude\": 106.718,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 4,\n  \"skillMin\": \"BEGINNER\",\n  \"skillMax\": \"AVERAGE_PLUS\",\n  \"feeType\": \"GENDER_RANGE\",\n  \"priceMin\": 80000,\n  \"priceMax\": 120000,\n  \"joinMode\": \"AUTO\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
+              "raw": "{\n  \"sport\": \"BADMINTON\",\n  \"format\": \"DOUBLES\",\n  \"title\": \"Evening doubles\",\n  \"coverUrl\": \"https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800\",\n  \"venueName\": \"San Cau Long Q7\",\n  \"venueAddress\": \"45 Nguyen Thi Thap, Q7, TP.HCM\",\n  \"province\": \"79\",\n  \"city\": \"778\",\n  \"latitude\": 10.741,\n  \"longitude\": 106.718,\n  \"startsAt\": \"{{startsAt}}\",\n  \"endsAt\": \"{{endsAt}}\",\n  \"maxPlayers\": 4,\n  \"skillMin\": \"BEGINNER\",\n  \"skillMax\": \"AVERAGE_PLUS\",\n  \"feeType\": \"GENDER_RANGE\",\n  \"priceMin\": 80000,\n  \"priceMax\": 120000,\n  \"joinMode\": \"AUTO\",\n  \"courts\": [{ \"name\": \"{{courtName}}\" }]\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/matches"
@@ -309,7 +309,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/matches?sport=FOOTBALL&date=2026-08-22&timeFrom=19:00&timeTo=21:00&skill=REC_BASIC&skill=SEMI_PRO&priceMin=20000&priceMax=150000&location=San%20ABC"
+            "url": "{{baseUrl}}/matches?sport=FOOTBALL&date=2026-08-22&timeFrom=19:00&timeTo=21:00&skill=REC_BASIC&skill=SEMI_PRO&priceMin=20000&priceMax=150000&location=San%20ABC&province=79&city=778"
           }
         },
         {
@@ -317,8 +317,8 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/matches?favorited=true&location=Q7",
-            "description": "Sheet filter: tim = kèo đã favorite. Kết hợp `location`."
+            "url": "{{baseUrl}}/matches?favorited=true&location=San%20ABC",
+            "description": "Sheet filter: tim = kèo đã favorite. `location` = không dấu + gần đúng; `suggestions` trong response."
           }
         },
         {

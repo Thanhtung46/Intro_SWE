@@ -45,8 +45,5 @@ CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_purpose
   ON schema_auth.otp_verifications (user_id, purpose)
   WHERE is_used = FALSE;
 
-ALTER TABLE schema_auth.user_profiles
-  ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(2048) NULL;
-
 -- Legacy scaffold only. Do not drop user_profiles.
 DROP TABLE IF EXISTS schema_auth.otp_tokens CASCADE;

@@ -59,6 +59,14 @@ export const LISTABLE_MATCH_STATUSES = Object.freeze([
   MATCH_STATUSES.FULL,
 ]);
 
+/** GET /matches?location= — unaccent + trigram; suggestions from our titles/venues. */
+export const MATCH_SEARCH = Object.freeze({
+  FUZZY_MIN_CHARS: 3,
+  LIST_SIMILARITY: 0.28,
+  SUGGEST_SIMILARITY: 0.2,
+  SUGGEST_LIMIT: 5,
+});
+
 export const MINE_TABS = Object.freeze({
   ACTIVE: 'active',
   COMPLETED: 'completed',

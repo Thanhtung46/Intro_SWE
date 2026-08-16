@@ -277,7 +277,7 @@ Exact paths may be adjusted when coding; keep REST + existing error JSON (`messa
 - Cover file upload / S3 (URL-only `coverUrl` is implemented)  
 - Geocoding / routing on backend (FE uses Geoapify; host sends `latitude`/`longitude`)  
 - Admin approve OWNER/REFEREE (already listed under auth backlog)  
-- Recommendation / NLP chatbot (homepage search box is **venue name** via `GET /matches?location=`, not AI)  
+- Recommendation / NLP chatbot (homepage search is **unaccent + fuzzy title/venue** via `GET /matches?location=`, plus `suggestions` from our kèo — not AI / Geoapify)  
 - Notifications (bell + unread dot)  
 - Booking tab / Schedule tab  
 - **Host rating** (Figma card `4.9`): after the match is finished, each `ACCEPTED` player rates the **host** (one rating per user per match). `host.rating` stays `null` until domain `review` exists. `host.matchCount` is already live.  

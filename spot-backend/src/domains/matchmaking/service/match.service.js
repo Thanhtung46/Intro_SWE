@@ -241,6 +241,8 @@ export async function createMatch(hostUserId, input) {
         notes: input.notes || null,
         venueName: input.venueName,
         venueAddress: input.venueAddress,
+        province: input.province,
+        city: input.city,
         latitude: input.latitude ?? null,
         longitude: input.longitude ?? null,
         startsAt: input.startsAt,
@@ -303,6 +305,8 @@ export async function listMatches(userId, query) {
       priceMin: query.priceMin,
       priceMax: query.priceMax,
       location: query.location,
+      province: query.province,
+      city: query.city,
       latitude: query.latitude,
       longitude: query.longitude,
       radiusKm: query.radiusKm,
@@ -315,6 +319,10 @@ export async function listMatches(userId, query) {
 
     const rows = await matchRepository.listMatches(client, filters);
     const total = await matchRepository.countMatches(client, filters);
+    const suggestions = await matchRepository.listSearchSuggestions(
+      client,
+      filters,
+    );
 
     const matchIds = rows.map((row) => row.match_id);
     const courtRows = await matchCourtRepository.findByMatchIds(
@@ -342,6 +350,7 @@ export async function listMatches(userId, query) {
           participantAvatars: avatarsByMatch.get(row.match_id) || [],
         }),
       ),
+      suggestions,
     };
   } finally {
     client.release();
@@ -896,6 +905,8 @@ function rowToCreateInput(match, courts) {
     coverUrl: match.cover_url ?? null,
     venueName: match.venue_name,
     venueAddress: match.venue_address,
+    province: match.province,
+    city: match.city,
     latitude: match.venue_lat == null ? undefined : Number(match.venue_lat),
     longitude: match.venue_lng == null ? undefined : Number(match.venue_lng),
     startsAt: match.starts_at,
@@ -1063,6 +1074,8 @@ export async function updateMatch(userId, rawId, patch) {
         notes: parsed.notes || null,
         venueName: parsed.venueName,
         venueAddress: parsed.venueAddress,
+        province: parsed.province,
+        city: parsed.city,
         latitude: parsed.latitude ?? null,
         longitude: parsed.longitude ?? null,
         startsAt: parsed.startsAt,
