@@ -14,3 +14,6 @@ web-build/
 .claude/
 .specify/
 specs/
+
+# Personal dev cheat-sheet of clickable localhost routes — not project docs.
+local-routes.md

@@ -1,7 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 // import MockAdapter from 'axios-mock-adapter';
 import { API_URL, USE_MOCK_API } from '../config/env';
-import type { RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import { getToken } from '@/utils/authStorage';
+import type { CurrentUserProfile, RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
 
 export interface RegisterPayload {
   fullName: string;
@@ -515,11 +516,35 @@ export function getErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export async function selectRole(role: Role): Promise<void> {
-  await delay(MOCK_DELAY_MS);
-  // No-op mock: role choice isn't persisted server-side yet, navigation
-  // alone drives the next screen.
-  void role;
+export interface SelectRoleResult {
+  success: boolean;
+  message?: string;
+}
+
+const ROLE_TO_BACKEND: Record<Role, string> = {
+  player: 'PLAYER',
+  owner: 'OWNER',
+  referee: 'REFEREE',
+};
+
+/**
+ * REAL — POST /auth/role (Register step 2, spot-backend's documented
+ * register→role→otp→login flow). Previously a no-op mock that nothing
+ * called; wired for real once it became clear no screen was invoking
+ * role selection at all, leaving every account stuck at SELECT_ROLE and
+ * unable to log in — see app/auth/choose-role.tsx.
+ */
+export async function selectRole(email: string, role: Role): Promise<SelectRoleResult> {
+  try {
+    await client.post(`${API_URL}/auth/role`, { email, role: ROLE_TO_BACKEND[role] });
+    return { success: true };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
 }
 
 export async function registerOwner(payload: RegisterOwnerPayload): Promise<RegisterResponse> {
@@ -536,4 +561,27 @@ export async function registerReferee(payload: RegisterRefereePayload): Promise<
     throw new Error("Couldn't submit registration. Check your network and try again.");
   }
   return { status: 'pending' };
+}
+
+/**
+ * REAL — GET /auth/me. Named in the original SPOT-76 API analysis as the
+ * Join Match sheet's second dependency (its "You" card, plan mục 2.2:
+ * Gender/Skill shown read-only, only Phone + Message are editable
+ * per-join). `seed` is kept in the signature for call-site compatibility
+ * (src/components/matches/JoinMatchSheet.tsx passes fullName/phoneNumber
+ * from useUser()) but is no longer used now that this hits the real
+ * endpoint — the backend response is the source of truth once signed in.
+ */
+export async function getMe(seed?: Pick<LoginUser, 'fullName' | 'phoneNumber'>): Promise<CurrentUserProfile> {
+  void seed;
+  const token = await getToken();
+  try {
+    const res = await client.get(`${API_URL}/auth/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.data as CurrentUserProfile;
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+    throw new Error(error.response?.data?.message || getErrorMessage(err));
+  }
 }

@@ -6,7 +6,7 @@ export default function RegisterRoute() {
   return (
     <RegisterScreen
       onBack={() => router.back()}
-      onRegistered={(email) => router.push({ pathname: '/auth/otp', params: { email } })}
+      onRegistered={(email) => router.push({ pathname: '/auth/choose-role', params: { email } })}
     />
   );
 }

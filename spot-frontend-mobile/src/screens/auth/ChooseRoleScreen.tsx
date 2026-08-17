@@ -40,20 +40,23 @@ type Props = {
   onSelectRole: (role: Role) => void;
   onBack: () => void;
   onContinue: () => void;
+  submitting?: boolean;
+  error?: string;
 };
 
 /**
  * Choose Role screen (Figma node 1:565). Player / Venue Owner / Referee
- * cards; role change happens locally until `onContinue` is pressed — no
- * network call here (the API call belongs to the register forms that
- * follow for Owner/Referee, per the AC).
+ * cards; role change happens locally until `onContinue` is pressed. When
+ * reached from Register (see app/auth/choose-role.tsx), `onContinue` calls
+ * POST /auth/role for real — `submitting`/`error` reflect that call's
+ * loading/error state, per .claude/rules/api-conventions.md's contract.
  */
 // Header title fades in once the user scrolls past roughly this many
 // pixels — mirrors iOS's collapsing large-title nav bar (title text is
 // blank while at the top, appears once content scrolls under the header).
 const TITLE_FADE_RANGE = 40;
 
-export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, onContinue }: Props) {
+export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, onContinue, submitting, error }: Props) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [0, TITLE_FADE_RANGE],
@@ -111,15 +114,18 @@ export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, o
           ))}
         </View>
 
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
         <TouchableOpacity
-          style={[styles.completeButton, !selectedRole && styles.completeButtonDisabled]}
+          testID="choose-role-continue"
+          style={[styles.completeButton, (!selectedRole || submitting) && styles.completeButtonDisabled]}
           onPress={onContinue}
-          disabled={!selectedRole}
+          disabled={!selectedRole || submitting}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Continue"
         >
-          <Text style={styles.completeButtonText}>Continue</Text>
+          <Text style={styles.completeButtonText}>{submitting ? 'Please wait...' : 'Continue'}</Text>
         </TouchableOpacity>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -190,6 +196,13 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.lg,
     marginBottom: spacing.xl + spacing.sm,
+  },
+  errorText: {
+    width: '100%',
+    color: colors.error,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   completeButton: {
     width: '100%',

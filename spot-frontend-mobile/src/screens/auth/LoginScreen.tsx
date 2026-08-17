@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
+import { setToken } from '../../utils/authStorage';
 import {
   Alert,
   Image,
@@ -55,7 +56,11 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
     setSubmitting(false);
 
     if (response.success && response.accessToken && response.refreshToken) {
-      await SecureStore.setItemAsync('accessToken', response.accessToken);
+      // Access token via authStorage.ts (spot:auth_token) — the key every
+      // other service reads through getToken(), see .claude/rules/
+      // api-conventions.md. Refresh token has no reader yet, so it stays a
+      // plain SecureStore key until a refresh flow needs it.
+      await setToken(response.accessToken);
       await SecureStore.setItemAsync('refreshToken', response.refreshToken);
       setUser(response.user || null);
 
