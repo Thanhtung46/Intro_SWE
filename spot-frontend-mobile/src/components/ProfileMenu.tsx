@@ -145,8 +145,13 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     }
   };
 
+  const handleGoHome = () => {
+    onClose();
+    router.replace(ROUTES.HOME);
+  };
+
   const menuItems: MenuItemConfig[] = [
-    { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
+    { key: 'home', label: 'Home', icon: 'home-outline', onPress: handleGoHome },
     {
       key: 'ai-assistant',
       label: 'AI Assistant',
