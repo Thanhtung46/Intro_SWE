@@ -17,9 +17,7 @@ import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
 import VenueCard, { Venue } from '@/components/home/VenueCard';
-import AppHeader from '@/components/layout/AppHeader';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
-import BottomNav from '@/components/navigation/BottomNav';
 
 const HEADING_TEXT = '#020617';
 
@@ -59,7 +57,7 @@ type Props = {
 };
 
 /** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
-export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
+export default function HomeScreen({ onNavigateSchedule }: Props) {
   const router = useRouter();
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -72,10 +70,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* Header - Top Navigation Shell (Figma node 8:124 / 50:603) */}
-      <AppHeader onAvatarPress={onAvatarPress} avatarInitial={avatarInitial} variant="blurred" />
-
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search bar */}
         <View style={styles.searchBarOuter}>
@@ -147,7 +142,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
           <View style={styles.upcomingContent}>
             <View style={styles.upcomingTop}>
               <Text style={styles.upcomingHeading}>Upcoming Match</Text>
-              <TouchableOpacity style={styles.viewScheduleButton} onPress={() => comingSoon('Schedule')}>
+              <TouchableOpacity style={styles.viewScheduleButton} onPress={onNavigateSchedule}>
                 <Text style={styles.viewScheduleText}>View Schedule</Text>
               </TouchableOpacity>
             </View>
@@ -180,9 +175,6 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
           </ScrollView>
         </View>
       </ScrollView>
-
-      {/* Bottom navigation */}
-      <BottomNav active="home" />
     </SafeAreaView>
   );
 }

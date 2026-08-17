@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { ReactNode, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
-import BottomNav from '@/components/navigation/BottomNav';
+import { clearToken } from '@/utils/authStorage';
+import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 // Alert.alert's button-array form (React Native's only way to offer a
 // multi-choice picker without a custom component) is a no-op on web —
 // react-native-web ships `class Alert { static alert() {} }`, verified
@@ -144,10 +145,6 @@ export default function SettingsScreen({
       }
     });
   }, []);
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
 
   const handleTogglePushNotifications = async (value: boolean) => {
     setPushNotifications(value);
@@ -305,7 +302,7 @@ export default function SettingsScreen({
         onSelect={handleSelectAppearance}
         onClose={() => setAppearancePickerOpen(false)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

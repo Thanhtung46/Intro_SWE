@@ -7,7 +7,7 @@ import {
   markNotificationRead,
   NotificationItem,
 } from '../services/notificationService';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 interface NotificationMenuProps {
   visible: boolean;
@@ -44,7 +44,7 @@ function iconForType(type: NotificationItem['type']): {
   if (type === 'SYSTEM') {
     return { name: 'information-circle', bg: colors.border, color: colors.subtitle };
   }
-  return { name: 'calendar', bg: colors.primary, color: colors.white };
+  return { name: 'calendar', bg: colors.primaryDark, color: colors.white };
 }
 
 export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   markAllRead: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   emptyText: {
     paddingHorizontal: 16,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     marginTop: 4,
   },
   viewAllButton: {
@@ -234,6 +234,6 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
 });

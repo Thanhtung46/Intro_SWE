@@ -1,11 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import BottomNav from '@/components/navigation/BottomNav';
+import { getMainProfile, MainProfileStats } from '@/services/profileService';
 
 function formatJoinedAt(joinedAt: string | null | undefined): string {
   if (!joinedAt) {

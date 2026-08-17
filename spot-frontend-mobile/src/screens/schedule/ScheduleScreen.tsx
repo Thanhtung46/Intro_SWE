@@ -1,10 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
-import BottomNav from '@/components/navigation/BottomNav';
+import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
+import { ReviewModal } from '@/components/ReviewModal';
 
 type ScheduleEvent = {
   id: string;
@@ -317,7 +318,16 @@ export default function ScheduleScreen() {
           </View>
         ) : null}
       </ScrollView>
-      <BottomNav active="schedule" />
+
+      <ReviewModal
+        visible={reviewBookingId !== null}
+        bookingId={reviewBookingId}
+        onClose={() => setReviewBookingId(null)}
+        onSubmitted={(bookingId) => {
+          setReviewedBookingIds((prev) => new Set(prev).add(bookingId));
+          setReviewBookingId(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -6,7 +6,7 @@ export default function ForgotPasswordRoute() {
   const router = useRouter();
   return (
     <ForgotPasswordScreen
-      onCodeSent={(email) => router.push({ pathname: ROUTES.AUTH_RESET_PASSWORD, params: { email } })}
+      onCodeSent={(email) => router.push({ pathname: ROUTES.AUTH_FORGOT_PASSWORD_OTP, params: { email } })}
     />
   );
 }

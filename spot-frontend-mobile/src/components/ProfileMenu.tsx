@@ -1,11 +1,13 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
+import { clearToken } from '@/utils/authStorage';
+import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 
 interface ProfileMenuProps {
   visible: boolean;
@@ -92,9 +94,6 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   const router = useRouter();
   const { user, clearUser } = useUser();
 
-<<<<<<< HEAD
-  const handleSignOut = () => {
-=======
   const [language, setLanguage] = useState<Language>('en');
   const [appearance, setAppearance] = useState<Appearance>('light');
   const [expanded, setExpanded] = useState<'language' | 'appearance' | null>(null);
@@ -112,13 +111,8 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     });
   }, [visible]);
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
-
   const handleSignOut = async () => {
     await clearToken();
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
     clearUser();
     onClose();
     router.replace(ROUTES.AUTH_LOGIN);
@@ -151,28 +145,8 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     }
   };
 
-  const handleGoHome = () => {
-    onClose();
-<<<<<<< HEAD
-    router.push(ROUTES.SETTINGS);
-  };
-
   const menuItems: MenuItemConfig[] = [
     { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
-    {
-      key: 'appearance',
-      label: 'Appearance',
-      icon: 'color-palette-outline',
-      secondaryLabel: 'Light >',
-      onPress: handleOpenSettings,
-    },
-    {
-      key: 'language',
-      label: 'Language',
-      icon: 'globe-outline',
-      secondaryLabel: 'English >',
-      onPress: handleOpenSettings,
-    },
     {
       key: 'ai-assistant',
       label: 'AI Assistant',
@@ -181,23 +155,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
       iconColor: colors.primaryDark,
       onPress: () => comingSoon('AI Assistant'),
     },
-=======
-    router.replace('/home');
-  };
-
-  const menuItems: MenuItemConfig[] = [
-    { key: 'home', label: 'Home', icon: 'home-outline', onPress: handleGoHome },
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
   ];
-
-  const aiItem: MenuItemConfig = {
-    key: 'ai-assistant',
-    label: 'AI Assistant',
-    mciIcon: 'creation',
-    labelColor: colors.primary,
-    iconColor: colors.primary,
-    onPress: () => showComingSoon('AI Assistant'),
-  };
 
   const supportItems: MenuItemConfig[] = [
     { key: 'help-center', label: 'Help Center', icon: 'help-circle-outline', onPress: () => comingSoon('Help Center') },
@@ -265,7 +223,6 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
                 options={LANGUAGE_OPTIONS}
                 onSelect={(value) => handleSelectLanguage(value as Language)}
               />
-              {renderItem(aiItem)}
 
               <View style={styles.divider} />
 

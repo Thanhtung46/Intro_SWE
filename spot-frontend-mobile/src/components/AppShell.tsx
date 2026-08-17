@@ -6,7 +6,7 @@ import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
-import BottomNavItem from '@/components/home/BottomNavItem';
+import BottomNavItem from '@/components/navigation/BottomNavItem';
 import { useUser } from '../context/UserContext';
 import { getUnreadCount } from '../services/notificationService';
 import { NotificationMenu } from './NotificationMenu';

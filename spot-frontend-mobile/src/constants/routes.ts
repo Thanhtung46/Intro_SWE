@@ -14,6 +14,7 @@ export const ROUTES = {
   AUTH_REGISTER: '/auth/register',
   AUTH_OTP: '/auth/otp',
   AUTH_FORGOT_PASSWORD: '/auth/forgot-password',
+  AUTH_FORGOT_PASSWORD_OTP: '/auth/forgot-password-otp',
   AUTH_RESET_PASSWORD: '/auth/reset-password',
   AUTH_CHOOSE_ROLE: '/auth/choose-role',
   OWNER_REGISTER: '/owner/register',

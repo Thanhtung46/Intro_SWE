@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { createReview } from '../services/reviewService';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 interface ReviewModalProps {
   visible: boolean;
@@ -163,13 +163,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 8,
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',

@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import OtpScreen from '../../src/screens/auth/OtpScreen';
+import OtpScreen from '@/screens/auth/OtpScreen';
+import { ROUTES } from '@/constants/routes';
 
 /**
  * "/auth/forgot-password-otp" — reuses the same OtpScreen UI as Register's
@@ -18,7 +19,7 @@ export default function ForgotPasswordOtpRoute() {
       email={email}
       purpose="FORGOT_PASSWORD"
       mode="collect"
-      onVerified={(otp) => router.push({ pathname: '/auth/reset-password', params: { email, otp } })}
+      onVerified={(otp) => router.push({ pathname: ROUTES.AUTH_RESET_PASSWORD, params: { email, otp } })}
     />
   );
 }

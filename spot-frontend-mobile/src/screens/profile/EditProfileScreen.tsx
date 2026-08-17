@@ -17,6 +17,7 @@ import { genderOptions } from '@/schemas/registerSchema';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
+import { getProfile, updateProfile } from '@/services/profileService';
 
 // Not part of user_profiles per any BE spec/AC — placeholder options for the
 // Figma-required UI only, confirm real values with team/PO later.
@@ -46,10 +47,6 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
   }, []);
 
   const displayName = user?.fullName || 'Guest';
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
 
   const handleSave = async () => {
     const trimmed = name.trim();

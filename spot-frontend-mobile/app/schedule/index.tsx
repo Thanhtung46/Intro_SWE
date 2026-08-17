@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { AppShell } from '@/components/AppShell';
 import ScheduleScreen from '@/screens/schedule/ScheduleScreen';
 
 export default function ScheduleRoute() {

@@ -4,12 +4,8 @@ import { useRouter } from 'expo-router';
 import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
 import { getProfile } from '@/services/profileService';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
-<<<<<<< HEAD
-import { getToken } from '@/utils/authStorage';
-import { ROUTES } from '@/constants/routes';
-=======
 import { clearToken, getToken } from '@/utils/authStorage';
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
+import { ROUTES } from '@/constants/routes';
 
 type Destination = typeof ROUTES.ONBOARDING | typeof ROUTES.AUTH_LOGIN | typeof ROUTES.HOME;
 
@@ -48,21 +44,17 @@ export default function Splash() {
         if (cancelled) return;
 
         if (token) {
-<<<<<<< HEAD
-          setDestination(ROUTES.HOME);
-=======
           const check = await getProfile();
           if (cancelled) return;
 
           if (check.success) {
-            setDestination('/home');
+            setDestination(ROUTES.HOME);
           } else {
             // Token hết hạn/không hợp lệ — xoá token cũ, không tự ý vào Home nữa.
             await clearToken();
             if (cancelled) return;
-            setDestination('/auth/login');
+            setDestination(ROUTES.AUTH_LOGIN);
           }
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
         } else if (!onboardingCompleted) {
           setDestination(ROUTES.ONBOARDING);
         } else {
