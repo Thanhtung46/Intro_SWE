@@ -4,6 +4,7 @@ import {
   MATCH_SEARCH,
   MATCH_STATUSES,
   MINE_TABS,
+  PITCH_OCCUPIED_STATUSES,
 } from '../../../shared/constants/matchmaking.js';
 
 const FOLD = 'schema_matchmaking.fold_search_text';
@@ -12,16 +13,21 @@ function locationPredicate(locationSlot) {
   const q = `${FOLD}(${locationSlot})`;
   const title = `${FOLD}(m.title)`;
   const venue = `${FOLD}(m.venue_name)`;
-  const hay = `(${title} || ' ' || ${venue})`;
+  const address = `${FOLD}(m.venue_address)`;
+  const hay = `(${title} || ' ' || ${venue} || ' ' || ${address})`;
   return `(
     ${q} <> ''
     AND (
       position(${q} in ${title}) > 0
       OR position(${q} in ${venue}) > 0
+      OR position(${q} in ${address}) > 0
       OR (
         length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
-        AND GREATEST(similarity(${title}, ${q}), similarity(${venue}, ${q}))
-          >= ${MATCH_SEARCH.LIST_SIMILARITY}
+        AND GREATEST(
+          similarity(${title}, ${q}),
+          similarity(${venue}, ${q}),
+          similarity(${address}, ${q})
+        ) >= ${MATCH_SEARCH.LIST_SIMILARITY}
       )
       OR (
         ${q} LIKE '% %'
@@ -141,7 +147,7 @@ export async function findPitchOverlaps(
      ORDER BY m.starts_at ASC
      FOR UPDATE OF m`,
     [
-      LISTABLE_MATCH_STATUSES,
+      PITCH_OCCUPIED_STATUSES,
       venueName,
       venueAddress,
       startsAt,
@@ -176,11 +182,15 @@ function buildListMatchWhere(
   filters,
   { bindViewer = false, omitLocation = false } = {},
 ) {
-  const where = [
-    `m.status = ANY($1::text[])`,
-    `m.ends_at > NOW()`,
+  const profileBrowse = filters.hostUserId != null;
+  const where = [`m.ends_at > NOW()`];
+  const params = [
+    profileBrowse ? PITCH_OCCUPIED_STATUSES : LISTABLE_MATCH_STATUSES,
   ];
-  const params = [LISTABLE_MATCH_STATUSES];
+  where.push(`m.status = ANY($1::text[])`);
+  if (!profileBrowse) {
+    where.push(`m.filled_count < m.max_players`);
+  }
 
   function add(value) {
     params.push(value);
@@ -299,6 +309,28 @@ function buildListMatchWhere(
     where.push(`m.host_user_id = ${add(filters.hostUserId)}`);
   }
 
+  // Homepage browse: hide kèo caller hosts or already joined / pending / kicked.
+  // REJECTED may reappear so joiner can request again. Profile hostUserId= skips this.
+  if (!profileBrowse && filters.viewerUserId != null) {
+    const browseViewerSlot = add(filters.viewerUserId);
+    where.push(`m.host_user_id <> ${browseViewerSlot}`);
+    const hiddenRequestStatuses = [
+      JOIN_REQUEST_STATUSES.PENDING,
+      JOIN_REQUEST_STATUSES.ACCEPTED,
+      JOIN_REQUEST_STATUSES.KICKED,
+    ];
+    const hiddenStatusSlot = add(hiddenRequestStatuses);
+    where.push(
+      `NOT EXISTS (
+         SELECT 1
+         FROM schema_matchmaking.match_join_requests r
+         WHERE r.match_id = m.match_id
+           AND r.user_id = ${browseViewerSlot}
+           AND r.status = ANY(${hiddenStatusSlot}::text[])
+       )`,
+    );
+  }
+
   return { where, params, add, viewerSlot, locationSlot };
 }
 
@@ -312,7 +344,8 @@ export async function listMatches(client, filters) {
   const orderBy = locationSlot
     ? `GREATEST(
          similarity(${FOLD}(m.title), ${FOLD}(${locationSlot})),
-         similarity(${FOLD}(m.venue_name), ${FOLD}(${locationSlot}))
+         similarity(${FOLD}(m.venue_name), ${FOLD}(${locationSlot})),
+         similarity(${FOLD}(m.venue_address), ${FOLD}(${locationSlot}))
        ) DESC, m.starts_at ASC`
     : 'm.starts_at ASC';
 
@@ -346,6 +379,7 @@ export async function listSearchSuggestions(client, filters) {
   const q = `${FOLD}(${qSlot})`;
   const title = `${FOLD}(m.title)`;
   const venue = `${FOLD}(m.venue_name)`;
+  const address = `${FOLD}(m.venue_address)`;
 
   const { rows } = await client.query(
     `SELECT text, kind
@@ -375,11 +409,92 @@ export async function listSearchSuggestions(client, filters) {
            AND ${q} <> ''
            AND ${venue} <> ${q}
            AND similarity(${venue}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+         UNION ALL
+         SELECT m.venue_address,
+                'venueAddress',
+                similarity(${address}, ${q})::float
+         FROM schema_matchmaking.matches m
+         WHERE ${where.join(' AND ')}
+           AND ${q} <> ''
+           AND ${address} <> ${q}
+           AND similarity(${address}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
        ) s
      ) ranked
      WHERE rn = 1
      ORDER BY score DESC, text ASC
      LIMIT ${MATCH_SEARCH.SUGGEST_LIMIT}`,
+    params,
+  );
+  return rows;
+}
+
+/** Host form: distinct venues from any non-cancelled kèo (not browse pool). */
+export async function listVenueSuggestions(client, { location, sport, limit }) {
+  if (!location) {
+    return [];
+  }
+  const params = [MATCH_STATUSES.CANCELLED];
+  const where = [`m.status <> $1`];
+
+  function add(value) {
+    params.push(value);
+    return `$${params.length}`;
+  }
+
+  if (sport) {
+    where.push(`m.sport = ${add(sport)}`);
+  }
+
+  const locationSlot = add(location);
+  where.push(locationPredicate(locationSlot));
+
+  const q = `${FOLD}(${locationSlot})`;
+  const title = `${FOLD}(m.title)`;
+  const venue = `${FOLD}(m.venue_name)`;
+  const address = `${FOLD}(m.venue_address)`;
+  const venueKey = `(${venue} || '|' || ${address})`;
+
+  params.push(limit);
+  const limitSlot = `$${params.length}`;
+
+  const { rows } = await client.query(
+    `SELECT venue_name,
+            venue_address,
+            province,
+            city,
+            venue_lat,
+            venue_lng,
+            score
+     FROM (
+       SELECT m.venue_name,
+              m.venue_address,
+              m.province,
+              m.city,
+              m.venue_lat,
+              m.venue_lng,
+              GREATEST(
+                similarity(${venue}, ${q}),
+                similarity(${address}, ${q}),
+                similarity(${title}, ${q})
+              )::float AS score,
+              ROW_NUMBER() OVER (
+                PARTITION BY ${venueKey}
+                ORDER BY GREATEST(
+                  similarity(${venue}, ${q}),
+                  similarity(${address}, ${q}),
+                  similarity(${title}, ${q})
+                ) DESC,
+                m.match_id DESC
+              ) AS rn
+       FROM schema_matchmaking.matches m
+       WHERE ${where.join(' AND ')}
+         AND ${q} <> ''
+         AND m.venue_name IS NOT NULL
+         AND trim(m.venue_name) <> ''
+     ) ranked
+     WHERE rn = 1
+     ORDER BY score DESC, venue_name ASC
+     LIMIT ${limitSlot}`,
     params,
   );
   return rows;
@@ -423,24 +538,85 @@ export async function updateFilledCount(client, matchId, filledCount, status) {
   return rows[0] || null;
 }
 
-function mineWhere(tab, params) {
+function mineHostWhere(tab, params) {
   if (tab === MINE_TABS.COMPLETED) {
     params.push([MATCH_STATUSES.CANCELLED, MATCH_STATUSES.COMPLETED]);
     const doneSlot = `$${params.length}`;
-    params.push(LISTABLE_MATCH_STATUSES);
+    params.push(PITCH_OCCUPIED_STATUSES);
     const openSlot = `$${params.length}`;
     return `(
       m.status = ANY(${doneSlot}::text[])
       OR (m.status = ANY(${openSlot}::text[]) AND m.ends_at <= NOW())
     )`;
   }
-  params.push(LISTABLE_MATCH_STATUSES);
+  params.push(PITCH_OCCUPIED_STATUSES);
   return `m.status = ANY($${params.length}::text[]) AND m.ends_at > NOW()`;
 }
 
-export async function listMine(client, { hostUserId, tab, limit, offset }) {
-  const params = [hostUserId];
-  const tabWhere = mineWhere(tab, params);
+function mineParticipantWhere(tab, userSlot) {
+  const accepted = JOIN_REQUEST_STATUSES.ACCEPTED;
+  const kicked = JOIN_REQUEST_STATUSES.KICKED;
+  if (tab === MINE_TABS.COMPLETED) {
+    return `EXISTS (
+      SELECT 1
+      FROM schema_matchmaking.match_join_requests r
+      WHERE r.match_id = m.match_id
+        AND r.user_id = ${userSlot}
+        AND (
+          r.status = '${kicked}'
+          OR (
+            r.status = '${accepted}'
+            AND (
+              m.status IN ('${MATCH_STATUSES.CANCELLED}', '${MATCH_STATUSES.COMPLETED}')
+              OR m.ends_at <= NOW()
+            )
+          )
+        )
+    )`;
+  }
+  return `EXISTS (
+    SELECT 1
+    FROM schema_matchmaking.match_join_requests r
+    WHERE r.match_id = m.match_id
+      AND r.user_id = ${userSlot}
+      AND r.status = '${accepted}'
+  )
+  AND m.status <> '${MATCH_STATUSES.CANCELLED}'
+  AND m.ends_at > NOW()`;
+}
+
+function buildMineWhere(tab, params) {
+  const userSlot = '$1';
+  const hostWhere = mineHostWhere(tab, params);
+  const participantWhere = mineParticipantWhere(tab, userSlot);
+  return `(
+    (m.host_user_id = ${userSlot} AND ${hostWhere})
+    OR
+    (m.host_user_id <> ${userSlot} AND ${participantWhere})
+  )`;
+}
+
+const MINE_ROW_EXTRA = `
+  CASE WHEN m.host_user_id = $1 THEN 'HOST' ELSE 'PARTICIPANT' END AS my_role,
+  (
+    SELECT r.status
+    FROM schema_matchmaking.match_join_requests r
+    WHERE r.match_id = m.match_id
+      AND r.user_id = $1
+    ORDER BY r.updated_at DESC, r.request_id DESC
+    LIMIT 1
+  ) AS my_request_status,
+  (
+    SELECT COUNT(*)::int
+    FROM schema_matchmaking.match_join_requests r
+    WHERE r.match_id = m.match_id
+      AND r.status = '${JOIN_REQUEST_STATUSES.PENDING}'
+  ) AS pending_request_count
+`;
+
+export async function listMine(client, { userId, tab, limit, offset }) {
+  const params = [userId];
+  const tabWhere = buildMineWhere(tab, params);
   params.push(limit, offset);
   const limitSlot = `$${params.length - 1}`;
   const offsetSlot = `$${params.length}`;
@@ -451,6 +627,7 @@ export async function listMine(client, { hostUserId, tab, limit, offset }) {
 
   const { rows } = await client.query(
     `SELECT ${MATCH_SELECT},
+            ${MINE_ROW_EXTRA},
             EXISTS (
               SELECT 1
               FROM schema_matchmaking.match_favorites f
@@ -460,8 +637,7 @@ export async function listMine(client, { hostUserId, tab, limit, offset }) {
      FROM schema_matchmaking.matches m
      JOIN schema_auth.users u ON u.user_id = m.host_user_id
      LEFT JOIN schema_auth.user_profiles p ON p.user_id = u.user_id
-     WHERE m.host_user_id = $1
-       AND ${tabWhere}
+     WHERE ${tabWhere}
      ORDER BY ${order}
      LIMIT ${limitSlot} OFFSET ${offsetSlot}`,
     params,
@@ -469,14 +645,13 @@ export async function listMine(client, { hostUserId, tab, limit, offset }) {
   return rows;
 }
 
-export async function countMine(client, { hostUserId, tab }) {
-  const params = [hostUserId];
-  const tabWhere = mineWhere(tab, params);
+export async function countMine(client, { userId, tab }) {
+  const params = [userId];
+  const tabWhere = buildMineWhere(tab, params);
   const { rows } = await client.query(
     `SELECT COUNT(*)::int AS total
      FROM schema_matchmaking.matches m
-     WHERE m.host_user_id = $1
-       AND ${tabWhere}`,
+     WHERE ${tabWhere}`,
     params,
   );
   return rows[0]?.total ?? 0;

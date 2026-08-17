@@ -234,3 +234,7 @@ CREATE INDEX IF NOT EXISTS idx_matches_title_fold_trgm
 CREATE INDEX IF NOT EXISTS idx_matches_venue_name_fold_trgm
   ON schema_matchmaking.matches
   USING gin ((schema_matchmaking.fold_search_text(venue_name)) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_matches_venue_address_fold_trgm
+  ON schema_matchmaking.matches
+  USING gin ((schema_matchmaking.fold_search_text(venue_address)) gin_trgm_ops);

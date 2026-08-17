@@ -54,17 +54,29 @@ export const MATCH_STATUSES = Object.freeze({
 
 export const MATCH_STATUS_CODES = Object.freeze(Object.values(MATCH_STATUSES));
 
-export const LISTABLE_MATCH_STATUSES = Object.freeze([
+/** GET /matches public browse — OPEN kèo còn slot (FULL hidden from homepage list). */
+export const LISTABLE_MATCH_STATUSES = Object.freeze([MATCH_STATUSES.OPEN]);
+
+/** Pitch still occupied while OPEN or FULL (overlap / 409 checks). */
+export const PITCH_OCCUPIED_STATUSES = Object.freeze([
   MATCH_STATUSES.OPEN,
   MATCH_STATUSES.FULL,
 ]);
 
-/** GET /matches?location= — unaccent + trigram; suggestions from our titles/venues. */
+/** GET /matches?location= — unaccent + trigram; suggestions from title/venue/address. */
 export const MATCH_SEARCH = Object.freeze({
   FUZZY_MIN_CHARS: 3,
   LIST_SIMILARITY: 0.28,
   SUGGEST_SIMILARITY: 0.2,
   SUGGEST_LIMIT: 5,
+  /** Host form venue picker — wider pool than homepage browse. */
+  VENUE_SUGGEST_LIMIT: 10,
+  VENUE_SUGGEST_SIMILARITY: 0.2,
+});
+
+/** Host bulk publish (Vmito-style clone / weekly expand on FE). */
+export const BULK_CREATE = Object.freeze({
+  MAX_SCHEDULES: 100,
 });
 
 export const MINE_TABS = Object.freeze({
@@ -73,6 +85,14 @@ export const MINE_TABS = Object.freeze({
 });
 
 export const MINE_TAB_CODES = Object.freeze(Object.values(MINE_TABS));
+
+/** Manage Matches list — caller relationship to the kèo. */
+export const MY_MATCH_ROLES = Object.freeze({
+  HOST: 'HOST',
+  PARTICIPANT: 'PARTICIPANT',
+});
+
+export const MY_MATCH_ROLE_CODES = Object.freeze(Object.values(MY_MATCH_ROLES));
 
 /** Host listing duration: at least 1 hour, no maximum. */
 export const MATCH_MIN_DURATION_MINUTES = 60;

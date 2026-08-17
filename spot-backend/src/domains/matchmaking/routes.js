@@ -14,8 +14,16 @@ router.post(
   requireRole(USER_ROLES.PLAYER),
   matchController.create,
 );
+router.post(
+  '/bulk',
+  authenticate,
+  requireRole(USER_ROLES.PLAYER),
+  matchController.createBulk,
+);
 router.get('/', authenticate, matchController.list);
 router.get('/mine', authenticate, matchController.mine);
+router.get('/my-join-requests', authenticate, matchController.myJoinRequests);
+router.get('/venue-suggestions', authenticate, matchController.venueSuggestions);
 router.post(
   '/:id/join',
   authenticate,

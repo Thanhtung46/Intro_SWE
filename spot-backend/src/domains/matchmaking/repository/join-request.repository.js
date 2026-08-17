@@ -230,3 +230,50 @@ export async function rejectPendingByMatchId(client, matchId) {
   );
   return rowCount;
 }
+
+/** Manage Matches — Join Requests tab (joiner tracking; PENDING + REJECTED). */
+export async function listMyJoinRequests(client, { userId, limit, offset }) {
+  const { rows } = await client.query(
+    `SELECT ${REQUEST_SELECT},
+            m.title AS match_title,
+            m.starts_at AS match_starts_at,
+            m.ends_at AS match_ends_at,
+            m.venue_name AS match_venue_name,
+            m.venue_address AS match_venue_address,
+            m.status AS match_status,
+            m.sport AS match_sport,
+            m.join_mode AS match_join_mode,
+            hp.full_name AS host_full_name
+     ${REQUEST_FROM}
+     INNER JOIN schema_matchmaking.matches m ON m.match_id = r.match_id
+     LEFT JOIN schema_auth.user_profiles hp ON hp.user_id = m.host_user_id
+     WHERE r.user_id = $1
+       AND r.status = ANY($2::text[])
+     ORDER BY
+       CASE r.status WHEN '${JOIN_REQUEST_STATUSES.PENDING}' THEN 0 ELSE 1 END,
+       r.updated_at DESC,
+       r.request_id DESC
+     LIMIT $3 OFFSET $4`,
+    [
+      userId,
+      [JOIN_REQUEST_STATUSES.PENDING, JOIN_REQUEST_STATUSES.REJECTED],
+      limit,
+      offset,
+    ],
+  );
+  return rows;
+}
+
+export async function countMyJoinRequests(client, { userId }) {
+  const { rows } = await client.query(
+    `SELECT COUNT(*)::int AS total
+     FROM schema_matchmaking.match_join_requests r
+     WHERE r.user_id = $1
+       AND r.status = ANY($2::text[])`,
+    [
+      userId,
+      [JOIN_REQUEST_STATUSES.PENDING, JOIN_REQUEST_STATUSES.REJECTED],
+    ],
+  );
+  return rows[0]?.total ?? 0;
+}

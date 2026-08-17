@@ -7,6 +7,7 @@ import {
   JOIN_MODES,
   JOIN_REQUEST_STATUSES,
   MATCH_STATUSES,
+  MY_MATCH_ROLES,
   PAYMENT_STATUSES,
   computeRequestShare,
   pitchKey,
@@ -18,8 +19,11 @@ import * as matchRepository from '../repository/match.repository.js';
 import * as matchCourtRepository from '../repository/match-court.repository.js';
 import * as joinRequestRepository from '../repository/join-request.repository.js';
 import * as matchFavoriteRepository from '../repository/match-favorite.repository.js';
-import { parseJoinMatchDto } from '../dto/join-match.dto.js';
 import { parseCreateMatchDto } from '../dto/create-match.dto.js';
+import {
+  vnCityName,
+  vnProvinceName,
+} from '../../../shared/constants/vn-admin.js';
 import {
   toPublicMatch,
   toPublicJoinRequest,
@@ -180,110 +184,222 @@ async function loadMatchView(client, match, userId, { includeHostPhone = false }
   });
 }
 
+async function persistNewMatch(client, host, input) {
+  const skills = resolveSkillRange(input);
+  const courts = buildCourts(input);
+  const courtNames = courts.map((court) => normalizeCourtName(court.name));
+  const feeType = input.feeType;
+  const priceMin = input.priceMin;
+  const priceMax = feeType === FEE_TYPES.GENDER_RANGE ? input.priceMax : null;
+
+  await matchRepository.lockPitches(
+    client,
+    courts.map((court) =>
+      pitchKey(input.venueName, input.venueAddress, court.name),
+    ),
+  );
+  const overlapRows = await matchRepository.findPitchOverlaps(client, {
+    venueName: input.venueName,
+    venueAddress: input.venueAddress,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    courtNames,
+  });
+  if (overlapRows.length) {
+    const row = overlapRows[0];
+    throw new AppError(
+      'This pitch is already booked at an overlapping time',
+      409,
+      {
+        matchId: row.match_id,
+        hostUserId: row.host_user_id,
+        title: row.title,
+        venueName: row.venue_name,
+        venueAddress: row.venue_address,
+        courtName: row.court_name,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+      },
+    );
+  }
+
+  const match = await matchRepository.createMatch(client, {
+    hostUserId: host.user_id,
+    sport: input.sport,
+    format: input.format,
+    title: input.title,
+    notes: input.notes || null,
+    venueName: input.venueName,
+    venueAddress: input.venueAddress,
+    province: input.province,
+    city: input.city,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    isMultiDay: false,
+    isRecurring: Boolean(input.isRecurring),
+    maxPlayers: input.maxPlayers,
+    skillMin: skills.skillMin,
+    skillMax: skills.skillMax,
+    skillMinRank: skills.skillMinRank,
+    skillMaxRank: skills.skillMaxRank,
+    allLevels: skills.allLevels,
+    feeType,
+    priceMin,
+    priceMax,
+    joinMode: input.joinMode,
+    coverUrl: input.coverUrl ?? null,
+  });
+  const courtRows = await matchCourtRepository.insertCourts(
+    client,
+    match.match_id,
+    courts,
+  );
+  return { match, courtRows };
+}
+
+function formatCreatedMatch(host, match, courtRows) {
+  match.host_full_name = host.full_name;
+  match.host_phone_number = host.phone_number;
+  match.host_avatar_url = host.avatar_url ?? null;
+  match.host_match_count = 1;
+  match.is_favorited = false;
+  return toPublicMatch(match, courtRows, {
+    gender: host.gender,
+    includeHostPhone: true,
+    participantAvatars: host.avatar_url ? [host.avatar_url] : [],
+  });
+}
+
+async function assertPlayerHost(client, hostUserId) {
+  const host = await userRepository.findById(client, hostUserId);
+  if (!host) {
+    throw new AppError('User not found', 404);
+  }
+  if (host.role !== USER_ROLES.PLAYER) {
+    throw new AppError('Only PLAYER accounts can host a match', 403);
+  }
+  return host;
+}
+
 export async function createMatch(hostUserId, input) {
   const client = await pool.connect();
   try {
-    const host = await userRepository.findById(client, hostUserId);
-    if (!host) {
-      throw new AppError('User not found', 404);
-    }
-    if (host.role !== USER_ROLES.PLAYER) {
-      throw new AppError('Only PLAYER accounts can host a match', 403);
-    }
-
-    const skills = resolveSkillRange(input);
-    const courts = buildCourts(input);
-    const courtNames = courts.map((court) => normalizeCourtName(court.name));
-    const feeType = input.feeType;
-    const priceMin = input.priceMin;
-    const priceMax = feeType === FEE_TYPES.GENDER_RANGE ? input.priceMax : null;
+    const host = await assertPlayerHost(client, hostUserId);
 
     await client.query('BEGIN');
     let match;
     let courtRows;
     try {
-      await matchRepository.lockPitches(
-        client,
-        courts.map((court) =>
-          pitchKey(input.venueName, input.venueAddress, court.name),
-        ),
-      );
-      const overlapRows = await matchRepository.findPitchOverlaps(client, {
-        venueName: input.venueName,
-        venueAddress: input.venueAddress,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
-        courtNames,
-      });
-      if (overlapRows.length) {
-        const row = overlapRows[0];
-        throw new AppError(
-          'This pitch is already booked at an overlapping time',
-          409,
-          {
-            matchId: row.match_id,
-            hostUserId: row.host_user_id,
-            title: row.title,
-            venueName: row.venue_name,
-            venueAddress: row.venue_address,
-            courtName: row.court_name,
-            startsAt: row.starts_at,
-            endsAt: row.ends_at,
-          },
-        );
-      }
-
-      match = await matchRepository.createMatch(client, {
-        hostUserId: host.user_id,
-        sport: input.sport,
-        format: input.format,
-        title: input.title,
-        notes: input.notes || null,
-        venueName: input.venueName,
-        venueAddress: input.venueAddress,
-        province: input.province,
-        city: input.city,
-        latitude: input.latitude ?? null,
-        longitude: input.longitude ?? null,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
-        isMultiDay: Boolean(input.isMultiDay),
-        isRecurring: Boolean(input.isRecurring),
-        maxPlayers: input.maxPlayers,
-        skillMin: skills.skillMin,
-        skillMax: skills.skillMax,
-        skillMinRank: skills.skillMinRank,
-        skillMaxRank: skills.skillMaxRank,
-        allLevels: skills.allLevels,
-        feeType,
-        priceMin,
-        priceMax,
-        joinMode: input.joinMode,
-        coverUrl: input.coverUrl ?? null,
-      });
-      courtRows = await matchCourtRepository.insertCourts(
-        client,
-        match.match_id,
-        courts,
-      );
+      ({ match, courtRows } = await persistNewMatch(client, host, {
+        ...input,
+        isMultiDay: false,
+      }));
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
     }
 
-    match.host_full_name = host.full_name;
-    match.host_phone_number = host.phone_number;
-    match.host_avatar_url = host.avatar_url ?? null;
-    match.host_match_count = 1;
-    match.is_favorited = false;
     return {
       message: 'Match created',
-      match: toPublicMatch(match, courtRows, {
-        gender: host.gender,
-        includeHostPhone: true,
-        participantAvatars: host.avatar_url ? [host.avatar_url] : [],
-      }),
+      match: formatCreatedMatch(host, match, courtRows),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function createMatchesBulk(hostUserId, { template, schedules }) {
+  const client = await pool.connect();
+  let host;
+  try {
+    host = await assertPlayerHost(client, hostUserId);
+  } finally {
+    client.release();
+  }
+
+  const isRecurring = schedules.length > 1 || Boolean(template.isRecurring);
+  const created = [];
+  const failed = [];
+
+  for (const schedule of schedules) {
+    const input = {
+      ...template,
+      ...schedule,
+      isMultiDay: false,
+      isRecurring,
+    };
+    parseCreateMatchDto(input);
+    const slotClient = await pool.connect();
+    try {
+      await slotClient.query('BEGIN');
+      try {
+        const { match, courtRows } = await persistNewMatch(
+          slotClient,
+          host,
+          input,
+        );
+        await slotClient.query('COMMIT');
+        created.push(formatCreatedMatch(host, match, courtRows));
+      } catch (err) {
+        await slotClient.query('ROLLBACK');
+        if (err instanceof AppError && err.statusCode === 409) {
+          failed.push({
+            startsAt: schedule.startsAt,
+            endsAt: schedule.endsAt,
+            message: err.message,
+            details: err.details ?? null,
+          });
+          continue;
+        }
+        throw err;
+      }
+    } finally {
+      slotClient.release();
+    }
+  }
+
+  if (!created.length && failed.length) {
+    throw new AppError('No matches were created', 409, {
+      failed,
+      totalRequested: schedules.length,
+      totalCreated: 0,
+    });
+  }
+
+  return {
+    message:
+      created.length === schedules.length
+        ? 'Matches created'
+        : 'Some matches were created',
+    totalRequested: schedules.length,
+    totalCreated: created.length,
+    created,
+    failed,
+  };
+}
+
+export async function listVenueSuggestions(_userId, query) {
+  const client = await pool.connect();
+  try {
+    const rows = await matchRepository.listVenueSuggestions(client, {
+      location: query.location,
+      sport: query.sport,
+      limit: query.limit,
+    });
+    return {
+      suggestions: rows.map((row) => ({
+        venueName: row.venue_name,
+        venueAddress: row.venue_address,
+        province: row.province ?? null,
+        provinceName: vnProvinceName(row.province),
+        city: row.city ?? null,
+        cityName: vnCityName(row.province, row.city),
+        latitude: row.venue_lat == null ? null : Number(row.venue_lat),
+        longitude: row.venue_lng == null ? null : Number(row.venue_lng),
+      })),
     };
   } finally {
     client.release();
@@ -950,7 +1066,7 @@ export async function listMine(userId, query) {
   try {
     const gender = await callerGender(client, callerId);
     const filters = {
-      hostUserId: callerId,
+      userId: callerId,
       tab: query.tab,
       limit: query.limit,
       offset: query.offset,
@@ -977,12 +1093,68 @@ export async function listMine(userId, query) {
       total,
       limit: query.limit,
       offset: query.offset,
-      matches: rows.map((row) =>
-        toPublicMatch(row, courtsByMatch.get(row.match_id) || [], {
+      matches: rows.map((row) => ({
+        ...toPublicMatch(row, courtsByMatch.get(row.match_id) || [], {
           gender,
           participantAvatars: avatarsByMatch.get(row.match_id) || [],
         }),
-      ),
+        myRole: row.my_role,
+        myRequestStatus: row.my_request_status ?? null,
+        pendingRequestCount:
+          row.my_role === MY_MATCH_ROLES.HOST
+            ? Number(row.pending_request_count ?? 0)
+            : 0,
+      })),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function listMyJoinRequests(userId, query) {
+  const callerId = callerUserId(userId);
+  const client = await pool.connect();
+  try {
+    const filters = {
+      userId: callerId,
+      limit: query.limit,
+      offset: query.offset,
+    };
+    const rows = await joinRequestRepository.listMyJoinRequests(
+      client,
+      filters,
+    );
+    const total = await joinRequestRepository.countMyJoinRequests(
+      client,
+      filters,
+    );
+    return {
+      total,
+      limit: query.limit,
+      offset: query.offset,
+      requests: rows.map((row) => ({
+        requestId: row.request_id,
+        status: row.status,
+        message: row.message ?? null,
+        heads: Number(row.heads),
+        skillWarning: Boolean(row.skill_warning),
+        shareAmount: row.share_amount ?? null,
+        paymentStatus: row.payment_status ?? null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        match: {
+          matchId: row.match_id,
+          title: row.match_title,
+          sport: row.match_sport,
+          joinMode: row.match_join_mode,
+          startsAt: row.match_starts_at,
+          endsAt: row.match_ends_at,
+          venueName: row.match_venue_name,
+          venueAddress: row.match_venue_address,
+          status: row.match_status,
+          hostFullName: row.host_full_name ?? undefined,
+        },
+      })),
     };
   } finally {
     client.release();

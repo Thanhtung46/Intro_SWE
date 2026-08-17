@@ -1,6 +1,9 @@
 import { parseCreateMatchDto } from '../dto/create-match.dto.js';
+import { parseCreateMatchBulkDto } from '../dto/create-match-bulk.dto.js';
+import { parseVenueSuggestionsQuery } from '../dto/venue-suggestions.dto.js';
 import { parseListMatchesQuery } from '../dto/list-matches.dto.js';
 import { parseListMineQuery } from '../dto/list-mine.dto.js';
+import { parseMyJoinRequestsQuery } from '../dto/my-join-requests.dto.js';
 import { parseJoinMatchDto } from '../dto/join-match.dto.js';
 import { parseUpdateMatchDto } from '../dto/update-match.dto.js';
 import * as matchService from '../service/match.service.js';
@@ -10,6 +13,29 @@ export async function create(req, res, next) {
     const dto = parseCreateMatchDto(req.body);
     const result = await matchService.createMatch(req.user.userId, dto);
     return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function createBulk(req, res, next) {
+  try {
+    const dto = parseCreateMatchBulkDto(req.body);
+    const result = await matchService.createMatchesBulk(req.user.userId, dto);
+    return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function venueSuggestions(req, res, next) {
+  try {
+    const query = parseVenueSuggestionsQuery(req.query);
+    const result = await matchService.listVenueSuggestions(
+      req.user.userId,
+      query,
+    );
+    return res.status(200).json(result);
   } catch (err) {
     return next(err);
   }
@@ -103,6 +129,19 @@ export async function mine(req, res, next) {
   try {
     const query = parseListMineQuery(req.query);
     const result = await matchService.listMine(req.user.userId, query);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function myJoinRequests(req, res, next) {
+  try {
+    const query = parseMyJoinRequestsQuery(req.query);
+    const result = await matchService.listMyJoinRequests(
+      req.user.userId,
+      query,
+    );
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

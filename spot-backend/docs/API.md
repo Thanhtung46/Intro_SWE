@@ -262,6 +262,8 @@ Muốn gửi lại OTP quên MK: gọi lại `POST /auth/forgot-password` (chị
 
 ```
 POST /matches            Bearer + body host
+POST /matches/bulk       Bearer + template + schedules[] (multi-publish)
+GET  /matches/venue-suggestions  ?location&sport&limit  (Host form only)
 GET  /matches            ?sport&date&timeFrom&timeTo&skill&priceMin&priceMax&location&province&city&favorited&hostUserId&latitude&longitude&radiusKm
 GET  /geo/vn             dropdown 63 tỉnh/TP + quận/huyện (bản đồ **trước 2025**, không API ngoài)
 GET  /matches/:id        squad, spotsLeft, yourShare, canJoin, yourRequest, participants
@@ -282,6 +284,7 @@ POST /matches/:id/participants/:userId/kick         host only (kèo ACCEPTED + g
 
 ```
 GET    /matches/mine?tab=active|completed
+GET    /matches/my-join-requests              joiner — Join Requests tab
 PATCH  /matches/:id                                 chưa kick-off (startsAt > now)
 POST   /matches/:id/cancel
 ```
@@ -1054,6 +1057,73 @@ curl -s -X POST http://localhost:3000/matches \
 
 ---
 
+### 7.1b `POST /matches/bulk`
+
+Tạo **nhiều kèo** cùng template (Vmito-style: clone ngày cụ thể hoặc lịch tuần — FE expand ra `schedules[]` trước khi gọi). PLAYER host. `isMultiDay` luôn `false`. `isRecurring: true` khi `schedules.length > 1`.
+
+**Body**
+
+| Field | Type | Required | Notes |
+| :--- | :--- | :--- | :--- |
+| `template` | object | ✓ | Giống `POST /matches` **trừ** `startsAt`, `endsAt`, `isMultiDay` (luôn false) |
+| `schedules` | `{ startsAt, endsAt }[]` | ✓ | 1–100 phần tử; mỗi slot validate như create (≥1h, tương lai) |
+
+**Success `201`**
+
+```json
+{
+  "message": "Some matches were created",
+  "totalRequested": 4,
+  "totalCreated": 3,
+  "created": [ { "matchId": 1, "startsAt": "..." } ],
+  "failed": [
+    {
+      "startsAt": "...",
+      "endsAt": "...",
+      "message": "This pitch is already booked at an overlapping time",
+      "details": { "matchId": 2, "courtName": "1" }
+    }
+  ]
+}
+```
+
+Một số slot **409** (sân trùng) vẫn tạo được slot khác. Nếu **không** tạo được kèo nào → `409` + `failed[]`.
+
+Toggle recurring **tắt** trên FE → gửi 1 phần tử `schedules` hoặc dùng `POST /matches`.
+
+---
+
+### 7.1c `GET /matches/venue-suggestions`
+
+Gợi ý **địa điểm** cho form Host (`99:2`). **Không** dùng cho Homepage browse.
+
+**Query:** `location` (required), `sport?`, `limit?` (default 10, max 10).
+
+Pool: mọi kèo `status <> CANCELLED` (gồm COMPLETED, FULL, OPEN…). Search unaccent + fuzzy trên `title`, `venueName`, `venueAddress`. Trả **distinct venue** (không trả title kèo).
+
+**Success `200`**
+
+```json
+{
+  "suggestions": [
+    {
+      "venueName": "San ABC",
+      "venueAddress": "123 Nguyen Van Linh, Q7, TP.HCM",
+      "province": "79",
+      "provinceName": "Thành phố Hồ Chí Minh",
+      "city": "778",
+      "cityName": "Quận 7",
+      "latitude": 10.729,
+      "longitude": 106.721
+    }
+  ]
+}
+```
+
+Không có trong DB → `suggestions: []` → FE mở map Geoapify. Không Geoapify trên BE.
+
+---
+
 ### `GET /geo/vn`
 
 Dropdown 2 cấp **bản đồ hành chính trước 1/7/2025**: 63 tỉnh/thành phố + 705 quận/huyện/thị xã/TP thuộc tỉnh. JSON tĩnh trong backend, **không** gọi API ngoài. Cần Bearer.
@@ -1066,7 +1136,9 @@ FE: chọn `province` rồi `city` từ list này; gửi đúng `code` lúc `POS
 
 ### 7.2 `GET /matches`
 
-List kèo `OPEN`/`FULL` chưa kết thúc (`endsAt > now`), sort `startsAt` tăng dần.
+List kèo còn slot (`OPEN`, `filledCount < maxPlayers`, `endsAt > now`). Kèo `FULL` **không** xuất hiện trên homepage browse; vẫn thấy qua `GET /matches?hostUserId=` (profile host: `OPEN`/`FULL` còn hạn). Sort `startsAt` tăng dần.
+
+**Ẩn khỏi browse mặc định** (không áp dụng khi `hostUserId=`): kèo caller **đang host**; kèo caller có join request `PENDING`, `ACCEPTED`, hoặc `KICKED`. **`REJECTED`** → kèo **hiện lại** (join lại được). Xem lại qua **Manage Matches** / `GET /matches/:id`. Cùng rule khi `favorited=true`.
 
 **Query**
 
@@ -1077,11 +1149,11 @@ List kèo `OPEN`/`FULL` chưa kết thúc (`endsAt > now`), sort `startsAt` tăn
 | `timeFrom` / `timeTo` | `HH:mm` (24h, timezone `Asia/Ho_Chi_Minh`). Có `date`: kèo **chồng giờ** với cửa sổ `[date+from, date+to]` (`startsAt < to` và `endsAt > from`; thiếu from → `00:00`, thiếu to → `23:59:59`). Không `date`: lọc **giờ bắt đầu** kèo (`startsAt::time >= timeFrom`, `< timeTo`). `timeTo` phải sau `timeFrom`. |
 | `skill` | Cần kèm `sport`. Một hoặc nhiều code (lặp `skill=` hoặc `skill=A,B`). Kèo **chứa ít nhất một** rank đã chọn trong `[skillMin, skillMax]` (OR). Tối đa 10. |
 | `priceMin` / `priceMax` | Integer **VND** (FE đổi `$20–$150` trước khi gửi). Cả hai: `GENDER_RANGE` nếu khoảng `[price_min, price_max]` **chồng** `[priceMin, priceMax]`; `SPLIT_EVENLY` nếu `ceil(price_min / maxPlayers)` nằm trong khoảng. Chỉ `priceMax`: như cũ (`price_min` hoặc share-khi-đầy `<= priceMax`). Chỉ `priceMin`: giá kèo `>= priceMin`. `priceMin <= priceMax`. |
-| `location` | Tên kèo **hoặc** tên sân. **Không dấu** (`san` = `Sân`), **gần đúng** (typo / lệch chữ, ≥ 3 ký tự), hoặc **mọi từ** đều xuất hiện trong title+venue. **Không** khớp `venueAddress`. **Không** Geoapify. Có `location` thì `suggestions` (tối đa 5 `{ text, kind: title\|venueName }`). Radio **Location**. **Không** gửi cùng `latitude`/`longitude`/`radiusKm`. |
+| `location` | Tên kèo, tên sân **hoặc** địa chỉ (`venueAddress`). **Không dấu** (`san` = `Sân`), **gần đúng** (typo / lệch chữ, ≥ 3 ký tự), hoặc **mọi từ** đều xuất hiện trong title+venue+address. **Không** Geoapify. Có `location` thì `suggestions` (tối đa 5 `{ text, kind: title\|venueName\|venueAddress }`) gợi ý khi user gõ. Radio **Location**. **Không** gửi cùng `latitude`/`longitude`/`radiusKm`. |
 | `province` | Mã tỉnh/TP bản đồ **trước 2025** (exact). Kết hợp được với `location` hoặc Distance. Kèo cũ `province` null thì không khớp filter này. |
 | `city` | Mã quận/huyện, **phải kèm** `province`. Exact. |
 | `favorited` | `true` → chỉ kèo caller đã tim (`match_favorites`). Kết hợp được với `location` **hoặc** distance (không cả hai). Bỏ trống / `false` = không lọc tim. |
-| `hostUserId` | Chỉ kèo do user này host. Dùng cho màn profile host (Hosted Matches). Kết hợp được với filter khác. User không tồn tại → `total: 0`. |
+| `hostUserId` | Chỉ kèo do user này host (`OPEN`/`FULL` còn hạn). Dùng cho màn profile host (Hosted Matches). Kết hợp được với filter khác. User không tồn tại → `total: 0`. |
 | `latitude` / `longitude` / `radiusKm` | Radio **Distance**. Cả ba **cùng lúc**. GPS user + bán kính 1–20 km. Haversine; kèo không có toạ độ bị loại. **Không** gửi cùng `location`. |
 | `limit` | Default 20, max 50 |
 | `offset` | Default 0 |
@@ -1096,12 +1168,13 @@ List kèo `OPEN`/`FULL` chưa kết thúc (`endsAt > now`), sort `startsAt` tăn
   "matches": [ { "matchId": 1, "spotsLeft": 13, "yourShare": 1400000 } ],
   "suggestions": [
     { "text": "Sân ABC", "kind": "venueName" },
-    { "text": "Saturday 7v7", "kind": "title" }
+    { "text": "Saturday 7v7", "kind": "title" },
+    { "text": "123 Nguyen Van Linh, Q7", "kind": "venueAddress" }
   ]
 }
 ```
 
-Mỗi phần tử cùng shape với `match` ở 7.1, **trừ** `hostPhoneNumber` (không lộ trên list). `suggestions` luôn là mảng (rỗng nếu không gửi `location` hoặc không có tên gần). `kind` = `title` \| `venueName`. Không Geoapify.
+Mỗi phần tử cùng shape với `match` ở 7.1, **trừ** `hostPhoneNumber` (không lộ trên list). `suggestions` luôn là mảng (rỗng nếu không gửi `location` hoặc không có tên gần). `kind` = `title` \| `venueName` \| `venueAddress`. Không Geoapify.
 
 ---
 
@@ -1235,16 +1308,29 @@ Host kick joiner **ACCEPTED** (kèm toàn bộ guests của request đó). `fill
 
 ### 7.9 `GET /matches/mine`
 
-Kèo **host đang login**. Query `tab` mặc định `active`.
+Manage Matches [`101:98`](https://www.figma.com/design/ZTpFWfkdcEpHH4xJaKaBxT/Spot?node-id=101-98) — tab **Active** / **Completed**. Card reuse Homepage; tap → `GET /matches/:id`.
 
-| `tab` | Gồm |
+Query `tab` mặc định `active`. Cũng nhận `limit` / `offset` như list.
+
+| `tab` | Host (`myRole: HOST`) | Participant (`myRole: PARTICIPANT`) |
+| :--- | :--- | :--- |
+| `active` | `OPEN`/`FULL`, `endsAt` còn tương lai | Join request **`ACCEPTED`**, kèo chưa hết giờ, chưa `CANCELLED` |
+| `completed` | `CANCELLED`/`COMPLETED`, hoặc `OPEN`/`FULL` đã qua `endsAt` | **`KICKED`**, hoặc **`ACCEPTED`** + kèo đã hết giờ / cancelled / completed |
+
+**Không** gồm join request **`PENDING`** — chỉ tab **`GET /matches/my-join-requests`**.
+
+Mỗi phần tử match thêm:
+
+| Field | Notes |
 | :--- | :--- |
-| `active` | `OPEN`/`FULL` và `endsAt` còn tương lai |
-| `completed` | `CANCELLED`/`COMPLETED`, hoặc `OPEN`/`FULL` đã qua `endsAt` |
+| `myRole` | `HOST` \| `PARTICIPANT` |
+| `myRequestStatus` | Participant: thường `ACCEPTED` trên active; `KICKED` trên completed. Host: `null` |
+| `pendingRequestCount` | Host only — số request **`PENDING`** chờ duyệt. FE chip **"N chờ duyệt"** khi `> 0` và `joinMode=APPROVAL` |
+| `status` | Như list — FE chip **"Đủ người"** khi `FULL` |
 
-Cũng nhận `limit` / `offset` như list.
+Host duyệt request: tap card → **Match detail** (`100:401` host view) → `GET /matches/:id/requests` → accept/reject.
 
-**Success `200`:** `{ "tab", "total", "limit", "offset", "matches": [ ... ] }`
+**Success `200`:** `{ "tab", "total", "limit", "offset", "matches": [ { ...match, "myRole", "myRequestStatus", "pendingRequestCount" } ] }`
 
 **curl**
 
@@ -1254,6 +1340,44 @@ curl -s "http://localhost:3000/matches/mine?tab=active" \
 ```
 
 **Errors:** `400` tab không hợp lệ · `401`
+
+---
+
+### 7.9b `GET /matches/my-join-requests`
+
+Manage Matches — tab **Join Requests** (joiner theo dõi). **Không** dùng cho host duyệt.
+
+Trả request của caller với `status` **`PENDING`** hoặc **`REJECTED`** (`ACCEPTED` → `/mine?tab=active`; `KICKED` → `/mine?tab=completed`). Sort: `PENDING` trước, rồi `updatedAt` giảm dần.
+
+**Success `200`**
+
+```json
+{
+  "total": 1,
+  "limit": 20,
+  "offset": 0,
+  "requests": [
+    {
+      "requestId": 1,
+      "status": "PENDING",
+      "message": "Can I join?",
+      "heads": 1,
+      "createdAt": "...",
+      "match": {
+        "matchId": 5,
+        "title": "Saturday 7v7",
+        "startsAt": "...",
+        "venueName": "San ABC",
+        "hostFullName": "Nguyen Van A"
+      }
+    }
+  ]
+}
+```
+
+Tap → `GET /matches/:id` (detail). `REJECTED` vẫn có thể join lại từ Homepage (browse hiện lại kèo).
+
+**Errors:** `401`
 
 ---
 

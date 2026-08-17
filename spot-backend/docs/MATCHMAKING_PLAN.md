@@ -42,7 +42,7 @@ Not in this plan: Groups, Tournaments, real payment gateway, venue booking lock,
 | Split equally (“Chia đều”) | **In MVP** as `SPLIT_EVENLY`. |
 | Flat fixed price (everyone same) | **Dropped** for MVP (only Min–Max or split evenly). |
 | Payment | **Stub always Success.** Record the amount; do not call MoMo/VNPay. |
-| Recurring / multi-day | Store flags, default **off**. Do not generate extra dates/weeks in MVP. |
+| Recurring / multi-day | Multi-day **off** (`isMultiDay: false`). **Bulk publish** via `POST /matches/bulk` + `schedules[]` (Vmito-style; FE expands weekdays/dates). No cron / auto future weeks. |
 | Advanced Settings (Figma collapsed) | Skip (no cover upload, join code, court colors, shuttle brand — notes text is enough). Optional map coords on the match are allowed. |
 | `maxPlayers` | **Required** on host (Figma detail shows `Squad 10/14`; Vmito shows `0/16`). |
 | Scope order | **Matches only**, then Groups, then Tournaments (later plans). |
@@ -271,13 +271,14 @@ Exact paths may be adjusted when coding; keep REST + existing error JSON (`messa
 - Tournaments (standings, schedule, teams)  
 - Real payment (MoMo/VNPay); split-evenly fee  
 - Match created from a paid booking (`booking_id`)  
-- Recurring generation, multi-day expansion  
+- Recurring cron / auto future weeks, multi-day expansion
 - Waitlist  
 - Zalo / chat with host  
 - Cover file upload / S3 (URL-only `coverUrl` is implemented)  
 - Geocoding / routing on backend (FE uses Geoapify; host sends `latitude`/`longitude`)  
 - Admin approve OWNER/REFEREE (already listed under auth backlog)  
-- Recommendation / NLP chatbot (homepage search is **unaccent + fuzzy title/venue** via `GET /matches?location=`, plus `suggestions` from our kèo — not AI / Geoapify)  
+- Recommendation / NLP chatbot (homepage search is **unaccent + fuzzy title/venue/address** via `GET /matches?location=`, plus `suggestions` while typing from our kèo — not AI / Geoapify)
+- Public browse hides `FULL` kèo (`OPEN` only + `spotsLeft > 0`); profile `hostUserId` list still shows `FULL`  
 - Notifications (bell + unread dot)  
 - Booking tab / Schedule tab  
 - **Host rating** (Figma card `4.9`): after the match is finished, each `ACCEPTED` player rates the **host** (one rating per user per match). `host.rating` stays `null` until domain `review` exists. `host.matchCount` is already live.  

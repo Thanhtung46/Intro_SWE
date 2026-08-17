@@ -35,9 +35,12 @@ Implemented so far:
 | Area | Status |
 | :--- | :--- |
 | `POST /matches` | Done — PLAYER **free listing** (no `booking_id`); required `province`+`city` (pre-2025); optional `coverUrl` |
-| `GET /matches` | Done — see **List filters** below; card: `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names |
+| `POST /matches/bulk` | Done — Vmito-style multi-publish; `template` + `schedules[]` (1–100) |
+| `GET /matches/venue-suggestions` | Done — Host form location picker (pool `status <> CANCELLED`) |
+| `GET /matches` | Done — see **List filters** + **Homepage browse exclusion** below |
 | `GET /geo/vn` | Done — static 63 tỉnh + 705 quận/huyện (pre-2025). **No** 3rd-party geo API |
-| `GET /matches/mine` | Done — host’s kèo; `?tab=active\|completed` (**route before** `GET /:id`) |
+| `GET /matches/mine` | Done — host **+ participant**; `?tab=active\|completed`; `myRole`, `pendingRequestCount` (host chips); **route before** `GET /:id` |
+| `GET /matches/my-join-requests` | Done — joiner Join Requests tab (`PENDING` + `REJECTED`) |
 | `GET /matches/:id` | Done — squad, `spotsLeft`, `yourShare`, `canJoin`, `yourRequest`, `participants` |
 | `POST` / `DELETE /matches/:id/favorite` | Done — heart; `isFavorited` on list/detail |
 | `GET /users/:id` | Done — Check Profile / host card (no email/phone) |
@@ -128,7 +131,7 @@ src/
 │   ├── routes.js
 │   ├── geo.routes.js             # GET /geo/vn (pre-2025 admin tree)
 │   ├── controller/match.controller.js
-│   ├── dto/{create-match,list-matches,join-match,list-mine,update-match}.dto.js
+│   ├── dto/{create-match,create-match-bulk,list-matches,join-match,list-mine,my-join-requests,update-match,venue-suggestions}.dto.js
 │   ├── entity/match.entity.js
 │   ├── repository/{match,match-court,join-request,match-favorite}.repository.js
 │   └── service/match.service.js
@@ -170,8 +173,9 @@ Dockerfile / .dockerignore / .env.example
 
 Match domain layering when adding code. Mount auth at `/auth` and `/api/auth`,
 users at `/users` and `/api/users`, matches at `/matches` and `/api/matches`,
-geo at `/geo` and `/api/geo` (see `app.js`). `GET /matches/mine` is registered
-**before** `GET /matches/:id`.
+geo at `/geo` and `/api/geo` (see `app.js`). Register **before** `GET /:id`:
+`GET /matches/mine`, `GET /matches/my-join-requests`, `GET /matches/venue-suggestions`,
+`POST /matches/bulk`.
 
 `req.user` after `authenticate`: `{ userId, role, email }`. JWT `sub` is a
 **string** — coerce with `Number` when comparing to DB ids.
@@ -252,22 +256,145 @@ Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 
 **Figma Matches screens → API**
 
-| Screen | Node | FE uses |
+| Screen | Node | BE status | FE uses |
+| :--- | :--- | :--- | :--- |
+| Homepage list | `95:2417` | **Done** — see **Homepage 1** below | `GET /matches` + search/filter below. Map = FE tiles + `latitude`/`longitude`. Paper-plane = **directions** (Geoapify), not share. |
+| Filter sheet | `87:1903` | **Done** — same list API + `GET /geo/vn` | Figma “Ward/Commune” → BE `city` (quận/huyện). “Province/City” → `province` + `city`. Price chips → `priceMin`/`priceMax` **VND**. Skill chips → codes from `shared/constants/sports.js`. “Book Field” bg = Booking — **locked**. |
+| Match detail | `100:401` | Done | `GET /matches/:id` + favorite + `POST .../join`. Map = FE Geoapify. |
+| Join Match sheet | `100:551` | Done | Detail + `GET /auth/me` + `POST /matches/:id/join`. Skill/gender labels from FE + sports constants. |
+| Host a Match form | `99:2` | **Done** — see **Host form 99:2** below | `POST /matches` / `POST /matches/bulk`; `GET /matches/venue-suggestions`; sport from Homepage tab `95:2675`. Advanced: `format`, `maxPlayers`, `coverUrl`, `joinMode` default `AUTO`. |
+| Check Profile (host) | `432:1211` | Done | `GET /users/:id` + `GET /matches?hostUserId=`. Hide Groups / verified / reviews. Phone **not** on this endpoint. |
+| Manage Matches | `101:98` | **Done** — see **Manage Matches 101:98** below | `GET /matches/mine` + `GET /matches/my-join-requests`; cards reuse Homepage; host approve on detail `100:401`. |
+
+**Host form (`99:2`) — product locked**
+
+Decisions from Figma + [Vmito sessions/new](https://vmito.com/vi/sessions/new). Do **not** re-open without FE gap.
+
+| Topic | Contract |
+| :--- | :--- |
+| **Sport** | From Homepage tab `95:2675`. Body field `sport`. |
+| **Location** | `GET /matches/venue-suggestions?location=&sport=` — pool `status <> CANCELLED`. Returns distinct venues (+ province/city/lat/lng). Map miss → Geoapify on FE; admin → `GET /geo/vn` codes. |
+| **Host name / phone** | Not in create body; read-only from `GET /auth/me`. |
+| **Multi-day** | Always `isMultiDay: false` (Figma toggle removed). |
+| **Skill** | Multi-chip → `skillMin`/`skillMax`; `allLevels` = full ladder. Per-sport labels in `sports.js`. |
+| **Fee** | Always on. `SPLIT_EVENLY` **or** `GENDER_RANGE` — **either sport** (VND). |
+| **Recurring** | Off → `POST /matches` (1 schedule). On → FE expand dates/weekdays → `POST /matches/bulk` (max 100 schedules). Partial 409 OK. |
+| **Advanced (FE required)** | `format`, `maxPlayers`, `coverUrl` (URL). `joinMode` default `AUTO`. |
+| **Cover** | Supabase Storage on FE → `coverUrl`. No BE upload. |
+
+**Do not confuse:** `GET /matches?location=` = browse joinable kèo. `GET /matches/venue-suggestions` = Host venue reuse (wider pool).
+
+**Manage Matches (`101:98`) — product locked**
+
+Decisions from Figma + product review ([`101:98`](https://www.figma.com/design/ZTpFWfkdcEpHH4xJaKaBxT/Spot?node-id=101-98)). Do **not** re-open without FE gap. **Do not** confuse with Manage Group (`101:2`) — out of scope.
+
+**Navigation (FE)**
+
+| From | Goes to |
+| :--- | :--- |
+| Homepage FAB menu | Manage Matches `101:98` |
+| Bottom nav tab **Matches** | Homepage browse `95:2675` (not Manage unless IA changes) |
+| Empty state **Host a Match** | Host form `99:2` (sport from Homepage tab) |
+| Empty state **Find Matches** | Homepage list |
+
+**Three tabs → two APIs**
+
+| UI tab | Who | API | Pool |
+| :--- | :--- | :--- | :--- |
+| **Active** | Host + participant | `GET /matches/mine?tab=active` | Host: own `OPEN`/`FULL`, `endsAt > now`. Participant: request **`ACCEPTED`**, kèo not cancelled, not ended. **No `PENDING`.** |
+| **Completed** | Host + participant | `GET /matches/mine?tab=completed` | Host: `CANCELLED`/`COMPLETED` or past `endsAt`. Participant: **`KICKED`**, or **`ACCEPTED`** + ended/cancelled/completed. |
+| **Join Requests** | Joiner only | `GET /matches/my-join-requests` | Caller’s **`PENDING`** + **`REJECTED`**. Sort: PENDING first. **`ACCEPTED`** → Active tab; **`KICKED`** → Completed. |
+
+**Host duyệt request — không có tab gộp**
+
+Host **does not** use Join Requests tab. Flow:
+
+1. `GET /matches/mine?tab=active` → card with `myRole: HOST`
+2. Tap card → Match detail (`100:401` — **host variant**: waiting list + Edit/Cancel; Figma joiner frame exists, host frame TBD)
+3. `GET /matches/:id/requests` → PENDING only
+4. `POST .../accept` \| `POST .../reject`
+
+**List item shape (`GET /matches/mine`)**
+
+Same public match card as Homepage **plus**:
+
+| Field | Notes |
+| :--- | :--- |
+| `myRole` | `HOST` \| `PARTICIPANT` |
+| `myRequestStatus` | Participant: usually `ACCEPTED` (active) or `KICKED` (completed). Host: `null` |
+| `pendingRequestCount` | Host only — count of **`PENDING`** join requests on that kèo |
+
+**FE chips on Active (host cards)**
+
+| Chip | Condition |
+| :--- | :--- |
+| **N chờ duyệt** | `myRole=HOST` && `pendingRequestCount > 0` && `joinMode=APPROVAL` |
+| **Đủ người** | `status === FULL` |
+| **HOST** / **JOINED** | From `myRole` |
+
+Participant Active cards: badge **JOINED**; no `pendingRequestCount`.
+
+**Join Requests tab item (`GET /matches/my-join-requests`)**
+
+```json
+{ "requestId", "status", "heads", "message", "match": { "matchId", "title", "startsAt", "venueName", "hostFullName", ... } }
+```
+
+Tap → `GET /matches/:id`. **`REJECTED`** rows stay here for tracking; same kèo **reappears on Homepage** browse (caller may join again).
+
+**Homepage browse exclusion (`GET /matches` — default, not `hostUserId=`)**
+
+Hide from feed (avoid duplicate with Manage):
+
+| Reason | Hidden? |
+| :--- | :--- |
+| Caller is **host** | Yes |
+| Join request **`PENDING`** | Yes → only Join Requests tab |
+| Join request **`ACCEPTED`** | Yes → Active tab |
+| Join request **`KICKED`** | Yes |
+| Join request **`REJECTED`** | **No** — show again for re-join |
+
+Same rule when `favorited=true`. **`GET /matches/:id`** and Manage routes unchanged.
+
+**Empty state**
+
+Figma `101:98` ships empty Active only. Filled states = reuse Homepage card + chips above. Pro Tip card = static FE copy (`rating` still null on BE).
+
+**Homepage 1 (Figma `95:2675` / list `95:2417`) — BE complete**
+
+Product review locked. Do **not** re-open unless FE finds a gap.
+
+| Topic | BE | Notes |
 | :--- | :--- | :--- |
-| Homepage list | `95:2417` | `GET /matches` (`location=` = unaccent + fuzzy `title` **or** `venueName`, `suggestions[]`, **not** Geoapify/NLP). Map = FE tiles + `latitude`/`longitude`. Paper-plane = **directions**, not share. |
-| Filter sheet | `87:1903` | Same `GET /matches` query. Tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025** map, not Geoapify). Background “Book Field” = Booking — **locked**. |
-| Match detail | `100:401` | `GET /matches/:id` + favorite + `POST .../join`. Map = FE Geoapify. |
-| Join Match sheet | `100:551` | Detail + `GET /auth/me` + `POST /matches/:id/join`. No enum endpoint for skill/gender. |
-| Check Profile (host) | `432:1211` | `GET /users/:id` + `GET /matches?hostUserId=`. Hide Groups / verified / reviews. Phone **not** on this endpoint. |
+| **Search (`location=`)** | **Done** | Full spec in **Homepage search** below. Postgres only — **not** Geoapify, **not** NLP/AI. |
+| **Suggestions while typing** | **Done** | Same `GET /matches?location=` returns `suggestions[]` (max 5). FE debounces per keystroke. |
+| **Public browse list** | **Done** | `OPEN` + spots left + `endsAt > now`; **`FULL` hidden**. Also hides caller’s hosted kèo + join `PENDING`/`ACCEPTED`/`KICKED`; **`REJECTED` reappears** — see **Manage Matches** browse exclusion. |
+| **Hosted Matches on profile** | **Done** | `GET /matches?hostUserId=` still returns `OPEN` **and** `FULL` (future `endsAt`). |
+| **Filter tỉnh/quận** | **Done** | `province` + `city` exact codes from `GET /geo/vn` (pre-2025 63 tỉnh + quận/huyện). |
+| **Filter sport / date / time / skill / price** | **Done** | `skill` needs `sport`; prices in **VND**; skill chip labels map to codes in `sports.js`. |
+| **Distance filter** | **Done** | `latitude` + `longitude` + `radiusKm` (1–20 km). **XOR** with `location` → `400`. |
+| **Favorites filter** | **Done** | `favorited=true`. Same browse-exclusion rule as default list. |
+| **Card fields** | **Done** | `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names, `spotsLeft`, `yourShare` (VND). |
+| **Card location display** | FE | Show `{venueName}, {cityName}`; distance from user GPS = FE (Haversine or map). |
+| **Logo → Home / Avatar → Profile** | FE | Nav only — no BE endpoint. |
+| **Sparkles (AI search)** | **Out of scope** | Search is text SQL only. |
+| **Notification bell** | **Out of scope** | No notification domain. |
+| **Groups / Tournaments tabs** | **Out of scope** | Pickup kèo only. |
+| **Booking / Schedule** | **Out of scope** | Free listing, no `booking_id`. |
+| **Host rating on card** | **Deferred** | `host.rating` always `null`; `matchCount` live. |
+| **FAB Host / Manage** | **Done (BE)** | Create = `POST /matches` / bulk. Manage = **Manage Matches 101:98** section. |
 
 **API map**
 
 | Method | Path | Notes |
 | :--- | :--- | :--- |
-| `POST` | `/matches` | PLAYER host; required `province`+`city`; `coverUrl` URL-only |
-| `GET` | `/matches` | List `OPEN`/`FULL`, `endsAt > now` |
+| `POST` | `/matches` | PLAYER host; single kèo |
+| `POST` | `/matches/bulk` | Same template + `schedules[]` (Vmito multi-publish) |
+| `GET` | `/matches/venue-suggestions` | Host location picker (wide venue pool) |
+| `GET` | `/matches` | Browse: excludes FULL, hosted, joined/pending/kicked; **`REJECTED` visible**. `hostUserId` → also `FULL` |
 | `GET` | `/geo/vn` | Pre-2025 63 tỉnh + 705 quận/huyện (static JSON, Bearer) |
-| `GET` | `/matches/mine` | Host only; `tab=active\|completed` |
+| `GET` | `/matches/mine` | Manage Active/Completed — **host + participant**; `myRole`, `pendingRequestCount` |
+| `GET` | `/matches/my-join-requests` | Manage Join Requests tab — joiner **`PENDING` + `REJECTED`** |
 | `GET` | `/matches/:id` | Detail + join context |
 | `POST` / `DELETE` | `/matches/:id/favorite` | Heart |
 | `POST` | `/matches/:id/join` | PLAYER; `message?`, `phoneNumber?`, `guests?` |
@@ -285,8 +412,8 @@ Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 `timeTo` after `timeFrom`), `skill` (needs `sport`; repeat or comma; OR —
 match range contains at least one selected rank; max 10), `priceMin`/`priceMax`
 (VND; both = GENDER_RANGE band overlap / SPLIT_EVENLY `ceil(price_min/maxPlayers)`
-in range), `location` (unaccent + fuzzy `title` **or** `venueName`; not
-`venueAddress`; `suggestions[]`; Postgres only), `province` / `city` (pre-2025
+in range), `location` (unaccent + fuzzy `title` / `venueName` / `venueAddress`;
+`suggestions[]` while typing; Postgres only), `province` / `city` (pre-2025
 GSO codes, exact; `city` requires `province`; HCM `79`, Quận 7 `778`),
 `favorited=true` (caller’s hearts), `hostUserId` (that host’s active kèo),
 `latitude`+`longitude`+`radiusKm` (1–20, haversine; all three together;
@@ -298,15 +425,88 @@ either. Football filter chips: Beginner→`LEARNING`, Basic Amateur→`REC_BASIC
 Advanced Amateur→`REC_ADVANCED`, Semi-pro→`SEMI_PRO`, Professional→`PROFESSIONAL`,
 Elite→`ELITE`.
 
+**Homepage search (`GET /matches?location=`) — BE contract**
+
+Text search on **our kèo in DB only**. No Geoapify Autocomplete, no NLP, no
+external geocoding. Implementation: `fold_search_text()` + `pg_trgm` in
+`match.repository.js` (`locationPredicate`, `listSearchSuggestions`).
+
+**What is searched (3 fields)**
+
+| Field | DB column | Example |
+| :--- | :--- | :--- |
+| Match title | `title` | `Saturday 7v7 AUTO` |
+| Venue name | `venue_name` | `San ABC` |
+| Street address | `venue_address` | `123 Nguyen Van Linh, Q7, TP.HCM` |
+
+**Not searched:** host name, `notes`, `province`/`city` codes or names, GPS
+coords. For admin area use `province` + `city` filters. For radius use
+Distance trio (XOR with `location`).
+
+**Normalization (`fold_search_text`)**
+
+Lowercase, strip Vietnamese diacritics and `đ`, collapse whitespace. So
+`location=san abc` matches `Sân ABC`.
+
+**Match modes (any one is enough)**
+
+1. **Substring** — folded query appears inside folded `title`, `venue_name`,
+   or `venue_address`.
+2. **Fuzzy** — query length ≥ `MATCH_SEARCH.FUZZY_MIN_CHARS` (3); max
+   `similarity()` across the three fields ≥ `LIST_SIMILARITY` (0.28). Handles
+   typos / near matches.
+3. **Multi-word AND** — query contains spaces → every non-empty token must
+   appear somewhere in the combined haystack
+   `title + venue_name + venue_address`.
+
+**Suggestions (`suggestions[]`) — while user types**
+
+Returned on the **same** `GET /matches` when `location` is present (FE should
+debounce, e.g. 300 ms). Built from listable kèo only (same pool as browse:
+`OPEN`, spots left, `endsAt > now`).
+
+| Property | Value |
+| :--- | :--- |
+| Max items | 5 (`MATCH_SEARCH.SUGGEST_LIMIT`) |
+| Shape | `{ text, kind }` |
+| `kind` | `title` \| `venueName` \| `venueAddress` |
+| Source | Distinct values from existing kèo (not Geoapify) |
+| Dedup | By folded `text`; best score wins |
+| Excludes | Suggestion text identical to folded query (no “search for what you typed”) |
+| Score threshold | `similarity` ≥ `SUGGEST_SIMILARITY` (0.2) per field |
+| Sort | Score DESC, then text ASC |
+
+Example response fragment:
+
+```json
+"suggestions": [
+  { "text": "San ABC", "kind": "venueName" },
+  { "text": "Saturday 7v7 AUTO", "kind": "title" },
+  { "text": "123 Nguyen Van Linh, Q7, TP.HCM", "kind": "venueAddress" }
+]
+```
+
+**Sort when searching**
+
+With `location`: order by best similarity across title / venue / address, then
+`startsAt` ASC. Without `location`: `startsAt` ASC only.
+
+**Public browse vs profile list (do not confuse)**
+
+| Query | Status filter | Spots filter | Caller exclusion |
+| :--- | :--- | :--- | :--- |
+| `GET /matches` (homepage) | `OPEN` only | `filledCount < maxPlayers` | Hide hosted + join `PENDING`/`ACCEPTED`/`KICKED`; show **`REJECTED`** again |
+| `GET /matches?hostUserId=` | `OPEN` + `FULL` | none | No caller exclusion (public profile) |
+
+Constants: `LISTABLE_MATCH_STATUSES` = browse; `PITCH_OCCUPIED_STATUSES` =
+`OPEN`+`FULL` for pitch overlap / 409 and host profile list.
+
 **Search / admin units (no 3rd-party API)**
 
-- Homepage search is SQL on `schema_matchmaking.fold_search_text` + `pg_trgm`.
-  Unaccent (`san` = `Sân`), fuzzy if query ≥ 3 chars, or all tokens in
-  title+venue. Response `suggestions` = up to 5 `{ text, kind: title\|venueName }`
-  from **our** kèo, not Geoapify Autocomplete/Geocoding/Reverse.
 - Filter tỉnh/quận: host and filter pick the **same codes** from `GET /geo/vn`
   (`vn-admin.json`). Map is **pre-2025** (63 tỉnh/TP + quận/huyện). Do **not**
-  switch to the 2025 34-tỉnh / xã-phường list.
+  switch to the 2025 34-tỉnh / xã-phường list. Figma filter “Ward/Commune” →
+  BE `city`; “Province/City” → BE `province` + `city`.
 - `venueAddress` is the free-text street line. Occupancy still uses
   `venueName`+`venueAddress`+court, not `province`/`city`.
 - Match card also returns `provinceName` / `cityName` (lookup from JSON).
@@ -365,7 +565,7 @@ join the join response includes it; APPROVAL pending does not.
 `fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`, `rating: null`,
 `reviewCount: 0`. No `email` / `phoneNumber` / `role` / `status` / `gender`.
 404 if missing, `LOCKED`, or not `ACTIVE`. Hosted Matches + View All =
-`GET /matches?hostUserId=` (same list rules: OPEN/FULL, still in the future).
+`GET /matches?hostUserId=` (profile: OPEN/FULL still in the future; browse hides FULL).
 
 **Join requests — one row per `(match_id, user_id)`**
 
@@ -382,14 +582,12 @@ Unique index `idx_join_requests_match_user`. Host accept / reject / kick
 Accepted people are on `participants` in match detail. `yourRequest` on detail
 is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
 
-**Host manage**
+**Host manage (PATCH / cancel — see also Manage Matches 101:98)**
 
-- `GET /matches/mine?tab=active` — `OPEN`/`FULL` and `endsAt` still in the future.
-- `tab=completed` — `CANCELLED`/`COMPLETED`, or `OPEN`/`FULL` with `endsAt <= now`.
-- `PATCH` only before kick-off. If `filledCount > 1`, cannot change sport /
+- `PATCH /matches/:id` only before kick-off. If `filledCount > 1`, cannot change sport /
   format / feeType / prices. `maxPlayers >= filledCount`. Occupancy check
   excludes this match.
-- `POST cancel` — pending → `REJECTED`; match `CANCELLED` (frees pitch).
+- `POST /matches/:id/cancel` — pending join requests → `REJECTED`; match `CANCELLED` (frees pitch).
   ACCEPTED rows stay as history.
 
 **Schema (`schema_matchmaking`)** — `003` is canonical for fresh installs:
@@ -407,7 +605,7 @@ delete. Do not `INSERT` name/gender on `users`.
 **Out of scope (do not add in this domain):** waitlist, Zalo, real MoMo/VNPay,
 `booking_id`, Groups/Tournaments, join-by-code, cover **file upload**/S3
 (URL-only `coverUrl` / `avatarUrl` is in), user profile **hero/cover** image,
-verified-host badge, recurring generation, AI chatbot, notifications (bell),
+verified-host badge, cron recurring (auto future weeks), AI chatbot, notifications (bell),
 Booking/Schedule tabs, **host rating/review** (keep `rating: null`), Geoapify
 **on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
 2025 34-tỉnh / xã-phường map.
@@ -467,9 +665,13 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
 - **Matchmaking:** one join request per `(match, user)`; kick is per-kèo not
   per-host; waiting list is PENDING only; `GET /mine` before `GET /:id`.
   List: Location XOR Distance; `province`/`city` may combine with either;
-  `hostUserId` for host profile kèo. Search = DB only. Admin dropdown =
-  `GET /geo/vn` (pre-2025). Do not add waitlist / Zalo / real payment /
-  `booking_id` / Groups / rating / Geoapify-on-backend / 2025 ward map.
+  `hostUserId` for host profile kèo (includes FULL). Homepage browse hides FULL,
+  caller's hosted kèo, and kèo with join request `PENDING`/`ACCEPTED`/`KICKED`
+  (`REJECTED` reappears for re-join).
+  Search = DB on `title`/`venueName`/`venueAddress` + `suggestions[]` (see
+  **Homepage search**). Admin dropdown = `GET /geo/vn` (pre-2025). Prices VND.
+  Do not add waitlist / Zalo / real payment / `booking_id` / Groups / rating /
+  Geoapify-on-backend / 2025 ward map / NLP search.
 - UI “Venue Owner” maps to DB/API role `OWNER`.
 - FE role-based navigation reads `role` from login JWT / `user`. Protect later
   APIs with `authenticate` / `requireRole` from `shared/middleware/authenticate.js`.
