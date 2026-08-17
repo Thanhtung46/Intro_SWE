@@ -7,6 +7,17 @@ import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import BottomNav from '@/components/navigation/BottomNav';
 
+function formatJoinedAt(joinedAt: string | null | undefined): string {
+  if (!joinedAt) {
+    return '—';
+  }
+  try {
+    return new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(joinedAt));
+  } catch (error) {
+    return '—';
+  }
+}
+
 const FAVORITE_TABS = ['Matches', 'Venues', 'Groups', 'Tournaments'];
 const HOSTED_MATCH_TABS = ['Open', 'Ended', 'All'];
 
@@ -53,6 +64,15 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
   const { user } = useUser();
   const [favoriteTab, setFavoriteTab] = useState(FAVORITE_TABS[0]);
   const [hostedTab, setHostedTab] = useState(HOSTED_MATCH_TABS[0]);
+  const [stats, setStats] = useState<MainProfileStats | undefined>(undefined);
+
+  useEffect(() => {
+    getMainProfile().then((result) => {
+      if (result.success) {
+        setStats(result.stats);
+      }
+    });
+  }, []);
 
   const displayName = user?.fullName || 'Guest';
 
@@ -80,15 +100,15 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats?.hostedMatches ?? 0}</Text>
             <Text style={styles.statLabel}>Hosted Matches</Text>
           </View>
           <View style={[styles.statItem, styles.statDivider]}>
-            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statValue}>{stats?.reviewsCount ?? 0}</Text>
             <Text style={styles.statLabel}>Reviews</Text>
           </View>
           <View style={[styles.statItem, styles.statDivider]}>
-            <Text style={styles.statValue}>—</Text>
+            <Text style={styles.statValue}>{formatJoinedAt(stats?.joinedAt)}</Text>
             <Text style={styles.statLabel}>Joined</Text>
           </View>
         </View>

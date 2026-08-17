@@ -52,9 +52,10 @@ const VENUES: Venue[] = [
 type Sport = 'football' | 'badminton';
 
 type Props = {
-  /** Opens the account menu (ProfileMenu) — wired by the app/home.tsx route. */
-  onAvatarPress: () => void;
-  avatarInitial: string;
+  /** "Upcoming Match" card's View Schedule pill — Booking/Matches/Home/
+   * Settings navigation now lives in the shared AppShell bottom tab bar,
+   * not here. */
+  onNavigateSchedule: () => void;
 };
 
 /** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
