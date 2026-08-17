@@ -1,25 +1,16 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ProfileMenu } from '../src/components/ProfileMenu';
-import { useUser } from '../src/context/UserContext';
+import React from 'react';
+import { AppShell } from '../src/components/AppShell';
 import HomeScreen from '../src/screens/home/HomeScreen';
 
-// Home dashboard (Figma node 8:2, "Football Dashboard") — replaces the
-// earlier role-placeholder screen now that a real design exists.
+// Home dashboard (Figma node 8:2, "Football Dashboard") — header/bottom
+// nav/ProfileMenu/NotificationMenu now live in AppShell (shared with
+// Schedule/Settings), this route just wires HomeScreen's content in.
 export default function Home() {
   const router = useRouter();
-  const { user } = useUser();
-  const [menuVisible, setMenuVisible] = useState(false);
-
   return (
-    <>
-      <HomeScreen
-        onAvatarPress={() => setMenuVisible(true)}
-        avatarInitial={(user?.fullName || 'G').charAt(0).toUpperCase()}
-        onNavigateSchedule={() => router.push('/schedule')}
-        onNavigateSettings={() => router.push('/settings')}
-      />
-      <ProfileMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
-    </>
+    <AppShell activeTab="home">
+      <HomeScreen onNavigateSchedule={() => router.push('/schedule')} />
+    </AppShell>
   );
 }

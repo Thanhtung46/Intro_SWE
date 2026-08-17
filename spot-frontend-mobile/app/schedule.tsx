@@ -1,7 +1,10 @@
-import { useRouter } from 'expo-router';
+import { AppShell } from '../src/components/AppShell';
 import ScheduleScreen from '../src/screens/schedule/ScheduleScreen';
 
 export default function ScheduleRoute() {
-  const router = useRouter();
-  return <ScheduleScreen onBack={() => router.back()} />;
+  return (
+    <AppShell activeTab="schedule">
+      <ScheduleScreen />
+    </AppShell>
+  );
 }

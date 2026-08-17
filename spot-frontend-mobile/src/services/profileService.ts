@@ -65,3 +65,39 @@ export async function getProfile(): Promise<ProfileUpdateResult> {
     return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
   }
 }
+
+export interface MainProfileStats {
+  hostedMatches: number;
+  joinedMatches: number;
+  completedBookings: number;
+  reviewsCount: number;
+  avgRating: number | null;
+  joinedAt: string | null;
+}
+
+export interface MainProfileResult {
+  success: boolean;
+  user?: ProfileUpdateUser;
+  stats?: MainProfileStats;
+  message?: string;
+}
+
+export async function getMainProfile(): Promise<MainProfileResult> {
+  try {
+    const token = await getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await client.get<{ user: ProfileUpdateUser; stats: MainProfileStats }>(
+      `${API_URL}/users/me/profile`,
+      { headers }
+    );
+    return { success: true, user: res.data.user, stats: res.data.stats };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
+}

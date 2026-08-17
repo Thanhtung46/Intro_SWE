@@ -4,6 +4,7 @@ import { Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, Touchable
 import { useUser } from '../../context/UserContext';
 import { Appearance, getPreferences, Language, updatePreferences } from '../../services/preferencesService';
 import { colors } from '../../theme/colors';
+import { clearToken } from '../../utils/authStorage';
 
 // Alert.alert's button-array form (React Native's only way to offer a
 // multi-choice picker without a custom component) is a no-op on web —
@@ -118,11 +119,9 @@ function Row({
 }
 
 export default function SettingsScreen({
-  onBack,
   onEditProfile,
   onSignedOut,
 }: {
-  onBack: () => void;
   onEditProfile: () => void;
   onSignedOut: () => void;
 }) {
@@ -188,7 +187,8 @@ export default function SettingsScreen({
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await clearToken();
     clearUser();
     onSignedOut();
   };
@@ -196,14 +196,6 @@ export default function SettingsScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          testID="settings-back-button"
-          style={styles.backButton}
-          onPress={onBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
       </View>
 
@@ -325,12 +317,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingTop: 48,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    marginBottom: 12,
   },
   title: {
     fontSize: 32,

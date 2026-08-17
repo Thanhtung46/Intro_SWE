@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 
 import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
+import { getProfile } from '@/services/profileService';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
-import { getToken } from '@/utils/authStorage';
+import { clearToken, getToken } from '@/utils/authStorage';
 
 type Destination = '/onboarding' | '/auth/login' | '/home';
 
@@ -42,7 +43,17 @@ export default function Splash() {
         if (cancelled) return;
 
         if (token) {
-          setDestination('/home');
+          const check = await getProfile();
+          if (cancelled) return;
+
+          if (check.success) {
+            setDestination('/home');
+          } else {
+            // Token hết hạn/không hợp lệ — xoá token cũ, không tự ý vào Home nữa.
+            await clearToken();
+            if (cancelled) return;
+            setDestination('/auth/login');
+          }
         } else if (!onboardingCompleted) {
           setDestination('/onboarding');
         } else {

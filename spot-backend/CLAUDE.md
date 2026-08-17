@@ -43,7 +43,7 @@ Docker from **repo root** `Intro_SWE/`:
 
 ```bash
 docker compose up -d --build redis backend
-
+docker compose run --rm backend npm run migrate
 
 ```
 

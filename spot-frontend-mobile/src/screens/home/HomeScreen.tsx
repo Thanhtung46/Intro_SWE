@@ -10,13 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import VenueCard, { Venue } from '@/components/home/VenueCard';
-import BottomNavItem from '@/components/home/BottomNavItem';
 
 const HEADING_TEXT = '#020617';
 
@@ -49,23 +46,17 @@ const VENUES: Venue[] = [
 type Sport = 'football' | 'badminton';
 
 type Props = {
-  /** Opens the account menu (ProfileMenu) — wired by the app/home.tsx route. */
-  onAvatarPress: () => void;
-  avatarInitial: string;
-  /** Bottom nav — Schedule/Settings are real routes now (SPOT-158/66). */
+  /** "Upcoming Match" card's View Schedule pill — Booking/Matches/Home/
+   * Settings navigation now lives in the shared AppShell bottom tab bar,
+   * not here. */
   onNavigateSchedule: () => void;
-  onNavigateSettings: () => void;
 };
 
 const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
 
-/** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
-export default function HomeScreen({
-  onAvatarPress,
-  avatarInitial,
-  onNavigateSchedule,
-  onNavigateSettings,
-}: Props) {
+/** SPOT home dashboard content — Figma node 8:2 ("Football Dashboard").
+ * Header + bottom nav now live in AppShell (see app/home.tsx). */
+export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
@@ -77,251 +68,135 @@ export default function HomeScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* Header - Top Navigation Shell (Figma node 8:124 / 50:603) */}
-      <BlurView intensity={30} tint="light" style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image source={require('../../../assets/logo.png')} style={styles.logo} />
-          <Text style={styles.logoText}>SPOT</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => comingSoon('AI Assistant')}
-            accessibilityRole="button"
-            accessibilityLabel="AI Assistant"
-          >
-            <MaterialCommunityIcons name="creation" size={20} color={colors.primaryDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => comingSoon('Notifications')}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.primaryDark} />
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={onAvatarPress}
-            accessibilityRole="button"
-            accessibilityLabel="Account menu"
-          >
-            <Text style={styles.avatarText}>{avatarInitial}</Text>
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Search bar */}
+      <View style={styles.searchBarOuter}>
+        <View style={styles.searchBarInner}>
+          <MaterialCommunityIcons name="creation" size={18} color={colors.primaryDark} />
+          <Text style={styles.searchPlaceholder}>Tell me what you need...</Text>
+          <TouchableOpacity onPress={() => comingSoon('Voice search')} accessibilityRole="button" accessibilityLabel="Voice search">
+            <Ionicons name="mic-outline" size={18} color={colors.primaryDark} />
           </TouchableOpacity>
         </View>
-      </BlurView>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Search bar */}
-        <View style={styles.searchBarOuter}>
-          <View style={styles.searchBarInner}>
-            <MaterialCommunityIcons name="creation" size={18} color={colors.primaryDark} />
-            <Text style={styles.searchPlaceholder}>Tell me what you need...</Text>
-            <TouchableOpacity onPress={() => comingSoon('Voice search')} accessibilityRole="button" accessibilityLabel="Voice search">
-              <Ionicons name="mic-outline" size={18} color={colors.primaryDark} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Sport toggle */}
-        <View style={styles.sportToggle}>
-          <TouchableOpacity
-            style={[styles.sportPill, sport === 'football' && styles.sportPillActive]}
-            onPress={() => setSport('football')}
-          >
-            <MaterialCommunityIcons
-              name="soccer"
-              size={16}
-              color={sport === 'football' ? colors.white : colors.primaryDark}
-            />
-            <Text style={[styles.sportText, sport === 'football' && styles.sportTextActive]}>Football</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sportPill, sport === 'badminton' && styles.sportPillActive]}
-            onPress={() => setSport('badminton')}
-          >
-            <MaterialCommunityIcons
-              name="badminton"
-              size={16}
-              color={sport === 'badminton' ? colors.white : colors.primaryDark}
-            />
-            <Text style={[styles.sportText, sport === 'badminton' && styles.sportTextActive]}>Badminton</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Photo carousel */}
-        <View style={styles.carouselWrap} onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handleCarouselScroll}
-          >
-            {CAROUSEL_IMAGES.map((source, index) => (
-              <Image
-                key={index}
-                source={source}
-                style={{ width: carouselWidth, height: '100%' }}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
-          <View style={styles.carouselDots}>
-            {CAROUSEL_IMAGES.map((_, index) => (
-              <View
-                key={index}
-                style={[styles.carouselDot, index === carouselIndex && styles.carouselDotActive]}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Quick actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon('Book Field')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.2)' }]}>
-              <Ionicons name="ticket-outline" size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.quickActionLabel}>Book Field</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon('Find Match')}>
-            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 112, 228, 0.2)' }]}>
-              <Ionicons name="trophy-outline" size={22} color="#2170E4" />
-            </View>
-            <Text style={styles.quickActionLabel}>Find Match</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Upcoming match */}
-        <View style={styles.upcomingCard}>
-          <Image
-            source={require('../../../assets/home/upcoming-match.png')}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-          <View style={styles.upcomingOverlay} />
-          <View style={styles.upcomingContent}>
-            <View style={styles.upcomingTop}>
-              <Text style={styles.upcomingHeading}>Upcoming Match</Text>
-              <TouchableOpacity style={styles.viewScheduleButton} onPress={onNavigateSchedule}>
-                <Text style={styles.viewScheduleText}>View Schedule</Text>
-              </TouchableOpacity>
-            </View>
-            <View>
-              <Text style={styles.upcomingTime}>Tonight, 8:00 PM</Text>
-              <View style={styles.upcomingLocationRow}>
-                <Ionicons name="location" size={13} color={HEADING_TEXT} />
-                <Text style={styles.upcomingLocation}>Football Field A @ VietNet Center</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Recommended venues */}
-        <View style={styles.venuesSection}>
-          <View style={styles.venuesHeader}>
-            <Text style={styles.venuesHeading}>Recommended Venues</Text>
-            <TouchableOpacity onPress={() => comingSoon('Explore All')}>
-              <Text style={styles.exploreAll}>Explore All</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.venuesList}
-          >
-            {VENUES.map((venue) => (
-              <VenueCard key={venue.id} venue={venue} onPress={() => comingSoon(venue.name)} />
-            ))}
-          </ScrollView>
-        </View>
-      </ScrollView>
-
-      {/* Bottom navigation */}
-      <View style={styles.bottomNav}>
-        <BottomNavItem icon="home" label="Home" active onPress={() => {}} />
-        <BottomNavItem icon="ticket-outline" label="Booking" onPress={() => comingSoon('Booking')} />
-        <BottomNavItem icon="trophy-outline" label="Matches" onPress={() => comingSoon('Matches')} />
-        <BottomNavItem icon="calendar-outline" label="Schedule" onPress={onNavigateSchedule} />
-        <BottomNavItem icon="settings-outline" label="Settings" onPress={onNavigateSettings} />
       </View>
-    </SafeAreaView>
+
+      {/* Sport toggle */}
+      <View style={styles.sportToggle}>
+        <TouchableOpacity
+          style={[styles.sportPill, sport === 'football' && styles.sportPillActive]}
+          onPress={() => setSport('football')}
+        >
+          <MaterialCommunityIcons
+            name="soccer"
+            size={16}
+            color={sport === 'football' ? colors.white : colors.primaryDark}
+          />
+          <Text style={[styles.sportText, sport === 'football' && styles.sportTextActive]}>Football</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.sportPill, sport === 'badminton' && styles.sportPillActive]}
+          onPress={() => setSport('badminton')}
+        >
+          <MaterialCommunityIcons
+            name="badminton"
+            size={16}
+            color={sport === 'badminton' ? colors.white : colors.primaryDark}
+          />
+          <Text style={[styles.sportText, sport === 'badminton' && styles.sportTextActive]}>Badminton</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Photo carousel */}
+      <View style={styles.carouselWrap} onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleCarouselScroll}
+        >
+          {CAROUSEL_IMAGES.map((source, index) => (
+            <Image
+              key={index}
+              source={source}
+              style={{ width: carouselWidth, height: '100%' }}
+              resizeMode="cover"
+            />
+          ))}
+        </ScrollView>
+        <View style={styles.carouselDots}>
+          {CAROUSEL_IMAGES.map((_, index) => (
+            <View
+              key={index}
+              style={[styles.carouselDot, index === carouselIndex && styles.carouselDotActive]}
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* Quick actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon('Book Field')}>
+          <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.2)' }]}>
+            <Ionicons name="ticket-outline" size={22} color={colors.primary} />
+          </View>
+          <Text style={styles.quickActionLabel}>Book Field</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon('Find Match')}>
+          <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 112, 228, 0.2)' }]}>
+            <Ionicons name="trophy-outline" size={22} color="#2170E4" />
+          </View>
+          <Text style={styles.quickActionLabel}>Find Match</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Upcoming match */}
+      <View style={styles.upcomingCard}>
+        <Image
+          source={require('../../../assets/home/upcoming-match.png')}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+        <View style={styles.upcomingOverlay} />
+        <View style={styles.upcomingContent}>
+          <View style={styles.upcomingTop}>
+            <Text style={styles.upcomingHeading}>Upcoming Match</Text>
+            <TouchableOpacity style={styles.viewScheduleButton} onPress={onNavigateSchedule}>
+              <Text style={styles.viewScheduleText}>View Schedule</Text>
+            </TouchableOpacity>
+          </View>
+          <View>
+            <Text style={styles.upcomingTime}>Tonight, 8:00 PM</Text>
+            <View style={styles.upcomingLocationRow}>
+              <Ionicons name="location" size={13} color={HEADING_TEXT} />
+              <Text style={styles.upcomingLocation}>Football Field A @ VietNet Center</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Recommended venues */}
+      <View style={styles.venuesSection}>
+        <View style={styles.venuesHeader}>
+          <Text style={styles.venuesHeading}>Recommended Venues</Text>
+          <TouchableOpacity onPress={() => comingSoon('Explore All')}>
+            <Text style={styles.exploreAll}>Explore All</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.venuesList}
+        >
+          {VENUES.map((venue) => (
+            <VenueCard key={venue.id} venue={venue} onPress={() => comingSoon(venue.name)} />
+          ))}
+        </ScrollView>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.screenBackground,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 64,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-    color: colors.primaryDark,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderWidth: 2,
-    borderColor: colors.ringBorder,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#996100',
-    borderWidth: 1,
-    borderColor: colors.white,
-  },
-  avatarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderWidth: 2,
-    borderColor: colors.ringBorder,
-  },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
   scrollContent: {
     paddingTop: 16,
     paddingBottom: 32,
@@ -520,16 +395,5 @@ const styles = StyleSheet.create({
   venuesList: {
     paddingHorizontal: 20,
     gap: 16,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
 });

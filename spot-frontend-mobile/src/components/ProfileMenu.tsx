@@ -5,6 +5,7 @@ import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedb
 import { useUser } from '../context/UserContext';
 import { Appearance, getPreferences, Language, updatePreferences } from '../services/preferencesService';
 import { colors } from '../theme/colors';
+import { clearToken } from '../utils/authStorage';
 
 interface ProfileMenuProps {
   visible: boolean;
@@ -112,7 +113,8 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     Alert.alert('Coming soon', `${feature} is not available yet.`);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await clearToken();
     clearUser();
     onClose();
     router.replace('/auth/login');
@@ -145,8 +147,13 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     }
   };
 
+  const handleGoHome = () => {
+    onClose();
+    router.replace('/home');
+  };
+
   const menuItems: MenuItemConfig[] = [
-    { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
+    { key: 'home', label: 'Home', icon: 'home-outline', onPress: handleGoHome },
   ];
 
   const aiItem: MenuItemConfig = {
