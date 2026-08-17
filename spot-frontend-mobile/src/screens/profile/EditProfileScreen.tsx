@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import { FormField } from '../../components/FormField';
 import { SelectField } from '../../components/SelectField';
 import { genderOptions } from '../../schemas/registerSchema';
 import { useUser } from '../../context/UserContext';
+import { getProfile, updateProfile } from '../../services/profileService';
 import { colors } from '../../theme/colors';
 
 // Not part of user_profiles per any BE spec/AC — placeholder options for the
@@ -34,6 +35,15 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const [gender, setGender] = useState('');
   const [skillLevel, setSkillLevel] = useState('');
   const [skillDescription, setSkillDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getProfile().then((result) => {
+      if (result.success && result.user?.gender) {
+        setGender(result.user.gender);
+      }
+    });
+  }, []);
 
   const displayName = user?.fullName || 'Guest';
 
@@ -41,14 +51,27 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
     Alert.alert('Coming soon', `${feature} is not available yet.`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
       setNameError('Name is required');
       return;
     }
     setNameError(undefined);
-    setUser({ ...user, fullName: trimmed });
+
+    setSaving(true);
+    const result = await updateProfile({
+      fullName: trimmed,
+      ...(gender ? { gender } : {}),
+    });
+    setSaving(false);
+
+    if (!result.success) {
+      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+      return;
+    }
+
+    setUser({ ...user, fullName: result.user?.fullName ?? trimmed });
     Alert.alert('Success', 'Profile updated');
     onBack();
   };
@@ -65,8 +88,13 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Edit Profile</Text>
-        <TouchableOpacity testID="edit-profile-save" style={styles.topBarSideRight} onPress={handleSave}>
-          <Text style={styles.saveText}>Save</Text>
+        <TouchableOpacity
+          testID="edit-profile-save"
+          style={styles.topBarSideRight}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save'}</Text>
         </TouchableOpacity>
       </View>
 

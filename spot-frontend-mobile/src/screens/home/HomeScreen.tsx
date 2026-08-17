@@ -52,12 +52,20 @@ type Props = {
   /** Opens the account menu (ProfileMenu) — wired by the app/home.tsx route. */
   onAvatarPress: () => void;
   avatarInitial: string;
+  /** Bottom nav — Schedule/Settings are real routes now (SPOT-158/66). */
+  onNavigateSchedule: () => void;
+  onNavigateSettings: () => void;
 };
 
 const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
 
 /** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
-export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
+export default function HomeScreen({
+  onAvatarPress,
+  avatarInitial,
+  onNavigateSchedule,
+  onNavigateSettings,
+}: Props) {
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
@@ -197,7 +205,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
           <View style={styles.upcomingContent}>
             <View style={styles.upcomingTop}>
               <Text style={styles.upcomingHeading}>Upcoming Match</Text>
-              <TouchableOpacity style={styles.viewScheduleButton} onPress={() => comingSoon('Schedule')}>
+              <TouchableOpacity style={styles.viewScheduleButton} onPress={onNavigateSchedule}>
                 <Text style={styles.viewScheduleText}>View Schedule</Text>
               </TouchableOpacity>
             </View>
@@ -236,8 +244,8 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
         <BottomNavItem icon="home" label="Home" active onPress={() => {}} />
         <BottomNavItem icon="ticket-outline" label="Booking" onPress={() => comingSoon('Booking')} />
         <BottomNavItem icon="trophy-outline" label="Matches" onPress={() => comingSoon('Matches')} />
-        <BottomNavItem icon="calendar-outline" label="Schedule" onPress={() => comingSoon('Schedule')} />
-        <BottomNavItem icon="settings-outline" label="Settings" onPress={() => comingSoon('Settings')} />
+        <BottomNavItem icon="calendar-outline" label="Schedule" onPress={onNavigateSchedule} />
+        <BottomNavItem icon="settings-outline" label="Settings" onPress={onNavigateSettings} />
       </View>
     </SafeAreaView>
   );
