@@ -105,9 +105,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
       () => expect(mockPush).toHaveBeenCalledWith({ pathname: '/home', params: { role: 'PLAYER' } }),
       { timeout: 3000 }
     );
-    // Access token now goes through authStorage.setToken() (key
-    // 'spot:auth_token') so getToken() can find it — see LoginScreen.tsx.
-    expect(mockSetItemAsync).toHaveBeenCalledWith('spot:auth_token', 'mock-access-token');
+    expect(mockSetItemAsync).toHaveBeenCalledWith('accessToken', 'mock-access-token');
     expect(mockSetItemAsync).toHaveBeenCalledWith('refreshToken', 'mock-refresh-token');
   }, 10000);
 
