@@ -71,7 +71,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## Project Overview
 
 SPOT (Sport Pitch Online Ticketing) is a sports-pitch booking platform (HCMUS
-<<<<<<< HEAD
 Software Engineering coursework, Group 09). It is now a **monorepo**: as of
 commit `a2dff26` ("merge polyrepo apps into monorepo"), `spot-frontend-web`,
 `spot-frontend-mobile`, and `spot-admin-console` — previously separate git
@@ -84,32 +83,15 @@ its "separate git repositories" framing as historical. Sections there marked
 "not yet implemented" (DB schema rules, Redis slot-locking, auth security
 rules, AI-service dependency lists) describe domains that are still empty
 scaffolds — don't assume they're built.
-=======
-Software Engineering coursework, Group 09). It is currently a **polyrepo**
-— the root `package.json`/`pnpm-workspace.yaml`/`infrastructure/` scaffold
-from an earlier pnpm-monorepo attempt has been removed from the working
-tree. `PROJECT_RULES.md` was rewritten (v2.0.0) to match this polyrepo and
-its actual version locks (npm not pnpm, `postgres:15-alpine`, `node:18-alpine`,
-etc.) — read it for the binding rules (version locks, DB/locking/security
-rules, code style, DRI table). Sections there marked "not yet implemented"
-may still apply to AI services / some security targets — **don't assume
-backend is empty**; see `spot-backend/CLAUDE.md` for what is actually built.
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 
 Tech stack per component:
 
 | Component | Stack | Status |
 | :--- | :--- | :--- |
 | `spot-frontend-web/` | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Zustand, Axios | Scaffolded but **`docker build`/`next build` fail today** — missing `src/app/globals.css`, `tsconfig.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`. `npm run dev` may still work despite this. |
-<<<<<<< HEAD
 | `spot-frontend-mobile/` | Expo, React Native, expo-router, Zustand, Axios — `package.json` currently pins Expo `^57`/React Native `^0.86`/React `19.2.8` (not Expo 49/RN 0.72 as this line used to say; version drifts fast here, so check `package.json` directly). See `spot-frontend-mobile/CLAUDE.md` for current status — it has a real, mostly-wired auth/onboarding/home flow, not an empty scaffold, and plain `npm install` works (no `--legacy-peer-deps` needed anymore). |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so — a leftover `.oxlintrc.json` file exists but isn't wired to anything). |
 | `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service) | **Has a `package.json` and is installable/runnable** — the `auth` domain (register/role/OTP/login/refresh/forgot-password/reset-password) is fully implemented; other domains are still empty scaffolds. See `spot-backend/CLAUDE.md`/`README.md` for the full API. |
-=======
-| `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
-| `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
-| `spot-backend/` | Node.js/Express ESM, domain-driven; `pg` + Supabase Session pooler; Redis; argon2; Zod | **Runnable.** Auth, profile/settings, schedule, notifications, reviews. Migrations squashed `001`–`004`. Details: `spot-backend/CLAUDE.md` + `spot-backend/docs/API.md`. |
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 | `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
 | Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified; **backend** builds with `env_file: spot-backend/.env` + `REDIS_HOST=redis`. Default backend DB is **Supabase**, not compose postgres. |
 
@@ -157,16 +139,6 @@ npm test
 
 **Backend (`spot-backend/`):**
 ```bash
-<<<<<<< HEAD
-npm install
-cp .env.example .env   # fill Supabase DB_*, SMTP_*, JWT_SECRET, Redis
-npm run migrate
-npm run dev       # http://localhost:3000
-npm test
-```
-See `spot-backend/CLAUDE.md`/`README.md` for the full command list (smoke
-scripts, Docker) and API reference.
-=======
 cd spot-backend
 npm install && cp .env.example .env   # DB_* (Supabase pooler), SMTP_*, JWT_SECRET, OTP_DEBUG
 npm run migrate
@@ -174,7 +146,6 @@ npm run dev                           # http://localhost:3000
 npm test
 npm run smoke:otp|login|profile|schedule|notifications|reviews
 ```
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 
 **AI services (`spot-ai-services/*/`):** not runnable yet — no application
 code or `requirements.txt` exists.
@@ -193,23 +164,9 @@ docker compose -f docker-compose.production.yml --env-file .env.production up -d
 `build.context` for `backend`/`frontend-web`/`admin-console` points at each
 app directory. Status:
 - `admin-console` — **builds successfully end-to-end.**
-<<<<<<< HEAD
-- `backend` — now has a `package.json`/`package-lock.json`/`Dockerfile`
-  (previously it had none, which is why this line used to say `npm ci`
-  fails); per `spot-backend/CLAUDE.md`/`README.md` the app itself is
-  installable and runnable, but an actual `docker build` for this service
-  hasn't been re-verified since — don't assume it's green until you run one.
-- `frontend-web` — gets past `npm ci` now (lockfile added) but fails at
-  `next build`: `src/app/globals.css` doesn't exist, and `tsconfig.json`/
-  `next.config.js`/`tailwind.config.js`/`postcss.config.js` are all missing
-  too. This is an app-scaffold gap, not a Docker problem.
-- `recommendation`/`noshow`/`nlp` — still fail immediately: no `Dockerfile`
-  exists under `spot-ai-services/*/` at all (empty scaffolds).
-=======
 - `backend` — **builds** when `package.json`/`package-lock.json` present; runtime DB defaults to Supabase via `spot-backend/.env`.
 - `frontend-web` — gets past `npm ci` but fails at `next build` (missing `globals.css` + Next/Tailwind configs).
 - `recommendation`/`noshow`/`nlp` — no `Dockerfile` under `spot-ai-services/*/` yet.
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 
 `docker-compose.production.yml` uses `${DB_USER}`/`${DB_PASSWORD}`/
 `${JWT_SECRET}`/etc. with **no defaults**. Compose only auto-loads a file
@@ -256,14 +213,6 @@ committed yet so it currently fails to run):
 
 ## Important Guidelines
 
-<<<<<<< HEAD
-- **Monorepo, not polyrepo**: despite `PROJECT_RULES.md`'s "Polyrepo Realignment" title, none of `spot-frontend-web`, `spot-frontend-mobile`, `spot-admin-console`, or `spot-backend` have their own `.git` today — they were merged into this repo (commit `a2dff26`) and are tracked by a `git status`/`git commit` at this repo's root like everything else.
-- **`spot-backend` has a `package.json` and is installable/runnable** — the `auth` domain is fully implemented; other domains are still empty scaffolds. Check `spot-backend/CLAUDE.md`/`README.md` for current status before assuming otherwise.
-- **`spot-ai-services/*` are empty directory scaffolds** — check for `requirements.txt`/app code before assuming a service is implemented.
-- **Env files**: `.env.development` and `.env.production` live at the repo root and are gitignored — never let real credentials get committed; verify `git status` shows them untracked before adding secrets. `docker-compose.yml`'s `backend` service reads DB/SMTP/JWT values from `spot-backend/.env` (not `.env.development`, which is unused); `docker-compose.production.yml` does need `.env.production`, but only via an explicit `--env-file` flag — see Docker caveat above.
-- **`Docs/` and `PA/`** hold course assignment materials (requirements docs, PDFs) — reference-only, not part of the running application.
-- Each scaffolded app under `spot-*/` now has its own `CLAUDE.md` with app-specific status — read the relevant one before working in that app.
-=======
 - **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — independent repos, not submodules. Root `git commit` does **not** track changes inside them. `spot-backend/` **is** tracked by this repo.
 - **`spot-backend` is runnable** — use `spot-backend/CLAUDE.md` + `docs/API.md`. Do not revive old “no package.json / no user_profiles” assumptions.
 - **`schema_auth` split:** `users` = auth identity; `user_profiles` = display + Settings prefs; view `user_prefs`. Prefs sync = same DB row (no Redis profile cache).
@@ -271,4 +220,3 @@ committed yet so it currently fails to run):
 - **Env files**: root `.env.development` / `.env.production` are gitignored. Backend secrets live in `spot-backend/.env` (also gitignored). Compose production needs `--env-file .env.production`.
 - **`Docs/` and `PA/`** — course materials only, not app code.
 - Each `spot-*/CLAUDE.md` is the source of truth for that app’s status — read it before editing.
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab

@@ -97,24 +97,11 @@ both sides, so plain `npm install` works without `--legacy-peer-deps`.
 
 ---
 
-<<<<<<< HEAD
-### 1.5. `spot-backend/` — implemented stack (auth domain) vs. target
-`package.json` now exists and the `auth` domain is implemented and running
-on it — see `spot-backend/CLAUDE.md`/`README.md` for the exact, current
-dependency set (`express`, `pg`, `ioredis`, `argon2`, `jsonwebtoken`,
-`nodemailer`, `zod`, `helmet`, `cors`, `express-rate-limit`, `winston`,
-`dotenv`; no ORM/Prisma or `redlock` in use yet). The table below is this
-document's **original target list** for domains still unbuilt — treat rows
-that diverge from what's actually installed (e.g. `@prisma/client`,
-`redlock`) as aspirational until those domains (booking's slot-locking,
-in particular) are actually written:
-=======
 ### 1.5. `spot-backend/` — installed stack
 
 `package.json` / `package-lock.json` exist; app is **installable and runnable**.
 Pin close to these versions (see lockfile for exact resolves). Full status:
 `spot-backend/CLAUDE.md`.
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 
 | Package Name | Target Version | Description & Usage |
 | :--- | :--- | :--- |
@@ -122,14 +109,6 @@ Pin close to these versions (see lockfile for exact resolves). Full status:
 | **`jsonwebtoken`** | **`9.0.x`** | JWT authentication (access + refresh) |
 | **`argon2`** | **`0.40.x`** | Password + OTP hashing |
 | **`express-rate-limit`** | **`7.3.x`** | Rate limiting |
-<<<<<<< HEAD
-| **`helmet`** | **`7.1.x`** | HTTP security headers |
-| **`pg`** | **`8.12.x`** | PostgreSQL client driver |
-| **`@prisma/client` / `prisma`** | **`5.17.x`** | ORM (not adopted — auth domain uses raw `pg`, no Prisma installed) |
-| **`ioredis`** | **`5.4.x`** | Redis client driver |
-| **`redlock`** | **`5.0.0-beta.2`** | Redis slot locking (see §2.3) — not installed yet, `booking` domain is still an empty scaffold |
-| **`winston`** | **`3.13.x`** | Structured JSON logging |
-=======
 | **`pg`** | **`8.x`** | Postgres client (Supabase Session pooler) |
 | **`ioredis`** | **`5.x`** | OTP counters / reminder ZSET (soft-fail) |
 | **`zod`** | **`3.x`** | Request DTOs |
@@ -138,7 +117,6 @@ Pin close to these versions (see lockfile for exact resolves). Full status:
 | **`dotenv` / `cors` / `helmet` / `winston`** | current | Config / security headers / logging |
 
 Also listed in deps but **not wired for auth**: `@supabase/supabase-js` — use `pg` + `ioredis` directly.
->>>>>>> refs/remotes/origin/SPOT-34-Football-Dashboard-Trang-chủ-Player-Football-tab
 
 There is exactly **one** backend service — not an `api-gateway` +
 `core-api` split. Domain-driven under `src/domains/<name>/{controller,dto,
