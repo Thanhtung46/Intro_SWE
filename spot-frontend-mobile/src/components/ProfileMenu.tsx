@@ -1,9 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import { useUser } from '../context/UserContext';
-import { colors } from '../theme/colors';
+import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { ROUTES } from '@/constants/routes';
+import { comingSoon } from '@/utils/comingSoon';
 
 interface ProfileMenuProps {
   visible: boolean;
@@ -27,24 +29,20 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   const router = useRouter();
   const { user, clearUser } = useUser();
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
-
   const handleSignOut = () => {
     clearUser();
     onClose();
-    router.replace('/auth/login');
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   const handleOpenProfile = () => {
     onClose();
-    router.push('/profile');
+    router.push(ROUTES.PROFILE);
   };
 
   const handleOpenSettings = () => {
     onClose();
-    router.push('/settings');
+    router.push(ROUTES.SETTINGS);
   };
 
   const menuItems: MenuItemConfig[] = [
@@ -67,20 +65,20 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
       key: 'ai-assistant',
       label: 'AI Assistant',
       mciIcon: 'creation',
-      labelColor: colors.primary,
-      iconColor: colors.primary,
-      onPress: () => showComingSoon('AI Assistant'),
+      labelColor: colors.primaryDark,
+      iconColor: colors.primaryDark,
+      onPress: () => comingSoon('AI Assistant'),
     },
   ];
 
   const supportItems: MenuItemConfig[] = [
-    { key: 'help-center', label: 'Help Center', icon: 'help-circle-outline', onPress: () => showComingSoon('Help Center') },
-    { key: 'contact-us', label: 'Contact Us', icon: 'mail-outline', onPress: () => showComingSoon('Contact Us') },
+    { key: 'help-center', label: 'Help Center', icon: 'help-circle-outline', onPress: () => comingSoon('Help Center') },
+    { key: 'contact-us', label: 'Contact Us', icon: 'mail-outline', onPress: () => comingSoon('Contact Us') },
     {
       key: 'report-issue',
       label: 'Report an Issue',
       icon: 'alert-circle-outline',
-      onPress: () => showComingSoon('Report an Issue'),
+      onPress: () => comingSoon('Report an Issue'),
     },
   ];
 
@@ -124,8 +122,8 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
               {supportItems.map(renderItem)}
 
               <TouchableOpacity testID="profile-menu-sign-out" style={styles.item} onPress={handleSignOut}>
-                <Ionicons name="log-out-outline" size={20} color={colors.error} style={styles.itemIcon} />
-                <Text style={[styles.itemLabel, { color: colors.error, fontWeight: '600' }]}>Sign Out</Text>
+                <Ionicons name="log-out-outline" size={20} color={colors.formError} style={styles.itemIcon} />
+                <Text style={[styles.itemLabel, { color: colors.formError, fontWeight: '600' }]}>Sign Out</Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -170,7 +168,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 16,
   },

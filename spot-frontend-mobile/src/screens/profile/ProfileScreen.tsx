@@ -1,8 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { ReactNode, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useUser } from '../../context/UserContext';
-import { colors } from '../../theme/colors';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
+import BottomNav from '@/components/navigation/BottomNav';
 
 const FAVORITE_TABS = ['Matches', 'Venues', 'Groups', 'Tournaments'];
 const HOSTED_MATCH_TABS = ['Open', 'Ended', 'All'];
@@ -51,14 +54,10 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
   const [favoriteTab, setFavoriteTab] = useState(FAVORITE_TABS[0]);
   const [hostedTab, setHostedTab] = useState(HOSTED_MATCH_TABS[0]);
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
-
   const displayName = user?.fullName || 'Guest';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <TouchableOpacity testID="profile-back-button" style={styles.heroIconButton} onPress={onBack}>
@@ -97,10 +96,10 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
         <View style={styles.sections}>
           <View>
             <CardHeader
-              icon={<Ionicons name="people" size={20} color={colors.primary} />}
+              icon={<Ionicons name="people" size={20} color={colors.primaryDark} />}
               iconBg={colors.primarySoft}
               title="Groups"
-              onPress={() => showComingSoon('Groups')}
+              onPress={() => comingSoon('Groups')}
             />
             <View style={styles.groupRows}>
               <View style={styles.groupRow}>
@@ -171,7 +170,7 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
               icon={<Ionicons name="star" size={18} color={colors.amber} />}
               iconBg={colors.amberSoft}
               title="Reviews"
-              onPress={() => showComingSoon('Reviews')}
+              onPress={() => comingSoon('Reviews')}
             />
             <EmptyState
               icon={
@@ -186,21 +185,22 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
           </View>
         </View>
       </ScrollView>
-    </View>
+      <BottomNav />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 128,
   },
   hero: {
     height: 160,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -239,12 +239,12 @@ const styles = StyleSheet.create({
     borderRadius: 64,
     backgroundColor: colors.primarySoft,
     borderWidth: 4,
-    borderColor: colors.background,
+    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 40,
   },
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   statLabel: {
     fontSize: 13,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   groupRowValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   chipsRow: {
     flexDirection: 'row',
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   chipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   chipText: {
     fontSize: 13,
@@ -362,14 +362,14 @@ const styles = StyleSheet.create({
   tabPillActive: {
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
   },
   tabPillText: {
     fontSize: 13,
     color: colors.subtitle,
   },
   tabPillTextActive: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
   },
   emptyState: {

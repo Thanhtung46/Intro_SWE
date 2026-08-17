@@ -4,11 +4,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import ChooseRoleScreen from '@/screens/auth/ChooseRoleScreen';
 import { selectRole } from '@/services/authService';
 import type { Role } from '@/types/auth';
+import { ROUTES } from '@/constants/routes';
 
 const DESTINATION: Record<Role, string> = {
-  player: '/home',
-  owner: '/owner/welcome',
-  referee: '/referee/register',
+  player: ROUTES.HOME,
+  owner: ROUTES.OWNER_WELCOME,
+  referee: ROUTES.REFEREE_REGISTER,
 };
 
 /**
@@ -44,7 +45,7 @@ export default function ChooseRoleRoute() {
     }
 
     if (selectedRole === 'player') {
-      router.replace('/home');
+      router.replace(ROUTES.HOME);
     } else {
       router.push(DESTINATION[selectedRole]);
     }

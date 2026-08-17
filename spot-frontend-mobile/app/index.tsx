@@ -4,8 +4,9 @@ import { useRouter } from 'expo-router';
 import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
 import { getToken } from '@/utils/authStorage';
+import { ROUTES } from '@/constants/routes';
 
-type Destination = '/onboarding' | '/auth/login' | '/home';
+type Destination = typeof ROUTES.ONBOARDING | typeof ROUTES.AUTH_LOGIN | typeof ROUTES.HOME;
 
 const AUTO_NAVIGATE_ENABLED = true;
 
@@ -42,11 +43,11 @@ export default function Splash() {
         if (cancelled) return;
 
         if (token) {
-          setDestination('/home');
+          setDestination(ROUTES.HOME);
         } else if (!onboardingCompleted) {
-          setDestination('/onboarding');
+          setDestination(ROUTES.ONBOARDING);
         } else {
-          setDestination('/auth/login');
+          setDestination(ROUTES.AUTH_LOGIN);
         }
       } catch (error) {
         if (cancelled) return;

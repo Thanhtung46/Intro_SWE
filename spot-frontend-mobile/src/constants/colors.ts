@@ -40,4 +40,24 @@ export const colors = {
   iconBackground: '#EFF4FF',
   primaryDisabled: '#A9C0F5',
   primaryDisabledText: '#EEEFFF',
+
+  // Merged in from the former src/theme/colors.ts (auth/profile/settings
+  // flow) — kept as distinct keys rather than reusing same-named keys
+  // above that already carry a different value (e.g. `error`,
+  // `screenBackground`), so no screen's appearance shifts beyond the
+  // intentional primary-blue unification.
+  primarySoft: '#E7ECFB',
+  text: '#1A1A1A',
+  subtitle: '#6B7280',
+  placeholder: '#9CA3AF',
+  border: '#D1D5DB',
+  formError: '#DC2626',
+  formScreenBackground: '#F3F4F6',
+  pink: '#EC4899',
+  pinkSoft: '#FDF2F8',
+  orange: '#F97316',
+  orangeSoft: '#FFF7ED',
+  amber: '#F59E0B',
+  amberSoft: '#FFFBEB',
+  success: '#16A34A',
 } as const;

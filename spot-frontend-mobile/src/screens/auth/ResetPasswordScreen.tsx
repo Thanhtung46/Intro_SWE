@@ -10,11 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { OtpInput } from '../../components/OtpInput';
-import { PasswordField } from '../../components/PasswordField';
-import { ResetPasswordFieldErrors, resetPasswordSchema } from '../../schemas/resetPasswordSchema';
-import { resetPassword } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { OtpInput } from '@/components/OtpInput';
+import { PasswordField } from '@/components/PasswordField';
+import { ResetPasswordFieldErrors, resetPasswordSchema } from '@/schemas/resetPasswordSchema';
+import { resetPassword } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 export default function ResetPasswordScreen({
   email,
@@ -87,7 +87,7 @@ export default function ResetPasswordScreen({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="lock-open" size={26} color={colors.primary} />
+            <Ionicons name="lock-open" size={26} color={colors.primaryDark} />
           </View>
 
           <Text style={styles.title}>Create New Password</Text>
@@ -138,14 +138,14 @@ export default function ResetPasswordScreen({
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
     paddingHorizontal: 16,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   topBarTitle: {
     flex: 1,
@@ -212,16 +212,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
     fontSize: 12,
-    color: colors.error,
+    color: colors.formError,
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 12,
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

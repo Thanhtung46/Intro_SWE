@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 
 import OwnerRegisterScreen from '@/screens/owner/OwnerRegisterScreen';
+import { ROUTES } from '@/constants/routes';
 
 /**
  * "/owner/register" — venue registration form, submitted via the mock
@@ -14,7 +15,7 @@ export default function OwnerRegisterRoute() {
   };
 
   const handleRegistered = () => {
-    router.replace({ pathname: '/pending', params: { role: 'owner' } });
+    router.replace({ pathname: ROUTES.PENDING, params: { role: 'owner' } });
   };
 
   return <OwnerRegisterScreen onBack={handleBack} onRegistered={handleRegistered} />;

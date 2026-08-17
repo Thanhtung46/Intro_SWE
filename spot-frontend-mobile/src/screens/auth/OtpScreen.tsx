@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { OtpInput } from '../../components/OtpInput';
-import { otpSchema } from '../../schemas/otpSchema';
-import { resendOtp, verifyOtp } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { OtpInput } from '@/components/OtpInput';
+import { otpSchema } from '@/schemas/otpSchema';
+import { resendOtp, verifyOtp } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -79,7 +79,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
     <View style={styles.screen}>
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <Ionicons name="shield-checkmark" size={28} color={colors.primary} />
+          <Ionicons name="shield-checkmark" size={28} color={colors.primaryDark} />
         </View>
 
         <Text style={styles.title}>OTP Verification</Text>
@@ -131,7 +131,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorText: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 12,
@@ -189,12 +189,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   resendCountdown: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   resendLink: {
     fontSize: 14,
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   verifyButton: {
     width: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

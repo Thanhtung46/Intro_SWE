@@ -1,14 +1,11 @@
 import React from 'react';
-import { Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { VenueBase } from '@/types/venue';
 
-export type Venue = {
-  id: string;
-  name: string;
-  image: ImageSourcePropType;
-  distanceLabel: string;
+export type Venue = VenueBase & {
   priceLabel: string;
   rating: number;
   tag: string;

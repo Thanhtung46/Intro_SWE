@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { ProfileMenu } from '../src/components/ProfileMenu';
-import { useUser } from '../src/context/UserContext';
-import HomeScreen from '../src/screens/home/HomeScreen';
+import { ProfileMenu } from '@/components/ProfileMenu';
+import { useUser } from '@/context/UserContext';
+import BookingScreen from '@/screens/booking/BookingScreen';
 
-// Home dashboard (Figma node 8:2, "Football Dashboard") — replaces the
-// earlier role-placeholder screen now that a real design exists.
-export default function Home() {
+// Booking Field venue list (Figma node 79:1390, "Booking Field - Home page")
+// — reached from the Home dashboard's "Book Field" quick action.
+export default function Booking() {
   const { user } = useUser();
   const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <>
-      <HomeScreen
+      <BookingScreen
         onAvatarPress={() => setMenuVisible(true)}
         avatarInitial={(user?.fullName || 'G').charAt(0).toUpperCase()}
       />

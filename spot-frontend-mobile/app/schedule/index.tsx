@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import ScheduleScreen from '../src/screens/schedule/ScheduleScreen';
+import ScheduleScreen from '@/screens/schedule/ScheduleScreen';
 
 export default function ScheduleRoute() {
   const router = useRouter();

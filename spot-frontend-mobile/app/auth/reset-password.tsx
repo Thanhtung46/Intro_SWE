@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import ResetPasswordScreen from '../../src/screens/auth/ResetPasswordScreen';
+import ResetPasswordScreen from '@/screens/auth/ResetPasswordScreen';
+import { ROUTES } from '@/constants/routes';
 
 export default function ResetPasswordRoute() {
   const router = useRouter();
@@ -9,7 +10,7 @@ export default function ResetPasswordRoute() {
     <ResetPasswordScreen
       email={email}
       onBack={() => router.back()}
-      onResetComplete={() => router.replace('/auth/login')}
+      onResetComplete={() => router.replace(ROUTES.AUTH_LOGIN)}
     />
   );
 }

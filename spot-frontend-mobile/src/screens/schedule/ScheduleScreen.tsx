@@ -1,7 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { colors } from '../../theme/colors';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
+import BottomNav from '@/components/navigation/BottomNav';
 
 type ScheduleEvent = {
   id: string;
@@ -167,17 +170,13 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
     return MOCK_EVENTS.filter((event) => isSameDay(event.date, selectedDate));
   }, [selectedDate]);
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
-
   const goToMonth = (offset: number) => {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
     setSelectedDate(null);
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity
@@ -275,7 +274,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                   <View key={event.id} style={styles.upcomingCard}>
                     <Text style={styles.cardStatusLabel}>UPCOMING</Text>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primary} />
+                      <SportIcon type={event.type} color={colors.primaryDark} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <View style={styles.detailRow}>
@@ -295,7 +294,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                     <TouchableOpacity
                       testID={`schedule-match-details-${event.id}`}
                       style={styles.primaryButton}
-                      onPress={() => showComingSoon('Match Details')}
+                      onPress={() => comingSoon('Match Details')}
                     >
                       <Text style={styles.primaryButtonText}>Match Details</Text>
                     </TouchableOpacity>
@@ -307,7 +306,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                       <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                     </View>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primary} />
+                      <SportIcon type={event.type} color={colors.primaryDark} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <Text style={styles.completedDate}>
@@ -319,7 +318,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                     <TouchableOpacity
                       testID={`schedule-leave-review-${event.id}`}
                       style={styles.outlineButton}
-                      onPress={() => showComingSoon('Leave Review')}
+                      onPress={() => comingSoon('Leave Review')}
                     >
                       <Text style={styles.outlineButtonText}>Leave Review</Text>
                     </TouchableOpacity>
@@ -330,18 +329,19 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
           </View>
         ) : null}
       </ScrollView>
-    </View>
+      <BottomNav active="schedule" />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 128,
   },
   header: {
     paddingTop: 48,
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayCircleSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   dayText: {
     fontSize: 14,
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     marginTop: 2,
   },
   matchesSection: {
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
   sportBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   cardStatusLabel: {
     fontSize: 11,
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
     padding: 16,
     marginBottom: 16,
   },
@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: 4,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -532,13 +532,13 @@ const styles = StyleSheet.create({
   outlineButton: {
     marginTop: 8,
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
   },
   outlineButtonText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '700',
   },

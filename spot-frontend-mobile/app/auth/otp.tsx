@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import OtpScreen from '../../src/screens/auth/OtpScreen';
+import OtpScreen from '@/screens/auth/OtpScreen';
+import { ROUTES } from '@/constants/routes';
 
 export default function OtpRoute() {
   const router = useRouter();
@@ -9,7 +10,7 @@ export default function OtpRoute() {
   return (
     <OtpScreen
       email={email}
-      onVerified={() => router.push({ pathname: '/auth/choose-role', params: { email } })}
+      onVerified={() => router.push({ pathname: ROUTES.AUTH_CHOOSE_ROLE, params: { email } })}
     />
   );
 }

@@ -2,7 +2,6 @@ import { Link } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,13 +11,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FormField } from '../../components/FormField';
-import { GoogleIcon } from '../../components/GoogleIcon';
-import { PasswordField } from '../../components/PasswordField';
-import { useUser } from '../../context/UserContext';
-import { LoginFieldErrors, loginSchema } from '../../schemas/loginSchema';
-import { login } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { FormField } from '@/components/FormField';
+import { GoogleIcon } from '@/components/GoogleIcon';
+import { PasswordField } from '@/components/PasswordField';
+import { useUser } from '@/context/UserContext';
+import { LoginFieldErrors, loginSchema } from '@/schemas/loginSchema';
+import { login } from '@/services/authService';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
 
 export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string) => void }) {
   const { setUser } = useUser();
@@ -28,10 +28,6 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
   const [errors, setErrors] = useState<LoginFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
 
   const handleLogin = async () => {
     setFormError(null);
@@ -133,7 +129,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
           <TouchableOpacity
             testID="google-login-button"
             style={styles.googleButton}
-            onPress={() => showComingSoon('Login with Google')}
+            onPress={() => comingSoon('Login with Google')}
           >
             <GoogleIcon size={18} />
             <Text style={styles.googleButtonText}>Login with Google</Text>
@@ -152,15 +148,15 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
         <View style={styles.footer}>
           <Text style={styles.footerCopyright}>© 2024 SPOT Sports Booking. All rights reserved.</Text>
           <View style={styles.footerLinksRow}>
-            <TouchableOpacity testID="footer-privacy" onPress={() => showComingSoon('Privacy Policy')}>
+            <TouchableOpacity testID="footer-privacy" onPress={() => comingSoon('Privacy Policy')}>
               <Text style={styles.footerLink}>Privacy Policy</Text>
             </TouchableOpacity>
             <Text style={styles.footerSeparator}> | </Text>
-            <TouchableOpacity testID="footer-terms" onPress={() => showComingSoon('Terms of Service')}>
+            <TouchableOpacity testID="footer-terms" onPress={() => comingSoon('Terms of Service')}>
               <Text style={styles.footerLink}>Terms of Service</Text>
             </TouchableOpacity>
             <Text style={styles.footerSeparator}> | </Text>
-            <TouchableOpacity testID="footer-help" onPress={() => showComingSoon('Help Center')}>
+            <TouchableOpacity testID="footer-help" onPress={() => comingSoon('Help Center')}>
               <Text style={styles.footerLink}>Help Center</Text>
             </TouchableOpacity>
           </View>
@@ -173,7 +169,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
   content: {
     paddingHorizontal: 24,
@@ -190,7 +186,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryDark,
     textAlign: 'center',
   },
   subtitle: {
@@ -207,17 +203,17 @@ const styles = StyleSheet.create({
   },
   forgotLink: {
     fontSize: 13,
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   loginButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -241,7 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   registerLink: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '700',
   },

@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { ReactNode, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { useUser } from '../../context/UserContext';
-import { colors } from '../../theme/colors';
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
+import BottomNav from '@/components/navigation/BottomNav';
 
 function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>;
@@ -31,17 +34,17 @@ function Row({
   onToggle?: (value: boolean) => void;
   danger?: boolean;
 }) {
-  const iconColor = danger ? colors.error : colors.primary;
+  const iconColor = danger ? colors.formError : colors.primaryDark;
   const content = (
     <View style={styles.row}>
       <Ionicons name={icon} size={20} color={iconColor} style={styles.rowIcon} />
-      <Text style={[styles.rowLabel, danger ? { color: colors.error, fontWeight: '600' } : null]}>{label}</Text>
+      <Text style={[styles.rowLabel, danger ? { color: colors.formError, fontWeight: '600' } : null]}>{label}</Text>
       {toggleValue !== undefined ? (
         <Switch
           testID={testID}
           value={toggleValue}
           onValueChange={onToggle}
-          trackColor={{ true: colors.primary, false: colors.border }}
+          trackColor={{ true: colors.primaryDark, false: colors.border }}
           thumbColor={colors.white}
         />
       ) : secondaryLabel ? (
@@ -80,17 +83,13 @@ export default function SettingsScreen({
   const [pushNotifications, setPushNotifications] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
-
   const handleSignOut = () => {
     clearUser();
     onSignedOut();
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           testID="settings-back-button"
@@ -140,7 +139,7 @@ export default function SettingsScreen({
             icon="globe-outline"
             label="Language"
             secondaryLabel="English"
-            onPress={() => showComingSoon('Language')}
+            onPress={() => comingSoon('Language')}
           />
           <View style={styles.rowDivider} />
           <Row
@@ -148,7 +147,7 @@ export default function SettingsScreen({
             icon="color-palette-outline"
             label="Appearance"
             secondaryLabel="Light"
-            onPress={() => showComingSoon('Appearance')}
+            onPress={() => comingSoon('Appearance')}
           />
         </Card>
 
@@ -158,28 +157,28 @@ export default function SettingsScreen({
             testID="settings-help-center"
             icon="help-circle-outline"
             label="Help Center"
-            onPress={() => showComingSoon('Help Center')}
+            onPress={() => comingSoon('Help Center')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-about-us"
             icon="information-circle-outline"
             label="About Us"
-            onPress={() => showComingSoon('About Us')}
+            onPress={() => comingSoon('About Us')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-contact-us"
             icon="mail-outline"
             label="Contact Us"
-            onPress={() => showComingSoon('Contact Us')}
+            onPress={() => comingSoon('Contact Us')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-report-issue"
             icon="alert-circle-outline"
             label="Report an Issue"
-            onPress={() => showComingSoon('Report an Issue')}
+            onPress={() => comingSoon('Report an Issue')}
           />
         </Card>
 
@@ -189,14 +188,15 @@ export default function SettingsScreen({
 
         <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
-    </View>
+      <BottomNav active="settings" />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   header: {
     paddingHorizontal: 16,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 128,
   },
   sectionLabel: {
     fontSize: 12,

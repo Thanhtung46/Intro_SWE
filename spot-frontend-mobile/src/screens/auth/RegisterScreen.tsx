@@ -11,12 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FormField } from '../../components/FormField';
-import { PasswordField } from '../../components/PasswordField';
-import { SelectField } from '../../components/SelectField';
-import { genderOptions, RegisterFieldErrors, registerSchema } from '../../schemas/registerSchema';
-import { register } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { FormField } from '@/components/FormField';
+import { PasswordField } from '@/components/PasswordField';
+import { SelectField } from '@/components/SelectField';
+import { genderOptions, RegisterFieldErrors, registerSchema } from '@/schemas/registerSchema';
+import { register } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 export default function RegisterScreen({
   onBack,
@@ -91,7 +91,7 @@ export default function RegisterScreen({
     >
       <View style={styles.topBar}>
         <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+          <Ionicons name="arrow-back" size={24} color={colors.primaryDark} />
         </TouchableOpacity>
       </View>
 
@@ -188,13 +188,13 @@ export default function RegisterScreen({
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
   topBar: {
     height: 56,
     justifyContent: 'center',
     paddingHorizontal: 16,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
   content: {
     paddingHorizontal: 24,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryDark,
     textAlign: 'center',
   },
   subtitle: {
@@ -228,13 +228,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   registerButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   loginLink: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '700',
   },

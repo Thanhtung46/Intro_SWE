@@ -11,11 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FormField } from '../../components/FormField';
-import { SelectField } from '../../components/SelectField';
-import { genderOptions } from '../../schemas/registerSchema';
-import { useUser } from '../../context/UserContext';
-import { colors } from '../../theme/colors';
+import { FormField } from '@/components/FormField';
+import { SelectField } from '@/components/SelectField';
+import { genderOptions } from '@/schemas/registerSchema';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
 
 // Not part of user_profiles per any BE spec/AC — placeholder options for the
 // Figma-required UI only, confirm real values with team/PO later.
@@ -36,10 +37,6 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const [skillDescription, setSkillDescription] = useState('');
 
   const displayName = user?.fullName || 'Guest';
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
 
   const handleSave = () => {
     const trimmed = name.trim();
@@ -74,7 +71,7 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
         <TouchableOpacity
           testID="edit-profile-avatar-upload"
           style={styles.avatarSection}
-          onPress={() => showComingSoon('Photo upload')}
+          onPress={() => comingSoon('Photo upload')}
           activeOpacity={0.8}
         >
           <View style={styles.avatar}>
@@ -153,7 +150,7 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
         <TouchableOpacity
           testID="edit-profile-change-password"
           style={styles.changePasswordButton}
-          onPress={() => showComingSoon('Change Password')}
+          onPress={() => comingSoon('Change Password')}
         >
           <Ionicons name="lock-closed-outline" size={18} color={colors.text} />
           <Text style={styles.changePasswordText}>Change Password</Text>
@@ -166,7 +163,7 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
   },
   topBar: {
     flexDirection: 'row',
@@ -175,7 +172,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 12,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -195,7 +192,7 @@ const styles = StyleSheet.create({
   saveText: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   content: {
     paddingHorizontal: 24,
@@ -216,7 +213,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 36,
   },
@@ -229,7 +226,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#22C55E',
     borderWidth: 3,
-    borderColor: colors.background,
+    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -11,12 +10,16 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
+import { ROUTES } from '@/constants/routes';
+import { comingSoon } from '@/utils/comingSoon';
 import VenueCard, { Venue } from '@/components/home/VenueCard';
-import BottomNavItem from '@/components/home/BottomNavItem';
+import AppHeader from '@/components/layout/AppHeader';
+import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
+import BottomNav from '@/components/navigation/BottomNav';
 
 const HEADING_TEXT = '#020617';
 
@@ -54,10 +57,9 @@ type Props = {
   avatarInitial: string;
 };
 
-const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
-
 /** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
 export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
+  const router = useRouter();
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
@@ -71,39 +73,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* Header - Top Navigation Shell (Figma node 8:124 / 50:603) */}
-      <BlurView intensity={30} tint="light" style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image source={require('../../../assets/logo.png')} style={styles.logo} />
-          <Text style={styles.logoText}>SPOT</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => comingSoon('AI Assistant')}
-            accessibilityRole="button"
-            accessibilityLabel="AI Assistant"
-          >
-            <MaterialCommunityIcons name="creation" size={20} color={colors.primaryDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => comingSoon('Notifications')}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.primaryDark} />
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={onAvatarPress}
-            accessibilityRole="button"
-            accessibilityLabel="Account menu"
-          >
-            <Text style={styles.avatarText}>{avatarInitial}</Text>
-          </TouchableOpacity>
-        </View>
-      </BlurView>
+      <AppHeader onAvatarPress={onAvatarPress} avatarInitial={avatarInitial} variant="blurred" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search bar */}
@@ -118,29 +88,8 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
         </View>
 
         {/* Sport toggle */}
-        <View style={styles.sportToggle}>
-          <TouchableOpacity
-            style={[styles.sportPill, sport === 'football' && styles.sportPillActive]}
-            onPress={() => setSport('football')}
-          >
-            <MaterialCommunityIcons
-              name="soccer"
-              size={16}
-              color={sport === 'football' ? colors.white : colors.primaryDark}
-            />
-            <Text style={[styles.sportText, sport === 'football' && styles.sportTextActive]}>Football</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sportPill, sport === 'badminton' && styles.sportPillActive]}
-            onPress={() => setSport('badminton')}
-          >
-            <MaterialCommunityIcons
-              name="badminton"
-              size={16}
-              color={sport === 'badminton' ? colors.white : colors.primaryDark}
-            />
-            <Text style={[styles.sportText, sport === 'badminton' && styles.sportTextActive]}>Badminton</Text>
-          </TouchableOpacity>
+        <View style={styles.sportToggleWrap}>
+          <SportSegmentedToggle value={sport} onChange={setSport} inactiveColor={colors.primaryDark} size="sm" />
         </View>
 
         {/* Photo carousel */}
@@ -172,7 +121,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
 
         {/* Quick actions */}
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon('Book Field')}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.BOOKING)}>
             <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.2)' }]}>
               <Ionicons name="ticket-outline" size={22} color={colors.primary} />
             </View>
@@ -232,13 +181,7 @@ export default function HomeScreen({ onAvatarPress, avatarInitial }: Props) {
       </ScrollView>
 
       {/* Bottom navigation */}
-      <View style={styles.bottomNav}>
-        <BottomNavItem icon="home" label="Home" active onPress={() => {}} />
-        <BottomNavItem icon="ticket-outline" label="Booking" onPress={() => comingSoon('Booking')} />
-        <BottomNavItem icon="trophy-outline" label="Matches" onPress={() => comingSoon('Matches')} />
-        <BottomNavItem icon="calendar-outline" label="Schedule" onPress={() => comingSoon('Schedule')} />
-        <BottomNavItem icon="settings-outline" label="Settings" onPress={() => comingSoon('Settings')} />
-      </View>
+      <BottomNav active="home" />
     </SafeAreaView>
   );
 }
@@ -247,72 +190,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.screenBackground,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 64,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-    color: colors.primaryDark,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderWidth: 2,
-    borderColor: colors.ringBorder,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#996100',
-    borderWidth: 1,
-    borderColor: colors.white,
-  },
-  avatarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderWidth: 2,
-    borderColor: colors.ringBorder,
-  },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primaryDark,
   },
   scrollContent: {
     paddingTop: 16,
@@ -349,34 +226,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(51, 65, 85, 0.8)',
   },
-  sportToggle: {
+  sportToggleWrap: {
     marginHorizontal: 20,
-    flexDirection: 'row',
-    gap: 6,
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(224, 227, 229, 0.4)',
-  },
-  sportPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  sportPillActive: {
-    backgroundColor: colors.primaryDark,
-  },
-  sportText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  sportTextActive: {
-    color: colors.white,
   },
   carouselWrap: {
     marginHorizontal: 20,
@@ -512,16 +363,5 @@ const styles = StyleSheet.create({
   venuesList: {
     paddingHorizontal: 20,
     gap: 16,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
 });
