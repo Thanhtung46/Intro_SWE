@@ -6,8 +6,9 @@ general behavioral guidelines and the cross-project map — read it too.
 ## Project Overview
 
 Next.js 14 (App Router) web client for SPOT. Talks to `spot-backend`'s REST
-API. This is its **own git repository** (has a nested `.git`) — commits here
-are not tracked by the root repo.
+API. This used to be its own git repository, but was merged into the root
+repo (commit `a2dff26`) — there is no nested `.git` here anymore; commits
+are tracked by the root repo like everything else.
 
 **Status: barely scaffolded.** Only `src/app/layout.tsx` and
 `src/app/page.tsx` have content. Everything else — `src/components/{auth,
@@ -72,5 +73,5 @@ built-in default until one is added.
 - Every feature folder (auth, booking, matchmaking, venue, voice components)
   is an empty placeholder — verify a file exists before assuming any UI
   feature is implemented.
-- This directory has its own `.git` — `git status`/`git commit` at the repo
-  root does not see changes made here.
+- This directory no longer has its own `.git` — `git status`/`git commit` at
+  the repo root does see changes made here.

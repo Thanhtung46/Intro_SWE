@@ -10,6 +10,7 @@ import { parseRefreshDto } from '../dto/refresh.dto.js';
 import { parseUpdateMeDto } from '../dto/update-me.dto.js';
 import { parseUserIdParam } from '../dto/user-id.dto.js';
 import * as authService from '../service/auth.service.js';
+import * as usersService from '../../users/service/users.service.js';
 
 export async function register(req, res, next) {
   try {
@@ -93,7 +94,7 @@ export async function refresh(req, res, next) {
 
 export async function me(req, res, next) {
   try {
-    const result = await authService.getCurrentUser(req.user.userId);
+    const result = await usersService.getMe(req.user.userId);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

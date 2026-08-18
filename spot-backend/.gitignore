@@ -42,3 +42,7 @@ Thumbs.db
 # Cache
 .eslintcache
 .prettierignore
+
+# Local avatar uploads
+uploads/
+

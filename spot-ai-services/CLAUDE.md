@@ -14,7 +14,8 @@ No nested `.git` here — tracked directly by the repo-root git repo.
 `models/`, `services/` (and `data/` for the first two) — every one of these
 is an **empty directory**. There is no Python source code, no
 `requirements.txt`, no `Dockerfile`, in any of the three. `README.md` at
-this level is a **0-byte empty file**.
+this level has real content (Vietnamese, ~1.6KB) describing this same
+empty-scaffold status — it is not empty itself.
 
 `docker compose build recommendation` / `noshow` / `nlp` all fail
 immediately (`failed to read dockerfile: open Dockerfile: no such file or
@@ -33,7 +34,7 @@ recommendation/       {app,models,services,data}/    # all empty
 noshow-prediction/    {app,models,services,data}/    # all empty
 nlp-assistant/        {app,models,services}/          # all empty
 logs/                                                  # empty
-README.md                                              # 0 bytes
+README.md                                              # has content, describes the same empty status
 .gitignore
 ```
 

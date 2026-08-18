@@ -8,7 +8,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 interface OtpInputProps {
   length?: number;
@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   boxError: {
-    borderColor: colors.error,
+    borderColor: colors.formError,
   },
 });

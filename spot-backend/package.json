@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "migrate": "node scripts/migrate.js",
+<<<<<<< HEAD
     "apply:homepage-card": "node scripts/apply-homepage-card.js",
     "apply:match-search": "node scripts/apply-match-search.js",
     "apply:match-admin": "node scripts/apply-match-admin.js",
@@ -15,6 +16,16 @@
     "smoke:otp": "node scripts/smoke-otp-flow.js",
     "smoke:login": "node scripts/smoke-login.js",
     "smoke:matches": "node scripts/smoke-matches.js",
+=======
+    "migrate:reset": "node scripts/reset-and-migrate.js",
+    "smoke:otp": "node scripts/smoke-otp-flow.js",
+    "smoke:login": "node scripts/smoke-login.js",
+    "smoke:profile": "node scripts/smoke-profile.js",
+    "smoke:notifications": "node scripts/smoke-notifications.js",
+    "smoke:schedule": "node scripts/smoke-schedule.js",
+    "smoke:reviews": "node scripts/smoke-reviews.js",
+    "worker:reminders": "node scripts/reminder-worker.js",
+>>>>>>> develop
     "health-check": "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
     "test": "node --test tests/unit/**/*.test.js"
   },
@@ -31,6 +42,7 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.1",
     "pg": "^8.12.0",
     "winston": "^3.13.1",
