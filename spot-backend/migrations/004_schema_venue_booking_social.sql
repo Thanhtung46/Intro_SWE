@@ -1,5 +1,6 @@
 -- 004 — venues, bookings, booking-linked social matches. Depends: 001, 003.
--- No PostGIS. booking_time_range is tstzrange (Asia/Bangkok-safe).
+-- venues.location is PostGIS geography(Point) for distance search.
+-- booking_time_range is tstzrange (Asia/Bangkok-safe).
 -- schema_social.matches is NOT schema_matchmaking.matches (see 006).
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;

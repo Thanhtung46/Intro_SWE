@@ -36,6 +36,7 @@ Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / pay
 11. [Checklist test](#11-checklist-test)
 12. [Smoke scripts](#12-smoke-scripts)
 13. [Chưa có / sắp làm](#13-chưa-có--sắp-làm)
+14. [Venues & Booking endpoints](#venues--booking-endpoints)
 
 ---
 
@@ -1907,6 +1908,8 @@ npm run smoke:profile  # login → GET/PATCH me → email/phone OTP change
 npm run smoke:notifications  # inbox + mark read + due reminder
 npm run smoke:schedule       # seed schedule → GET /users/me/schedule
 npm run smoke:reviews        # seed COMPLETED booking → review → reply
+npm run smoke:venues         # dev-seed → list/detail/availability
+npm run smoke:booking        # dev-seed → create → 409 conflict → schedule
 npm run worker:reminders     # background T-24h/T-2h processor
 node scripts/smoke-forgot-password.js
 node scripts/smoke-register.js
@@ -1933,7 +1936,7 @@ npm test
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Chưa |
 | Logout | Chưa |
-| Booking / venue / payment / … | Scaffold rỗng — chưa có route |
+| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; payment vẫn chưa có |
 | Matchmaking host / list / detail | Done — `POST/GET /matches`, `GET /matches/:id` |
 | Join / guests / approve / kick | Done — Phase 3 |
 | Host mine / edit / cancel | Done — Phase 4 |
@@ -1951,11 +1954,239 @@ npm test
 | Logout | Chưa |
 | Avatar file upload (S3) / stats | Chưa |
 | FCM / device tokens | Chưa |
-| Booking create/pay/cancel, matchmaking lobby, payment, … | Chưa (schedule read + reviews only) |
+| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; pay/cancel, matchmaking lobby, payment gateway vẫn chưa có |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 
 ---
+
+## Venues & Booking endpoints
+
+Browse real venues + book a field (Home dashboard, SPOT `001-home-booking-api`). Schema: `schema_venue.venues`/`fields`/`venue_images`, `schema_booking.bookings` (`004`, `007`). Alias `/api/venues/*`, `/api/bookings/*`. Cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `GET` | `/venues` | List venues có field `ACTIVE` của `sport`; optional `lat`/`long`/`radiusKm` để lọc/sort theo khoảng cách (PostGIS) |
+| `GET` | `/venues/:venueId` | Venue detail + toàn bộ field (mọi status) |
+| `GET` | `/venues/:venueId/images` | Gallery ảnh venue (`display_order` tăng dần) |
+| `GET` | `/venues/:venueId/fields/:fieldId/availability` | Lưới slot 1 giờ trong `date`, `available:false` nếu trùng booking |
+| `POST` | `/bookings` | Player tạo booking cho 1 field/khung giờ — `PENDING_PAYMENT` |
+| `POST` | `/bookings/bulk` | Tạo nhiều booking cùng lúc (nhiều khung giờ và/hoặc nhiều sân) — mỗi item độc lập, partial success OK |
+
+**Rules**
+
+- `GET /venues` chỉ trả venue có ≥1 field `status = ACTIVE` khớp `sport`
+- `lat`/`long` phải đi cùng nhau (chỉ 1 trong 2 → `400`); venue chưa có `location` bị loại khỏi kết quả lọc khoảng cách
+- Availability tính từ `venue.opening_hours` → `closing_hours`, bước 1 giờ; `date` không được ở quá khứ
+- Booking: field phải `ACTIVE`, khung giờ phải nằm trong `opening_hours`/`closing_hours`, không được ở quá khứ
+- Chống trùng lịch: DB `EXCLUDE USING gist` trên `(field_id, booking_time_range)` → `23P01` → `409` (không lock ứng dụng)
+- `venue_images.image_url` là URL-only (FE upload lên Supabase Storage rồi gửi URL), giống convention `coverUrl`/`avatarUrl` — chưa có BE upload endpoint
+- Chưa có `POST /venues` / `POST /venues/:venueId/images` (Venue Owner tạo venue/ảnh) — venue/field/ảnh dữ liệu test dùng `POST /users/me/schedule/dev/seed` (non-production, seed sẵn 2 ảnh placeholder picsum.photos)
+
+### `GET /venues`
+
+**Query params**
+
+| Param | Bắt buộc | Ghi chú |
+| :--- | :--- | :--- |
+| `sport` | Có | `football` \| `badminton` (không phân biệt hoa/thường) |
+| `lat` | Không | `-90..90`; phải đi cùng `long` |
+| `long` | Không | `-180..180`; phải đi cùng `lat` |
+| `radiusKm` | Không | Chỉ có nghĩa khi có `lat`+`long`; mặc định `20` |
+
+**Success `200`**
+
+```json
+{
+  "venues": [
+    {
+      "venueId": 12,
+      "name": "Skyline Arena",
+      "address": "123 Sports Lane, District 1, HCMC",
+      "amenities": "Parking, Wifi",
+      "openingHours": "06:00",
+      "closingHours": "23:00",
+      "latitude": 10.776889,
+      "longitude": 106.700897,
+      "avgRating": 4.8,
+      "ratingCount": 120,
+      "distanceKm": 2.4
+    }
+  ]
+}
+```
+
+`distanceKm` chỉ xuất hiện khi request có `lat`+`long`. Không có `lat`/`long` → sort theo `avgRating` desc.
+
+**Errors:** `400` thiếu/sai `sport`, hoặc chỉ có 1 trong `lat`/`long` · `401`
+
+**curl**
+
+```bash
+curl -s "http://localhost:3000/venues?sport=football" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### `GET /venues/:venueId`
+
+**Success `200`**
+
+```json
+{
+  "venue": {
+    "venueId": 12, "name": "Skyline Arena", "address": "123 Sports Lane, District 1, HCMC",
+    "amenities": null, "openingHours": "06:00", "closingHours": "23:00",
+    "latitude": null, "longitude": null, "avgRating": 0, "ratingCount": 0
+  },
+  "fields": [
+    { "fieldId": 45, "venueId": 12, "name": "Pitch A", "sportType": "Football", "pricePerHour": 250000, "capacity": 14, "status": "ACTIVE" }
+  ]
+}
+```
+
+**Errors:** `404` venue không tồn tại
+
+---
+
+### `GET /venues/:venueId/images`
+
+**Success `200`**
+
+```json
+{
+  "images": [
+    { "imageId": 1, "venueId": 12, "imageUrl": "https://cdn.example.com/venues/12/1.jpg", "displayOrder": 0 },
+    { "imageId": 2, "venueId": 12, "imageUrl": "https://cdn.example.com/venues/12/2.jpg", "displayOrder": 1 }
+  ]
+}
+```
+
+**Errors:** `404` venue không tồn tại
+
+**curl**
+
+```bash
+curl -s "http://localhost:3000/venues/12/images" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### `GET /venues/:venueId/fields/:fieldId/availability`
+
+**Query params:** `date` (`YYYY-MM-DD`, bắt buộc, không quá khứ)
+
+**Success `200`**
+
+```json
+{
+  "fieldId": 45,
+  "date": "2026-08-20",
+  "slots": [
+    { "startTime": "18:00", "endTime": "19:00", "available": true },
+    { "startTime": "19:00", "endTime": "20:00", "available": false }
+  ]
+}
+```
+
+**Errors:** `400` thiếu/sai/quá khứ `date` · `404` field/venue không tồn tại hoặc field không thuộc venue
+
+---
+
+### `POST /bookings`
+
+**Body**
+
+```json
+{ "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00" }
+```
+
+**Success `201`**
+
+```json
+{
+  "booking": {
+    "bookingId": 501,
+    "fieldId": 45,
+    "bookingDate": "2026-08-20",
+    "startTime": "19:00",
+    "endTime": "20:00",
+    "totalAmount": 250000,
+    "depositAmount": 75000,
+    "status": "PENDING_PAYMENT"
+  }
+}
+```
+
+**Errors**
+
+| Status | Message |
+| :--- | :--- |
+| `400` | Validation failed (thiếu field, `endTime <= startTime`, ngày/giờ quá khứ) |
+| `404` | Field not found |
+| `409` | Field is not available for booking / Requested time is outside the venue's opening hours / This field is already booked for the requested time |
+
+**curl**
+
+```bash
+curl -s -X POST http://localhost:3000/bookings \
+  -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" \
+  -d '{"fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00"}'
+```
+
+---
+
+### `POST /bookings/bulk`
+
+Đặt nhiều khung giờ và/hoặc nhiều sân trong 1 request (VD: chọn nhiều ô trên lưới Select Pitch & Time). Mỗi item xử lý độc lập — 1 item trùng lịch không làm rollback các item khác (giống `POST /matches/bulk`). Max 20 item/request.
+
+**Body**
+
+```json
+{
+  "bookings": [
+    { "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00" },
+    { "fieldId": 46, "bookingDate": "2026-08-20", "startTime": "10:00", "endTime": "11:00" }
+  ]
+}
+```
+
+**Success `201`** (toàn bộ hoặc một phần thành công)
+
+```json
+{
+  "message": "Bookings created",
+  "totalRequested": 2,
+  "totalCreated": 2,
+  "created": [
+    { "bookingId": 501, "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00", "totalAmount": 250000, "depositAmount": 75000, "status": "PENDING_PAYMENT" },
+    { "bookingId": 502, "fieldId": 46, "bookingDate": "2026-08-20", "startTime": "10:00", "endTime": "11:00", "totalAmount": 200000, "depositAmount": 60000, "status": "PENDING_PAYMENT" }
+  ],
+  "failed": []
+}
+```
+
+`message: "Some bookings were created"` khi chỉ một phần thành công — `failed[]` liệt kê item lỗi kèm `message` cụ thể.
+
+**Errors**
+
+| Status | Ghi chú |
+| :--- | :--- |
+| `400` | `bookings` rỗng, quá 20 item, hoặc 1 item sai format (thiếu field, ngày/giờ quá khứ, `endTime <= startTime`) |
+| `409` | **Toàn bộ** item đều lỗi — body có `details: { failed, totalRequested, totalCreated: 0 }` |
+
+**curl**
+
+```bash
+curl -s -X POST http://localhost:3000/bookings/bulk \
+  -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" \
+  -d '{"bookings":[{"fieldId":45,"bookingDate":"2026-08-20","startTime":"19:00","endTime":"20:00"},{"fieldId":46,"bookingDate":"2026-08-20","startTime":"10:00","endTime":"11:00"}]}'
+```
+
+---
+
 
 ## Liên kết
 

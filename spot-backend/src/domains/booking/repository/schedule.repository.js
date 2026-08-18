@@ -136,12 +136,15 @@ export async function getProfileStatsForUser(client, userId) {
   };
 }
 
-export async function insertVenue(client, { ownerId, name, address }) {
+export async function insertVenue(
+  client,
+  { ownerId, name, address, openingHours = null, closingHours = null },
+) {
   const { rows } = await client.query(
-    `INSERT INTO schema_venue.venues (owner_id, name, address)
-     VALUES ($1, $2, $3)
-     RETURNING venue_id, name, address`,
-    [ownerId, name, address],
+    `INSERT INTO schema_venue.venues (owner_id, name, address, opening_hours, closing_hours)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING venue_id, name, address, opening_hours, closing_hours`,
+    [ownerId, name, address, openingHours, closingHours],
   );
   return rows[0];
 }
@@ -155,6 +158,19 @@ export async function insertField(
      VALUES ($1, $2, $3, $4)
      RETURNING field_id, name, sport_type`,
     [venueId, name, sportType, pricePerHour],
+  );
+  return rows[0];
+}
+
+export async function insertVenueImage(
+  client,
+  { venueId, imageUrl, displayOrder = 0 },
+) {
+  const { rows } = await client.query(
+    `INSERT INTO schema_venue.venue_images (venue_id, image_url, display_order)
+     VALUES ($1, $2, $3)
+     RETURNING image_id, venue_id, image_url, display_order`,
+    [venueId, imageUrl, displayOrder],
   );
   return rows[0];
 }

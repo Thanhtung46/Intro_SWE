@@ -11,6 +11,7 @@
     "apply:homepage-card": "node scripts/apply-homepage-card.js",
     "apply:match-search": "node scripts/apply-match-search.js",
     "apply:match-admin": "node scripts/apply-match-admin.js",
+    "apply:venue-location": "node scripts/apply-venue-location.js",
     "reset:matches": "node scripts/reset-matches.js",
     "smoke:otp": "node scripts/smoke-otp-flow.js",
     "smoke:login": "node scripts/smoke-login.js",
@@ -20,9 +21,11 @@
     "smoke:notifications": "node scripts/smoke-notifications.js",
     "smoke:schedule": "node scripts/smoke-schedule.js",
     "smoke:reviews": "node scripts/smoke-reviews.js",
+    "smoke:venues": "node scripts/smoke-venues.js",
+    "smoke:booking": "node scripts/smoke-booking.js",
     "worker:reminders": "node scripts/reminder-worker.js",
     "health-check": "node -e \"fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
-    "test": "node --test tests/unit/**/*.test.js"
+    "test": "node --test tests/unit"
   },
   "engines": {
     "node": ">=18"
