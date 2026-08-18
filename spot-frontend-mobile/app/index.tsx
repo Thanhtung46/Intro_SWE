@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
 import { getProfile } from '@/services/profileService';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
-import { clearToken, getToken } from '@/utils/authStorage';
+import { clearAllTokens, getToken } from '@/utils/authStorage';
 import { ROUTES } from '@/constants/routes';
 
 type Destination = typeof ROUTES.ONBOARDING | typeof ROUTES.AUTH_LOGIN | typeof ROUTES.HOME;
@@ -49,11 +49,12 @@ export default function Splash() {
 
           if (check.success) {
             setDestination(ROUTES.HOME);
-          } else {
-            // Token hết hạn/không hợp lệ — xoá token cũ, không tự ý vào Home nữa.
-            await clearToken();
+          } else if (check.statusCode === 401) {
+            await clearAllTokens();
             if (cancelled) return;
             setDestination(ROUTES.AUTH_LOGIN);
+          } else {
+            setStatus('error');
           }
         } else if (!onboardingCompleted) {
           setDestination(ROUTES.ONBOARDING);
