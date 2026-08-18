@@ -1,5 +1,5 @@
--- Canonical auth schema (squashed). Fresh installs only.
--- users = identity/auth; user_profiles = display + Settings prefs; user_prefs = view alias.
+-- 001 — schema_auth. Depends: none.
+-- users = identity; user_profiles = display + Settings prefs; user_prefs = view.
 
 CREATE SCHEMA IF NOT EXISTS schema_auth;
 
@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS schema_auth.user_profiles (
     REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
   full_name VARCHAR(100) NOT NULL,
   gender VARCHAR(30) NOT NULL
-    CHECK (gender IN ('male', 'female', 'other', 'prefer_not_to_say')),
-  avatar_url TEXT NULL,
+    CHECK (gender IN ('male', 'female')),
+  avatar_url VARCHAR(2048) NULL,
   language VARCHAR(10) NOT NULL DEFAULT 'en'
     CHECK (language IN ('en', 'vi')),
   appearance VARCHAR(20) NOT NULL DEFAULT 'light'
@@ -60,3 +60,6 @@ CREATE TABLE IF NOT EXISTS schema_auth.otp_verifications (
 CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_purpose
   ON schema_auth.otp_verifications (user_id, purpose)
   WHERE is_used = FALSE;
+
+-- Legacy scaffold only. Do not drop user_profiles.
+DROP TABLE IF EXISTS schema_auth.otp_tokens CASCADE;

@@ -34,7 +34,7 @@ import * as userSportSkillRepository from '../repository/user-sport-skill.reposi
 import { toPublicUser, toPublicHostProfile } from '../entity/user.entity.js';
 import { SPORTS } from '../../../shared/constants/sports.js';
 import config from '../../../shared/config/env.js';
-import { getMe } from '../../users/service/users.service.js';
+import * as matchRepository from '../../matchmaking/repository/match.repository.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -514,7 +514,81 @@ export async function refreshSession(input) {
 
 /** Alias of users.getMe — kept for any internal callers. */
 export async function getCurrentUser(userId) {
-  return getMe(userId);
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    return {
+      user: await publicUserWithSkills(client, user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function getPublicUserProfile(userId) {
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user || user.status !== USER_STATUSES.ACTIVE) {
+      throw new AppError('User not found', 404);
+    }
+    const skillRows = await userSportSkillRepository.findByUserId(
+      client,
+      user.user_id,
+    );
+    const matchCount = await matchRepository.countHostedByUser(
+      client,
+      user.user_id,
+    );
+    return {
+      user: toPublicHostProfile(user, skillRows, { matchCount }),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateCurrentUser(userId, { skills, avatarUrl }) {
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    await client.query('BEGIN');
+    try {
+      if (skills) {
+        await applySkillPatch(client, userId, SPORTS.BADMINTON, skills.badminton);
+        await applySkillPatch(client, userId, SPORTS.FOOTBALL, skills.football);
+      }
+      if (avatarUrl !== undefined) {
+        const updatedProfile = await userRepository.updateAvatarUrl(
+          client,
+          userId,
+          avatarUrl,
+        );
+        if (!updatedProfile) {
+          throw new AppError('User profile not found', 404);
+        }
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    const fresh = await userRepository.findById(client, userId);
+    return {
+      message: 'Profile updated',
+      user: await publicUserWithSkills(client, fresh),
+    };
+  } finally {
+    client.release();
+  }
 }
 
 export async function selectRole(input) {
@@ -544,7 +618,6 @@ export async function selectRole(input) {
       role,
       status,
     });
-    const withProfile = await userRepository.findById(client, updated.user_id);
 
     return {
       message:
@@ -552,7 +625,7 @@ export async function selectRole(input) {
           ? 'Role selected. Account is pending approval.'
           : 'Role selected successfully',
       nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
-      user: await publicUserWithSkills(client, withProfile),
+      user: await publicUserWithSkills(client, updated),
     };
   } finally {
     client.release();

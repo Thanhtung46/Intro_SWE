@@ -24,7 +24,7 @@ export const registerSchema = z
       ),
     gender: z.enum(GENDERS, {
       errorMap: () => ({
-        message: 'Gender must be one of: male, female, other, prefer_not_to_say',
+        message: 'Gender must be one of: male, female',
       }),
     }),
     password: z

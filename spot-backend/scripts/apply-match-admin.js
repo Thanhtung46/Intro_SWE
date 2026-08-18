@@ -1,6 +1,6 @@
 /**
- * Re-apply 005 (ADD COLUMN IF NOT EXISTS / constraint / partial index).
- * migrate.js skips 005 once it is in schema_migrations.
+ * Re-apply province/city (ADD COLUMN IF NOT EXISTS). migrate.js skips 006
+ * once recorded.
  *
  *   docker compose run --rm backend node scripts/apply-match-admin.js
  */
@@ -11,7 +11,7 @@ import pool from '../src/shared/database/pool.js';
 
 const sqlPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../migrations/005_match_admin_units.sql',
+  'sql/match-admin-units.sql',
 );
 
 const sql = fs.readFileSync(sqlPath, 'utf8');

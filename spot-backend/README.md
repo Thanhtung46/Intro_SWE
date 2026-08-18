@@ -36,6 +36,15 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 | **OTP resend** `POST /auth/otp/resend` | New OTP; 60s cooldown; max 5 wrong attempts | Done |
 | **Login** `POST /auth/login` | Access + refresh JWT (`sub`, `role`); lockout after 5 failed passwords / 15 min | Done |
 | **Refresh** `POST /auth/refresh` | Exchange refresh JWT → new access + refresh | Done |
+| **Me** `GET /auth/me` | Protected profile (`authenticate` + Bearer); includes `user.skills` | Done |
+| **Public user** `GET /users/:id` | Host profile card (no email/phone); `matchCount` live; `rating`/`reviewCount` stub | Done |
+| **Update me** `PATCH /auth/me` | Set/clear badminton + football skills | Done |
+| **Forgot password** `POST /auth/forgot-password` | OTP with `purpose=FORGOT_PASSWORD`; anti-enumeration (always same 200 message) | Done |
+| **Reset password** `POST /auth/reset-password` | Verify forgot OTP → update `password_hash`, clear lockout | Done |
+| **Email delivery** | `nodemailer` + Gmail SMTP; HTML + text; without SMTP in dev, OTP is logged | Done |
+| **Rate limiting** | IP + email limiters on OTP / login / forgot / reset (`express-rate-limit`) | Done |
+| **Zod validation** | DTOs: register, role, otp, login, refresh, forgot-password, update-me | Done |
+| **Migrations** | `001` auth, `002` skills, `003` matchmaking — tracked in `public.schema_migrations` | Done |
 | **Me** `GET /auth/me` | Protected; alias of `GET /users/me` | Done |
 | **Profile** `GET/PATCH /users/me` | View/update profile + prefs (`fullName`, `gender`, `avatarUrl`, `language`, `appearance`, push/location) | Done |
 | **Main Profile** `GET /users/me/profile` | `{ user, stats }` — hosted/joined matches, completed bookings, joinedAt | Done |
@@ -55,9 +64,13 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 
 ### Schema decisions
 
+- `full_name` / `gender` live on **`schema_auth.user_profiles`** (login/list JOIN).
+- Skill per sport lives on **`schema_auth.user_sport_skills`** (not on `users`).
+- OTP rows live in **`schema_auth.otp_verifications`** (not `otp_tokens`), filtered by `purpose`.
+- `email_verified_at` and `role_selected_at` on `users` (see `001_schema_auth.sql`).
 - Display profile + prefs live on **`schema_auth.user_profiles`** (`full_name`,
   `gender`, `avatar_url`, language/appearance/toggles); email/phone stay on `users`.
-- Prefs columns (`002_user_prefs.sql`): `avatar_url`, `language`, `appearance`,
+- Prefs columns (`001_schema_auth.sql` / `user_profiles`): `avatar_url`, `language`, `appearance`,
   `push_notifications_enabled`, `location_services_enabled`.
 - Inbox + reminders: **`schema_notification.notifications`** /
   **`reminder_jobs`** (`003_schema_notification.sql`).
@@ -90,6 +103,22 @@ Profile routes: **`/users/*`** and **`/api/users/*`**.
 | `POST` | `/auth/otp/resend` | `email`, `purpose?` | `200` `{ message, email, resendAvailableInSeconds }` |
 | `POST` | `/auth/login` | `email`, `password` | `200` `{ accessToken, refreshToken, tokenType, expiresIn, user }` |
 | `POST` | `/auth/refresh` | `refreshToken` | `200` new access + refresh |
+| `GET` | `/auth/me` | `Authorization: Bearer <access>` | `200` `{ user }` (kèm `skills`) |
+| `GET` | `/users/:id` | Bearer | `200` `{ user }` public host card (no email/phone) |
+| `PATCH` | `/auth/me` | `{ skills: { badminton?, football? } }` | `200` `{ message, user }` |
+| `POST` | `/auth/forgot-password` | `email` | `200` same message whether or not email exists |
+| `POST` | `/auth/reset-password` | `email`, `otp`, `newPassword`, `confirmPassword` | `200` password updated |
+| `POST` | `/matches` | Bearer + host body (`PLAYER`) | `201` `{ match }` |
+| `GET` | `/matches` | Bearer + query filters (`hostUserId` = kèo của host đó) | `200` `{ total, matches }` |
+| `GET` | `/matches/:id` | Bearer | `200` `{ match, canJoin, yourRequest, participants }` |
+| `POST` | `/matches/:id/join` | Bearer + `{ message?, guests? }` (`PLAYER`) | `201` `{ request, match }` |
+| `GET` | `/matches/:id/requests` | Bearer (host) | `200` `{ requests }` |
+| `POST` | `/matches/:id/requests/:requestId/accept` | Bearer (host) | `200` |
+| `POST` | `/matches/:id/requests/:requestId/reject` | Bearer (host) | `200` |
+| `POST` | `/matches/:id/participants/:userId/kick` | Bearer (host) | `200` |
+| `GET` | `/matches/mine` | Bearer `?tab=active\|completed` | `200` `{ matches }` |
+| `PATCH` | `/matches/:id` | Bearer (host), before start | `200` `{ match }` |
+| `POST` | `/matches/:id/cancel` | Bearer (host) | `200` `{ match }` |
 | `GET` | `/auth/me` | `Authorization: Bearer <access>` | `200` `{ user }` |
 | `GET` | `/users/me` | Bearer access | `200` `{ user }` (same as `/auth/me`) |
 | `GET` | `/users/me/profile` | Bearer access | `200` `{ user, stats }` Main Profile |
@@ -155,7 +184,7 @@ curl -s -X POST http://localhost:3000/auth/register \
   }'
 ```
 
-`gender`: `male` | `female` | `other` | `prefer_not_to_say`.
+`gender`: `male` | `female` .
 
 Password rules (register + reset): min 8 characters, at least one lowercase,
 uppercase, digit, **and special character**; confirm must match.
@@ -217,6 +246,12 @@ npm run dev            # http://localhost:3000
 | `npm run dev` | `node --watch src/server.js` |
 | `npm start` | `node src/server.js` |
 | `npm run migrate` | Apply pending `migrations/*.sql` |
+| `npm run apply:match-search` | Re-apply `004` fold + GIN (when `004` already migrated) |
+| `npm run apply:match-admin` | Re-apply `005` province/city (when `005` already migrated) |
+| `npm test` | `node --test tests/unit/**/*.test.js` |
+| `npm run smoke:otp` | Register → verify OTP |
+| `npm run smoke:login` | Register → role → verify → login |
+| `npm run smoke:matches` | Two PLAYERs: host / join / approve / kick / mine / cancel |
 | `npm run migrate:reset` | **Destructive** drop app schemas + re-apply squashed chain |
 | `npm test` | `node --test tests/unit/*.test.js` |
 | `npm run smoke:otp` | Register → verify OTP |
@@ -250,20 +285,19 @@ console instead of emailed.
 
 | Migration | Purpose |
 | :--- | :--- |
-| File | Purpose |
-| :--- | :--- |
-| `001_schema_auth.sql` | `schema_auth.users` + `otp_verifications` (full auth schema) |
-| `002_user_prefs.sql` | prefs + `avatar_url` on `users` |
-| `003_schema_notification.sql` | `schema_notification.notifications` + `reminder_jobs` |
-| `004_notification_timestamptz.sql` | `fire_at` / timestamps → `TIMESTAMPTZ` |
+| `001_schema_auth.sql` | `users` + `user_profiles` (prefs) + `otp_verifications` |
+| `002_user_sport_skills.sql` | one skill per sport |
+| `003_schema_notification.sql` | inbox + reminder jobs |
+| `004_schema_venue_booking_social.sql` | venues, bookings, booking-linked matches |
+| `005_schema_review.sql` | reviews + owner replies |
+| `006_schema_matchmaking.sql` | pickup kèo + search fold + province/city |
 
 Applied migrations are recorded in `public.schema_migrations`
 (`scripts/migrate.js` skips already-applied files).
 
-**`users` (notable columns):** `full_name`, `phone_number`, `gender`,
-`avatar_url`, `language`, `appearance`, `push_notifications_enabled`,
-`location_services_enabled`, `password_hash`, `role`, `status`,
-`login_attempts`, `lockout_until`, `email_verified_at`, `role_selected_at`.
+**`users`:** identity only (`email`, `phone_number`, `password_hash`, `role`,
+`status`, lockout, `email_verified_at`, `role_selected_at`). **Name / gender /
+avatar / Settings prefs** live on `schema_auth.user_profiles`.
 
 **`otp_verifications`:** shared for register + forgot-password + profile contact
 change via `purpose` (`REGISTER` | `FORGOT_PASSWORD` | `CHANGE_EMAIL` |
@@ -280,6 +314,35 @@ src/
 ├── server.js / app.js
 ├── domains/auth/                 # implemented
 │   ├── routes.js
+│   ├── controller/
+│   ├── dto/
+│   ├── entity/
+│   ├── repository/
+│   └── service/
+├── domains/{admin,booking,matchmaking,notification,payment,referee,review,venue}/
+│   └── {controller,dto,entity,repository,service}/   # empty until that domain is built
+├── events/{handlers,topics}/     # empty
+└── shared/
+    ├── config/env.js
+    ├── constants/{auth,sports}.js
+    ├── database/{config,pool,redis}.js
+    ├── middleware/{errorHandler,otpRateLimit,authenticate}.js
+    ├── types/                    # reserved
+    └── utils/{logger,otp,password,jwt,mailer}.js
+migrations/
+├── 001_schema_auth.sql
+├── 002_user_sport_skills.sql
+├── 003_schema_notification.sql
+├── 004_schema_venue_booking_social.sql
+├── 005_schema_review.sql
+├── 006_schema_matchmaking.sql
+scripts/                          # migrate, check-db, smoke-*
+docs/
+├── API.md                        # FE / tester contract
+└── MATCHMAKING_PLAN.md
+tests/unit/
+├── auth/                         # DTO tests
+└── shared/                       # sports ladders
 │   ├── controller/auth.controller.js
 │   ├── dto/{register,otp,login,role,forgot-password,refresh}.dto.js
 │   ├── entity/user.entity.js
@@ -305,7 +368,7 @@ src/
     ├── database/{config,pool,redis}.js
     ├── middleware/{errorHandler,otpRateLimit,authenticate}.js
     └── utils/{logger,otp,password,jwt,mailer}.js
-migrations/                       # 001–003
+migrations/                       # 001–006
 scripts/
 ├── migrate.js / check-db.js
 ├── smoke-register.js
@@ -334,6 +397,7 @@ npm test                              # unit tests (node:test)
 node scripts/smoke-register.js        # needs server up
 npm run smoke:otp                     # register → verify (OTP_DEBUG=true)
 npm run smoke:login                   # register → role → verify → login
+npm run smoke:matches                 # host / join / approve / kick / mine / cancel
 npm run smoke:profile                 # GET/PATCH me + email/phone OTP change
 npm run smoke:notifications           # inbox + reminder tick
 npm run worker:reminders              # T-24h/T-2h worker loop
@@ -372,6 +436,7 @@ Full stack guide: [`DOCKER.md`](../DOCKER.md).
 - Do **not** commit `.env` (Supabase credentials, SMTP App Password, JWT secret).
 - Auth uses `pg` + `ioredis` directly; `@supabase/supabase-js` is a dependency
   but is not wired into these flows yet.
+- `full_name` / `gender` live on `schema_auth.user_profiles`.
 - Profile/prefs on `schema_auth.user_profiles` (`001_schema_auth.sql`).
 - UI “Venue Owner” → API/DB role `OWNER`.
 - FE role-based navigation reads `role` from the login JWT / `user` object;

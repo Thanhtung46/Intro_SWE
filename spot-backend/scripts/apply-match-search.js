@@ -1,6 +1,5 @@
 /**
- * Re-apply 004 (CREATE OR REPLACE / IF NOT EXISTS). migrate.js skips 004
- * once it is in schema_migrations.
+ * Re-apply search fold + GIN. migrate.js skips 006 once recorded.
  *
  *   docker compose run --rm backend node scripts/apply-match-search.js
  */
@@ -11,7 +10,7 @@ import pool from '../src/shared/database/pool.js';
 
 const sqlPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../migrations/004_match_search_fold.sql',
+  'sql/match-search-fold.sql',
 );
 
 const sql = fs.readFileSync(sqlPath, 'utf8');

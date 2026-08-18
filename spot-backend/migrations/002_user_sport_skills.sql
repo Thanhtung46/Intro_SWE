@@ -1,5 +1,5 @@
--- Player skill per sport (Alobo-style). At most one row per (user, sport).
--- Codes are scoped by sport: SEMI_PRO / PROFESSIONAL exist on both ladders.
+-- 002 — player skill per sport. Depends: 001.
+-- At most one row per (user, sport). SEMI_PRO / PROFESSIONAL exist on both ladders.
 
 CREATE TABLE IF NOT EXISTS schema_auth.user_sport_skills (
   user_id INT NOT NULL REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
