@@ -48,13 +48,13 @@ export default function BottomNav({ active }: Props) {
         icon="calendar-outline"
         label="Schedule"
         active={active === 'schedule'}
-        onPress={active === 'schedule' ? noop : () => comingSoon('Schedule')}
+        onPress={active === 'schedule' ? noop : () => router.push(ROUTES.SCHEDULE)}
       />
       <BottomNavItem
         icon="settings-outline"
         label="Settings"
         active={active === 'settings'}
-        onPress={active === 'settings' ? noop : () => comingSoon('Settings')}
+        onPress={active === 'settings' ? noop : () => router.push(ROUTES.SETTINGS)}
       />
     </View>
   );

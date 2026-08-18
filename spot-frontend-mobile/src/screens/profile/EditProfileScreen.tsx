@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import { genderOptions } from '@/schemas/registerSchema';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
+import { showAlert } from '@/utils/showAlert';
 import { getProfile, updateProfile } from '@/services/profileService';
 
 // Not part of user_profiles per any BE spec/AC — placeholder options for the
@@ -64,12 +64,12 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setSaving(false);
 
     if (!result.success) {
-      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert('Error', result.message || 'Something went wrong. Please try again.');
       return;
     }
 
     setUser({ ...user, fullName: result.user?.fullName ?? trimmed });
-    Alert.alert('Success', 'Profile updated');
+    showAlert('Success', 'Profile updated');
     onBack();
   };
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import LoginScreen from '../app/auth/login';
 import { UserProvider } from '../src/context/UserContext';
+import * as authService from '../src/services/authService';
 
 function renderLoginScreen() {
   return render(
@@ -20,11 +21,19 @@ jest.mock('expo-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-const mockSetItemAsync = jest.fn();
+const mockSetToken = jest.fn();
+const mockSetRefreshToken = jest.fn();
 
-jest.mock('expo-secure-store', () => ({
-  setItemAsync: (...args: unknown[]) => mockSetItemAsync(...args),
+jest.mock('../src/utils/authStorage', () => ({
+  setToken: (...args: unknown[]) => mockSetToken(...args),
+  setRefreshToken: (...args: unknown[]) => mockSetRefreshToken(...args),
 }));
+
+jest.mock('../src/services/authService', () => ({
+  login: jest.fn(),
+}));
+
+const mockLogin = authService.login as jest.MockedFunction<typeof authService.login>;
 
 function fillValidForm(
   getByPlaceholderText: ReturnType<typeof render>['getByPlaceholderText'],
@@ -35,14 +44,24 @@ function fillValidForm(
   fireEvent.changeText(getByPlaceholderText('Enter your password'), password);
 }
 
-describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
+describe('LoginScreen', () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockBack.mockClear();
-    mockSetItemAsync.mockClear();
+    mockSetToken.mockClear();
+    mockSetRefreshToken.mockClear();
+    mockLogin.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockSetRefreshToken.mockResolvedValue(undefined);
   });
 
   it('shows a 401 invalid-credentials error with attempts remaining', async () => {
+    mockLogin.mockResolvedValue({
+      success: false,
+      message: 'Invalid email or password',
+      attemptsRemaining: 4,
+    });
+
     const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'someone@example.com', 'wrongpass');
 
@@ -53,9 +72,14 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
       { timeout: 3000 }
     );
     expect(mockPush).not.toHaveBeenCalled();
-  }, 10000);
+  });
 
   it('shows the locked-account message on a 403 locked response', async () => {
+    mockLogin.mockResolvedValue({
+      success: false,
+      message: 'Account is locked. Please contact support.',
+    });
+
     const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'locked@example.com');
 
@@ -66,9 +90,14 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
       { timeout: 3000 }
     );
     expect(mockPush).not.toHaveBeenCalled();
-  }, 10000);
+  });
 
   it('shows the pending-approval message on a 403 pending response', async () => {
+    mockLogin.mockResolvedValue({
+      success: false,
+      message: 'Account is pending approval and cannot log in yet.',
+    });
+
     const { getByPlaceholderText, getByText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'pending@example.com');
 
@@ -79,9 +108,14 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
       { timeout: 3000 }
     );
     expect(mockPush).not.toHaveBeenCalled();
-  }, 10000);
+  });
 
   it('shows a friendly message (not the raw backend text) when the role has not been selected yet', async () => {
+    mockLogin.mockResolvedValue({
+      success: false,
+      message: 'Please finish setting up your account before logging in.',
+    });
+
     const { getByPlaceholderText, getByText, getByTestId, queryByText } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'noselectrole@example.com');
 
@@ -93,9 +127,16 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
     );
     expect(queryByText('Please select your role to continue.')).toBeNull();
     expect(mockPush).not.toHaveBeenCalled();
-  }, 10000);
+  });
 
   it('stores the tokens and navigates to /home on a successful login', async () => {
+    mockLogin.mockResolvedValue({
+      success: true,
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      user: { role: 'PLAYER', email: 'new-user@example.com' },
+    });
+
     const { getByPlaceholderText, getByTestId } = renderLoginScreen();
     fillValidForm(getByPlaceholderText, 'new-user@example.com');
 
@@ -105,9 +146,30 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
       () => expect(mockPush).toHaveBeenCalledWith({ pathname: '/home', params: { role: 'PLAYER' } }),
       { timeout: 3000 }
     );
-    expect(mockSetItemAsync).toHaveBeenCalledWith('accessToken', 'mock-access-token');
-    expect(mockSetItemAsync).toHaveBeenCalledWith('refreshToken', 'mock-refresh-token');
-  }, 10000);
+    expect(mockSetToken).toHaveBeenCalledWith('mock-access-token');
+    expect(mockSetRefreshToken).toHaveBeenCalledWith('mock-refresh-token');
+  });
+
+  it('does not navigate when saving the session fails', async () => {
+    mockLogin.mockResolvedValue({
+      success: true,
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      user: { role: 'PLAYER' },
+    });
+    mockSetToken.mockRejectedValueOnce(new Error('SecureStore unavailable'));
+
+    const { getByPlaceholderText, getByTestId, getByText } = renderLoginScreen();
+    fillValidForm(getByPlaceholderText, 'new-user@example.com');
+
+    fireEvent.press(getByTestId('login-button'));
+
+    await waitFor(
+      () => expect(getByText('Could not save session. Please try again.')).toBeTruthy(),
+      { timeout: 3000 }
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 
   it('shows validation errors under fields (not an alert) when submitted empty', async () => {
     const { getByText, getByTestId, queryByText } = renderLoginScreen();
@@ -117,6 +179,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
     await waitFor(() => expect(getByText('Email is required')).toBeTruthy());
     expect(getByText('Password is required')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
+    expect(mockLogin).not.toHaveBeenCalled();
     expect(queryByText('Something went wrong. Please try again.')).toBeNull();
   });
 
@@ -127,6 +190,7 @@ describe('LoginScreen (mocked authService via USE_MOCK_API)', () => {
     fireEvent.press(getByTestId('google-login-button'));
 
     expect(alertSpy).toHaveBeenCalledWith('Coming soon', 'Login with Google is not available yet.');
+    expect(mockLogin).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });

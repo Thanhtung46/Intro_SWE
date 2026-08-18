@@ -1,6 +1,5 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '../utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 
 export type NotificationType = 'BOOKING_CREATED' | 'BOOKING_REMINDER' | 'SYSTEM';
 
@@ -33,14 +32,9 @@ export interface NotificationActionResult {
   message?: string;
 }
 
-const client: AxiosInstance = axios.create();
-
 export async function getNotifications(limit = 20): Promise<NotificationListResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.get<{ items: NotificationItem[] }>(`${API_URL}/notifications`, {
-      headers,
+    const res = await apiClient.get<{ items: NotificationItem[] }>('/notifications', {
       params: { limit },
     });
     return { success: true, items: res.data.items };
@@ -55,9 +49,7 @@ export async function getNotifications(limit = 20): Promise<NotificationListResu
 
 export async function getUnreadCount(): Promise<UnreadCountResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.get<{ count: number }>(`${API_URL}/notifications/unread-count`, { headers });
+    const res = await apiClient.get<{ count: number }>('/notifications/unread-count');
     return { success: true, count: res.data.count };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -70,9 +62,7 @@ export async function getUnreadCount(): Promise<UnreadCountResult> {
 
 export async function markNotificationRead(id: number): Promise<NotificationActionResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    await client.patch(`${API_URL}/notifications/${id}/read`, {}, { headers });
+    await apiClient.patch(`/notifications/${id}/read`, {});
     return { success: true };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -85,9 +75,7 @@ export async function markNotificationRead(id: number): Promise<NotificationActi
 
 export async function markAllNotificationsRead(): Promise<NotificationActionResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    await client.post(`${API_URL}/notifications/read-all`, {}, { headers });
+    await apiClient.post('/notifications/read-all', {});
     return { success: true };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;

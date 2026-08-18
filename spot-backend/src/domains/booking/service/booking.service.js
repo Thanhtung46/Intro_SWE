@@ -4,8 +4,22 @@ import {
   SCHEDULE_DEFAULT_DAYS,
   SCHEDULE_ITEM_TYPES,
 } from '../../../shared/constants/schedule.js';
+import { AppError } from '../../../shared/middleware/errorHandler.js';
+import {
+  BOOKING_DEPOSIT_PERCENTAGE,
+  EXCLUSION_VIOLATION_CODE,
+} from '../../../shared/constants/booking.js';
 import * as scheduleRepository from '../repository/schedule.repository.js';
-import { toPublicScheduleItem } from '../entity/schedule.entity.js';
+import * as bookingRepository from '../repository/booking.repository.js';
+import * as venueRepository from '../../venue/repository/venue.repository.js';
+import {
+  toPublicScheduleItem,
+} from '../entity/schedule.entity.js';
+import {
+  buildAvailabilitySlots,
+  formatTimeInZone,
+  toPublicBooking,
+} from '../entity/booking.entity.js';
 
 /** YYYY-MM-DD for "today" in Asia/Bangkok. */
 export function todayInBangkok(now = new Date()) {
@@ -88,6 +102,23 @@ export async function seedScheduleForUser(userId, input = {}) {
       ownerId: userId,
       name: `Smoke Venue ${Date.now()}`,
       address: '123 Nguyen Trai, Dist 1, HCMC',
+      // Open all day so seeded venues are always bookable — this endpoint
+      // is the documented dev-only stand-in for POST /venues (out of scope).
+      openingHours: '00:00',
+      closingHours: '23:59',
+    });
+
+    // Sample gallery photos — placeholder images (Lorem Picsum), not real
+    // venue photos; no photo-upload flow exists yet (Venue Owner out of scope).
+    await scheduleRepository.insertVenueImage(client, {
+      venueId: venue.venue_id,
+      imageUrl: `https://picsum.photos/seed/venue-${venue.venue_id}-1/800/600`,
+      displayOrder: 0,
+    });
+    await scheduleRepository.insertVenueImage(client, {
+      venueId: venue.venue_id,
+      imageUrl: `https://picsum.photos/seed/venue-${venue.venue_id}-2/800/600`,
+      displayOrder: 1,
     });
 
     const field = await scheduleRepository.insertField(client, {
@@ -153,4 +184,154 @@ export async function seedScheduleForUser(userId, input = {}) {
   } finally {
     client.release();
   }
+}
+
+export async function getFieldAvailability(venueId, fieldId, date) {
+  const client = await pool.connect();
+  try {
+    const venue = await venueRepository.findVenueById(client, venueId);
+    if (!venue) {
+      throw new AppError('Venue not found', 404);
+    }
+
+    const fields = await venueRepository.listFieldsByVenueId(client, venueId);
+    const field = fields.find((f) => f.field_id === Number(fieldId));
+    if (!field) {
+      throw new AppError('Field not found', 404);
+    }
+
+    const bookedRows = await bookingRepository.listBookedRangesForFieldOnDate(
+      client,
+      field.field_id,
+      date,
+    );
+    const bookedRanges = bookedRows.map((row) => ({
+      startTime: formatTimeInZone(row.starts_at),
+      endTime: formatTimeInZone(row.ends_at),
+    }));
+
+    const slots = buildAvailabilitySlots(
+      venue.opening_hours,
+      venue.closing_hours,
+      bookedRanges,
+    );
+
+    return { fieldId: field.field_id, date, slots };
+  } finally {
+    client.release();
+  }
+}
+
+export async function createBooking(playerId, dto) {
+  const client = await pool.connect();
+  try {
+    const field = await bookingRepository.findFieldWithVenueForBooking(
+      client,
+      dto.fieldId,
+    );
+    if (!field) {
+      throw new AppError('Field not found', 404);
+    }
+    if (field.field_status !== 'ACTIVE') {
+      throw new AppError('Field is not available for booking', 409);
+    }
+
+    const openingHours = field.opening_hours
+      ? String(field.opening_hours).slice(0, 5)
+      : null;
+    const closingHours = field.closing_hours
+      ? String(field.closing_hours).slice(0, 5)
+      : null;
+    if (
+      !openingHours ||
+      !closingHours ||
+      dto.startTime < openingHours ||
+      dto.endTime > closingHours
+    ) {
+      throw new AppError(
+        "Requested time is outside the venue's opening hours",
+        409,
+      );
+    }
+
+    const rangeStart = new Date(`${dto.bookingDate}T${dto.startTime}:00+07:00`);
+    const rangeEnd = new Date(`${dto.bookingDate}T${dto.endTime}:00+07:00`);
+    const durationHours = (rangeEnd - rangeStart) / (1000 * 60 * 60);
+    const totalAmount =
+      Math.round(Number(field.price_per_hour) * durationHours * 100) / 100;
+    const depositAmount =
+      Math.round(totalAmount * BOOKING_DEPOSIT_PERCENTAGE * 100) / 100;
+
+    let booking;
+    try {
+      booking = await bookingRepository.insertBooking(client, {
+        playerId,
+        fieldId: dto.fieldId,
+        bookingDate: dto.bookingDate,
+        timeRange: { start: rangeStart, end: rangeEnd },
+        totalAmount,
+        depositAmount,
+      });
+    } catch (err) {
+      if (err.code === EXCLUSION_VIOLATION_CODE) {
+        throw new AppError(
+          'This field is already booked for the requested time',
+          409,
+        );
+      }
+      throw err;
+    }
+
+    return toPublicBooking(booking);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Book multiple field/time slots in one request (multi-pitch and/or
+ * multi-slot). Each item is created independently — one conflict doesn't
+ * roll back the others, mirroring matchmaking's POST /matches/bulk.
+ */
+export async function createBookingsBulk(playerId, { bookings }) {
+  const created = [];
+  const failed = [];
+
+  for (const item of bookings) {
+    try {
+      const booking = await createBooking(playerId, item);
+      created.push(booking);
+    } catch (err) {
+      if (err instanceof AppError) {
+        failed.push({
+          fieldId: item.fieldId,
+          bookingDate: item.bookingDate,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          message: err.message,
+        });
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (!created.length && failed.length) {
+    throw new AppError('No bookings were created', 409, {
+      failed,
+      totalRequested: bookings.length,
+      totalCreated: 0,
+    });
+  }
+
+  return {
+    message:
+      created.length === bookings.length
+        ? 'Bookings created'
+        : 'Some bookings were created',
+    totalRequested: bookings.length,
+    totalCreated: created.length,
+    created,
+    failed,
+  };
 }

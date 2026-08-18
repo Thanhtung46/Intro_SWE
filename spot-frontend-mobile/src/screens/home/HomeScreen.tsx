@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   NativeScrollEvent,
@@ -18,6 +18,8 @@ import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
 import VenueCard, { Venue } from '@/components/home/VenueCard';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
+import { listVenues, PublicVenue } from '@/services/venueService';
+import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 
 const HEADING_TEXT = '#020617';
 
@@ -26,26 +28,38 @@ const CAROUSEL_IMAGES = [
   require('../../../assets/home/carousel-stadium.png'),
 ];
 
-const VENUES: Venue[] = [
-  {
-    id: 'skyline-arena',
-    name: 'Skyline Arena',
-    image: require('../../../assets/home/venue-skyline-arena.png'),
-    distanceLabel: '1.2 km',
-    priceLabel: '120k/hr',
-    rating: 4.9,
-    tag: 'Multi-sport, Premium Surface',
-  },
-  {
-    id: 'champions-club',
-    name: 'Champions Club',
-    image: require('../../../assets/home/venue-champions-club.png'),
-    distanceLabel: '2.5 km',
-    priceLabel: '$40/hr',
-    rating: 4.8,
-    tag: 'Indoor Courts, Pro Amenities',
-  },
-];
+// GET /venues has no per-venue photo/price at list level (data-model.md
+// PublicVenue) — this is a static placeholder image/price, not real data.
+const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/home/venue-skyline-arena.png');
+const NOT_AVAILABLE_LABEL = '—';
+
+function formatUpcomingTime(startsAt: string): string {
+  const date = new Date(startsAt);
+  const now = new Date();
+  const timeLabel = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(
+    date,
+  );
+  if (date.toDateString() === now.toDateString()) {
+    return `Today, ${timeLabel}`;
+  }
+  const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(
+    date,
+  );
+  return `${dateLabel}, ${timeLabel}`;
+}
+
+function mapVenueToCard(venue: PublicVenue): Venue {
+  return {
+    id: String(venue.venueId),
+    name: venue.name,
+    image: VENUE_PLACEHOLDER_IMAGE,
+    distanceLabel:
+      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    priceLabel: NOT_AVAILABLE_LABEL,
+    rating: venue.avgRating,
+    tag: venue.amenities ?? '',
+  };
+}
 
 type Sport = 'football' | 'badminton';
 
@@ -62,6 +76,27 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
+  const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
+
+  useEffect(() => {
+    listVenues(sport).then((result) => {
+      if (result.success) {
+        setVenues((result.venues ?? []).map(mapVenueToCard));
+        setVenuesError(null);
+      } else {
+        setVenues([]);
+        setVenuesError(result.message ?? 'Something went wrong. Please try again.');
+      }
+    });
+  }, [sport]);
+
+  useEffect(() => {
+    getMySchedule({ type: 'booking', limit: 1 }).then((result) => {
+      setUpcomingBooking(result.success ? (result.items?.[0] ?? null) : null);
+    });
+  }, []);
 
   const handleCarouselScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!carouselWidth) return;
@@ -146,13 +181,19 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
                 <Text style={styles.viewScheduleText}>View Schedule</Text>
               </TouchableOpacity>
             </View>
-            <View>
-              <Text style={styles.upcomingTime}>Tonight, 8:00 PM</Text>
-              <View style={styles.upcomingLocationRow}>
-                <Ionicons name="location" size={13} color={HEADING_TEXT} />
-                <Text style={styles.upcomingLocation}>Football Field A @ VietNet Center</Text>
+            {upcomingBooking ? (
+              <View>
+                <Text style={styles.upcomingTime}>{formatUpcomingTime(upcomingBooking.startsAt)}</Text>
+                <View style={styles.upcomingLocationRow}>
+                  <Ionicons name="location" size={13} color={HEADING_TEXT} />
+                  <Text style={styles.upcomingLocation}>
+                    {upcomingBooking.fieldName} @ {upcomingBooking.venueName}
+                  </Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <Text style={styles.upcomingTime}>No upcoming booking yet</Text>
+            )}
           </View>
         </View>
 
@@ -164,15 +205,21 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
               <Text style={styles.exploreAll}>Explore All</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.venuesList}
-          >
-            {VENUES.map((venue) => (
-              <VenueCard key={venue.id} venue={venue} onPress={() => comingSoon(venue.name)} />
-            ))}
-          </ScrollView>
+          {venuesError ? (
+            <Text style={styles.venuesEmptyText}>{venuesError}</Text>
+          ) : venues.length === 0 ? (
+            <Text style={styles.venuesEmptyText}>No venues found for this sport yet.</Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.venuesList}
+            >
+              {venues.map((venue) => (
+                <VenueCard key={venue.id} venue={venue} onPress={() => comingSoon(venue.name)} />
+              ))}
+            </ScrollView>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -356,5 +403,10 @@ const styles = StyleSheet.create({
   venuesList: {
     paddingHorizontal: 20,
     gap: 16,
+  },
+  venuesEmptyText: {
+    marginHorizontal: 20,
+    fontSize: 14,
+    color: colors.bodyText,
   },
 });
