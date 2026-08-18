@@ -2,11 +2,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { ReactNode, useEffect, useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
 import BottomNavItem from '@/components/navigation/BottomNavItem';
+import { showAlert } from '@/utils/showAlert';
 import { useUser } from '../context/UserContext';
 import { getUnreadCount } from '../services/notificationService';
 import { NotificationMenu } from './NotificationMenu';
@@ -14,7 +15,7 @@ import { ProfileMenu } from './ProfileMenu';
 
 type TabKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
 
-const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
+const comingSoon = (feature: string) => showAlert('Coming soon', `${feature} is not available yet.`);
 
 /**
  * Persistent top header + bottom tab bar shared across Home/Schedule/

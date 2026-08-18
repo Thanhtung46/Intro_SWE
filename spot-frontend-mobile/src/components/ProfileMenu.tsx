@@ -1,11 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
+import { showAlert } from '@/utils/showAlert';
 import { clearToken } from '@/utils/authStorage';
 import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 
@@ -130,7 +131,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     const result = await updatePreferences({ language: value });
     if (!result.success) {
       setLanguage(previous);
-      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert('Error', result.message || 'Something went wrong. Please try again.');
     }
   };
 
@@ -141,7 +142,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
     const result = await updatePreferences({ appearance: value });
     if (!result.success) {
       setAppearance(previous);
-      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert('Error', result.message || 'Something went wrong. Please try again.');
     }
   };
 

@@ -25,14 +25,22 @@ export interface ScheduleResult {
 
 const client: AxiosInstance = axios.create();
 
-/** GET /users/me/schedule — from/to là YYYY-MM-DD (theo lịch đang xem). */
-export async function getMySchedule(params: { from: string; to: string }): Promise<ScheduleResult> {
+/** GET /users/me/schedule — from/to là YYYY-MM-DD (theo lịch đang xem, mặc định do BE tự chọn nếu bỏ trống). */
+export async function getMySchedule(
+  params: { from?: string; to?: string; type?: 'all' | 'booking' | 'match'; limit?: number } = {},
+): Promise<ScheduleResult> {
   try {
     const token = await getToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const queryParams: Record<string, string | number> = {
+      type: params.type ?? 'all',
+      limit: params.limit ?? 100,
+    };
+    if (params.from) queryParams.from = params.from;
+    if (params.to) queryParams.to = params.to;
     const res = await client.get<{ items: ScheduleItem[] }>(`${API_URL}/users/me/schedule`, {
       headers,
-      params: { type: 'all', from: params.from, to: params.to, limit: 100 },
+      params: queryParams,
     });
     return { success: true, items: res.data.items };
   } catch (err) {

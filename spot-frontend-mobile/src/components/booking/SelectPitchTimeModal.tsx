@@ -1,34 +1,43 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
+import { showAlert } from '@/utils/showAlert';
+import { getFieldAvailability } from '@/services/venueService';
+import { createBookingsBulk } from '@/services/bookingService';
+import DatePickerModal from './DatePickerModal';
 
-export type Pitch = { name: string; format: string };
-
-export type PitchTimeSelection = { pitchName: string; date: Date; time: string };
+export type Pitch = { fieldId: number; name: string; format: string };
 
 type Props = {
   visible: boolean;
+  venueId: number;
   pitches: Pitch[];
   /** Venue opening hours as 24h integers, e.g. 6 and 23 for "06:00 - 23:00". */
   openHour: number;
   closeHour: number;
   onClose: () => void;
-  onConfirm: (selection: PitchTimeSelection) => void;
+  /** Called after at least one slot in the multi-select was booked successfully. */
+  onConfirm: () => void;
 };
 
-const WEEKDAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const DAY_COUNT = 7;
-// Fixed mock "booked" cells (pitch index-time index) so the grid isn't
-// always empty — matches the Figma mock's Pitch A / first two slots.
-const BOOKED_CELLS = new Set(['0-0', '0-1']);
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-function buildDays(): Date[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Array.from({ length: DAY_COUNT }, (_, i) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + i));
+function formatDateLabel(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+}
+
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function buildTimeSlots(openHour: number, closeHour: number): string[] {
@@ -40,29 +49,97 @@ function buildTimeSlots(openHour: number, closeHour: number): string[] {
 }
 
 /** Pitch & time-slot booking grid — Figma node 81:152 ("Booking field - Select Pitch & Time"). */
-export default function SelectPitchTimeModal({ visible, pitches, openHour, closeHour, onClose, onConfirm }: Props) {
-  const days = useMemo(() => buildDays(), []);
+export default function SelectPitchTimeModal({ visible, venueId, pitches, openHour, closeHour, onClose, onConfirm }: Props) {
   const timeSlots = useMemo(() => buildTimeSlots(openHour, closeHour), [openHour, closeHour]);
 
-  const [dayIndex, setDayIndex] = useState(0);
-  const [selectedCell, setSelectedCell] = useState<{ pitchIndex: number; timeIndex: number } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => startOfToday());
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  // "pitchIndex-timeIndex" keys — supports picking several slots and/or
+  // several pitches at once, all for the currently selected date.
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const [bookedCells, setBookedCells] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!visible || pitches.length === 0) return;
+    const date = toLocalDateString(selectedDate);
+
+    Promise.all(
+      pitches.map((pitch, pitchIndex) =>
+        getFieldAvailability(venueId, pitch.fieldId, date).then((result) => {
+          if (!result.success || !result.slots) return [];
+          return result.slots
+            .filter((slot) => !slot.available)
+            .map((slot) => timeSlots.indexOf(slot.startTime))
+            .filter((timeIndex) => timeIndex !== -1)
+            .map((timeIndex) => `${pitchIndex}-${timeIndex}`);
+        }),
+      ),
+    ).then((perPitchKeys) => {
+      setBookedCells(new Set(perPitchKeys.flat()));
+    });
+  }, [visible, venueId, pitches, selectedDate, timeSlots]);
+
+  // Selections are scoped to one date — switching dates would otherwise book
+  // against the wrong date, so clear them.
+  useEffect(() => {
+    setSelectedCells(new Set());
+  }, [selectedDate]);
 
   const toggleCell = (pitchIndex: number, timeIndex: number) => {
     const key = `${pitchIndex}-${timeIndex}`;
-    if (BOOKED_CELLS.has(key)) return;
-    setSelectedCell((prev) =>
-      prev && prev.pitchIndex === pitchIndex && prev.timeIndex === timeIndex ? null : { pitchIndex, timeIndex },
-    );
+    if (bookedCells.has(key)) return;
+    setSelectedCells((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
   };
 
-  const handleConfirm = () => {
-    if (!selectedCell) return;
-    comingSoon('Confirm booking');
-    onConfirm({
-      pitchName: pitches[selectedCell.pitchIndex].name,
-      date: days[dayIndex],
-      time: timeSlots[selectedCell.timeIndex],
+  const handleConfirm = async () => {
+    if (selectedCells.size === 0) return;
+    const bookingDate = toLocalDateString(selectedDate);
+    const bookings = Array.from(selectedCells).map((key) => {
+      const [pitchIndexStr, timeIndexStr] = key.split('-');
+      const pitchIndex = Number(pitchIndexStr);
+      const timeIndex = Number(timeIndexStr);
+      return {
+        fieldId: pitches[pitchIndex].fieldId,
+        bookingDate,
+        startTime: timeSlots[timeIndex],
+        endTime: timeSlots[timeIndex + 1] ?? `${String(closeHour).padStart(2, '0')}:00`,
+      };
     });
+
+    setSubmitting(true);
+    const result = await createBookingsBulk({ bookings });
+    setSubmitting(false);
+
+    if (!result.success) {
+      showAlert('Booking failed', result.message || 'Something went wrong. Please try again.');
+      return;
+    }
+
+    const { totalCreated, totalRequested, failed } = result;
+    if (!totalCreated) {
+      showAlert('Booking failed', failed?.[0]?.message || 'None of the selected slots could be booked.');
+      return;
+    }
+
+    setSelectedCells(new Set());
+    if (totalCreated === totalRequested) {
+      showAlert('Booked', `${totalCreated} slot${totalCreated === 1 ? '' : 's'} booked successfully.`);
+    } else {
+      showAlert(
+        'Partially booked',
+        `${totalCreated}/${totalRequested} slots booked. ${failed?.length ?? 0} failed (already taken).`,
+      );
+    }
+    onConfirm();
   };
 
   return (
@@ -91,31 +168,27 @@ export default function SelectPitchTimeModal({ visible, pitches, openHour, close
           </View>
         </View>
 
-        {/* Date strip */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dateStrip}
+        {/* Date selector — opens the full month calendar so any date, in
+            any month, can be picked (not just a rolling few-week window). */}
+        <TouchableOpacity
+          style={styles.dateSelector}
+          onPress={() => setDatePickerVisible(true)}
+          accessibilityRole="button"
         >
-          {days.map((date, index) => {
-            const active = index === dayIndex;
-            return (
-              <TouchableOpacity
-                key={date.toISOString()}
-                style={[styles.dateChip, active && styles.dateChipActive]}
-                onPress={() => setDayIndex(index)}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.dateWeekday, active && styles.dateTextActive]}>
-                  {WEEKDAY_LABELS[date.getDay()]}
-                </Text>
-                <Text style={[styles.dateNumber, active && styles.dateTextActive]}>
-                  {String(date.getDate()).padStart(2, '0')}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+          <Text style={styles.dateSelectorText}>{formatDateLabel(selectedDate)}</Text>
+          <Ionicons name="chevron-down" size={16} color={colors.primaryDark} />
+        </TouchableOpacity>
+
+        <DatePickerModal
+          visible={datePickerVisible}
+          initialDate={selectedDate}
+          onCancel={() => setDatePickerVisible(false)}
+          onConfirm={(date) => {
+            setSelectedDate(date);
+            setDatePickerVisible(false);
+          }}
+        />
 
         {/* Matrix */}
         <View style={styles.matrixWrap}>
@@ -144,8 +217,8 @@ export default function SelectPitchTimeModal({ visible, pitches, openHour, close
                 <View key={pitch.name} style={styles.gridRow}>
                   {timeSlots.map((_, timeIndex) => {
                     const key = `${pitchIndex}-${timeIndex}`;
-                    const booked = BOOKED_CELLS.has(key);
-                    const selected = selectedCell?.pitchIndex === pitchIndex && selectedCell?.timeIndex === timeIndex;
+                    const booked = bookedCells.has(key);
+                    const selected = selectedCells.has(key);
                     return (
                       <TouchableOpacity
                         key={key}
@@ -174,17 +247,21 @@ export default function SelectPitchTimeModal({ visible, pitches, openHour, close
         {/* Bottom action bar */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.confirmButton, !selectedCell && styles.confirmButtonDisabled]}
+            style={[styles.confirmButton, (selectedCells.size === 0 || submitting) && styles.confirmButtonDisabled]}
             onPress={handleConfirm}
-            disabled={!selectedCell}
+            disabled={selectedCells.size === 0 || submitting}
             accessibilityRole="button"
           >
-            <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+            <Text style={styles.confirmButtonText}>
+              {submitting
+                ? 'Booking…'
+                : `Confirm Booking${selectedCells.size > 1 ? ` (${selectedCells.size})` : ''}`}
+            </Text>
             <Ionicons name="calendar" size={18} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.clearButton}
-            onPress={() => setSelectedCell(null)}
+            onPress={() => setSelectedCells(new Set())}
             accessibilityRole="button"
             accessibilityLabel="Clear selection"
           >
@@ -251,40 +328,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.primary,
   },
-  dateStrip: {
-    gap: 8,
-    padding: 16,
-  },
-  dateChip: {
-    minWidth: 64,
-    height: 80,
+  dateSelector: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: '#EFF4FF',
-    paddingHorizontal: 14,
   },
-  dateChipActive: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 7,
-    elevation: 4,
-  },
-  dateWeekday: {
-    fontSize: 16,
-    color: colors.bodyText,
-    opacity: 0.7,
-  },
-  dateNumber: {
-    fontSize: 16,
-    color: colors.bodyText,
-    marginTop: 2,
-  },
-  dateTextActive: {
-    color: colors.white,
-    opacity: 1,
+  dateSelectorText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primaryDark,
   },
   matrixWrap: {
     flexDirection: 'row',

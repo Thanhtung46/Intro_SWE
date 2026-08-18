@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import SelectPitchTimeModal, { Pitch } from '@/components/booking/SelectPitchTimeModal';
+import { getVenueDetail, getVenueImages, PublicField, PublicVenueImage } from '@/services/venueService';
+import { getVenueRating } from '@/services/reviewService';
 
 type VenueDetail = {
   name: string;
@@ -16,7 +18,7 @@ type VenueDetail = {
   verified: boolean;
   hours: string;
   capacityLabel: string;
-  amenities: { parking: boolean; wifi?: string };
+  amenities: string | null;
   schedule: { dateLabel: string; timeLabel: string; pitchLabel: string };
   extraService: { label: string; priceLabel: string };
   contact: { name: string; phone: string };
@@ -25,52 +27,35 @@ type VenueDetail = {
   priceUnit: string;
 };
 
-const VENUE_DETAILS: Record<string, VenueDetail> = {
-  'skyline-arena': {
-    name: 'Skyline Arena',
-    heroImage: require('../../../assets/booking/venue-skyline-arena-action.jpg'),
-    address: '123 Sports Lane, District 1, HCMC',
-    rating: 4.8,
-    reviewCount: 120,
-    verified: true,
-    hours: '06:00 - 23:00',
-    capacityLabel: '6 Pitches',
-    amenities: { parking: true, wifi: 'Skyline_Guest' },
-    schedule: { dateLabel: 'Tue, Jul 28', timeLabel: '19:00 - 20:30', pitchLabel: 'Pitch A (7v7) • Turf' },
-    extraService: { label: 'Hire a Referee', priceLabel: '+ 150,000 VND' },
-    contact: { name: 'Venue Management', phone: '0909 123 456' },
-    pitches: [
-      { name: 'Pitch A', format: '7V7' },
-      { name: 'Pitch B', format: '5V5' },
-      { name: 'Pitch C', format: '5V5' },
-      { name: 'Pitch D', format: '7V7' },
-    ],
-    price: '250,000',
-    priceUnit: 'VND / hr',
-  },
-  'metro-futsal-hub': {
-    name: 'Metro Futsal Hub',
-    heroImage: require('../../../assets/booking/venue-metro-futsal-hub.jpg'),
-    address: '456 Metro Blvd, District 7, HCMC',
-    rating: 4.6,
-    reviewCount: 86,
-    verified: true,
-    hours: '07:00 - 22:00',
-    capacityLabel: '4 Pitches',
-    amenities: { parking: false, wifi: 'MetroFutsal_5G' },
-    schedule: { dateLabel: 'Wed, Jul 29', timeLabel: '18:00 - 19:00', pitchLabel: 'Court 2 (5v5) • Indoor' },
-    extraService: { label: 'Hire a Referee', priceLabel: '+ 150,000 VND' },
-    contact: { name: 'Venue Management', phone: '0912 345 678' },
-    pitches: [
-      { name: 'Court 1', format: '5V5' },
-      { name: 'Court 2', format: '5V5' },
-      { name: 'Court 3', format: '7V7' },
-      { name: 'Court 4', format: '7V7' },
-    ],
-    price: '220,000',
-    priceUnit: 'VND / hr',
-  },
+// GET /venues/:venueId has no heroImage / schedule / extra-service / contact
+// data (data-model.md PublicVenue) — this is static placeholder copy shared
+// by every real venue, not per-venue fake data.
+const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/booking/venue-skyline-arena-action.jpg');
+const DEFAULT_VENUE_EXTRAS = {
+  heroImage: VENUE_PLACEHOLDER_IMAGE,
+  verified: false,
+  schedule: { dateLabel: 'No upcoming booking', timeLabel: '', pitchLabel: 'Pick a pitch below to book one' },
+  extraService: { label: 'Hire a Referee', priceLabel: '+ 150,000 VND' },
+  contact: { name: 'Venue Management', phone: '' },
 };
+
+const EMPTY_VENUE_DETAIL: VenueDetail = {
+  name: '',
+  address: '',
+  rating: 0,
+  reviewCount: 0,
+  hours: '— - —',
+  capacityLabel: '0 Pitches',
+  amenities: null,
+  pitches: [],
+  price: '—',
+  priceUnit: 'VND / hr',
+  ...DEFAULT_VENUE_EXTRAS,
+};
+
+function formatVnd(amount: number): string {
+  return amount.toLocaleString('en-US');
+}
 
 /** Parses "HH:MM - HH:MM" into [openHour, closeHour]; falls back to a sane default. */
 function parseHours(hours: string): [number, number] {
@@ -94,10 +79,65 @@ type Props = {
 
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
 export default function VenueDetailScreen({ venueId, onBack }: Props) {
-  const venue = VENUE_DETAILS[venueId] ?? VENUE_DETAILS['skyline-arena'];
+  const [venue, setVenue] = useState<VenueDetail>(EMPTY_VENUE_DETAIL);
+  const [fields, setFields] = useState<PublicField[]>([]);
+  const [reviewRating, setReviewRating] = useState<{ avgRating: number; ratingCount: number } | null>(null);
+  const [reviewRatingError, setReviewRatingError] = useState<string | null>(null);
+  const [images, setImages] = useState<PublicVenueImage[]>([]);
+  const [imagesError, setImagesError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [refereeHired, setRefereeHired] = useState(false);
   const [pitchTimeVisible, setPitchTimeVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('about');
+  const numericVenueId = Number(venueId);
+
+  useEffect(() => {
+    if (!Number.isInteger(numericVenueId)) return;
+    getVenueDetail(numericVenueId).then((result) => {
+      if (!result.success || !result.venue) return;
+      const apiVenue = result.venue;
+      const apiFields = result.fields ?? [];
+      const prices = apiFields.map((f) => f.pricePerHour);
+      setFields(apiFields);
+      setVenue({
+        name: apiVenue.name,
+        address: apiVenue.address,
+        rating: apiVenue.avgRating,
+        reviewCount: apiVenue.ratingCount,
+        hours:
+          apiVenue.openingHours && apiVenue.closingHours
+            ? `${apiVenue.openingHours} - ${apiVenue.closingHours}`
+            : '— - —',
+        capacityLabel: `${apiFields.length} Pitch${apiFields.length === 1 ? '' : 'es'}`,
+        amenities: apiVenue.amenities,
+        pitches: apiFields.map((f) => ({ fieldId: f.fieldId, name: f.name, format: f.sportType })),
+        price: prices.length ? formatVnd(Math.min(...prices)) : '—',
+        priceUnit: 'VND / hr',
+        ...DEFAULT_VENUE_EXTRAS,
+      });
+    });
+
+    getVenueRating(numericVenueId).then((result) => {
+      if (result.success && result.avgRating !== undefined && result.ratingCount !== undefined) {
+        setReviewRating({ avgRating: result.avgRating, ratingCount: result.ratingCount });
+        setReviewRatingError(null);
+      } else {
+        setReviewRating(null);
+        setReviewRatingError(result.message ?? 'Something went wrong. Please try again.');
+      }
+    });
+
+    getVenueImages(numericVenueId).then((result) => {
+      if (result.success) {
+        setImages(result.images ?? []);
+        setImagesError(null);
+      } else {
+        setImages([]);
+        setImagesError(result.message ?? 'Something went wrong. Please try again.');
+      }
+    });
+  }, [numericVenueId]);
+
   const [openHour, closeHour] = parseHours(venue.hours);
 
   const openInMaps = () => {
@@ -110,9 +150,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
   };
 
   const selectTab = (tab: Tab) => {
-    if (tab !== 'about') {
-      comingSoon(TABS.find((t) => t.key === tab)?.label || 'Tab');
-    }
+    setActiveTab(tab);
   };
 
   return (
@@ -173,12 +211,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               onPress={() => selectTab(tab.key)}
               accessibilityRole="button"
             >
-              <Text style={[styles.tabText, tab.key === 'about' && styles.tabTextActive]}>{tab.label}</Text>
-              {tab.key === 'about' && <View style={styles.tabIndicator} />}
+              <Text style={[styles.tabText, tab.key === activeTab && styles.tabTextActive]}>{tab.label}</Text>
+              {tab.key === activeTab && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
           ))}
         </View>
 
+        {activeTab === 'about' && (
         <View style={styles.content}>
           {/* Quick info */}
           <View style={styles.quickInfoRow}>
@@ -205,19 +244,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               <Text style={styles.sectionTitle}>Amenities</Text>
             </View>
             <View style={styles.amenitiesRow}>
-              {venue.amenities.parking && (
+              {venue.amenities ? (
                 <View style={styles.amenityChip}>
-                  <View style={styles.parkingBadge}>
-                    <Text style={styles.parkingBadgeText}>P</Text>
-                  </View>
-                  <Text style={styles.amenityText}>Parking</Text>
+                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.bodyText} />
+                  <Text style={styles.amenityText}>{venue.amenities}</Text>
                 </View>
-              )}
-              {venue.amenities.wifi && (
-                <View style={styles.amenityChip}>
-                  <Ionicons name="wifi" size={16} color={colors.bodyText} />
-                  <Text style={styles.amenityText}>Wifi: {venue.amenities.wifi}</Text>
-                </View>
+              ) : (
+                <Text style={styles.amenityText}>No amenities listed</Text>
               )}
             </View>
           </View>
@@ -328,6 +361,83 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             </View>
           </View>
         </View>
+        )}
+
+        {activeTab === 'pricing' && (
+          <View style={styles.content}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <Ionicons name="pricetag-outline" size={18} color={colors.headingText} />
+                <Text style={styles.sectionTitle}>Pricing</Text>
+              </View>
+              {fields.length === 0 ? (
+                <Text style={styles.amenityText}>No pitches to price yet</Text>
+              ) : (
+                fields.map((field) => (
+                  <View key={field.fieldId} style={styles.scheduleCard}>
+                    <View style={styles.scheduleInfo}>
+                      <Text style={styles.scheduleDateTime}>{field.name}</Text>
+                      <Text style={styles.schedulePitch}>{field.sportType}</Text>
+                    </View>
+                    <Text style={styles.priceValue}>{formatVnd(field.pricePerHour)}</Text>
+                    <Text style={styles.priceUnit}>VND / hr</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        )}
+
+        {activeTab === 'reviews' && (
+          <View style={styles.content}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <Ionicons name="star-outline" size={18} color={colors.headingText} />
+                <Text style={styles.sectionTitle}>Reviews</Text>
+              </View>
+              {reviewRatingError ? (
+                <Text style={styles.amenityText}>{reviewRatingError}</Text>
+              ) : reviewRating ? (
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={12} color="#D97706" />
+                  <Text style={styles.ratingText}>
+                    {reviewRating.avgRating} ({reviewRating.ratingCount} Reviews)
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.amenityText}>No reviews yet</Text>
+              )}
+              <Text style={styles.amenityText}>Individual review comments aren&apos;t available yet.</Text>
+            </View>
+          </View>
+        )}
+
+        {activeTab === 'gallery' && (
+          <View style={styles.content}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <Ionicons name="images-outline" size={18} color={colors.headingText} />
+                <Text style={styles.sectionTitle}>Gallery</Text>
+              </View>
+              {imagesError ? (
+                <Text style={styles.amenityText}>{imagesError}</Text>
+              ) : images.length === 0 ? (
+                <Text style={styles.amenityText}>No photos yet</Text>
+              ) : (
+                <View style={styles.galleryGrid}>
+                  {images.map((image) => (
+                    <Image
+                      key={image.imageId}
+                      source={{ uri: image.imageUrl }}
+                      style={styles.galleryImage}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sticky bottom bar */}
@@ -347,6 +457,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
 
       <SelectPitchTimeModal
         visible={pitchTimeVisible}
+        venueId={numericVenueId}
         pitches={venue.pitches}
         openHour={openHour}
         closeHour={closeHour}
@@ -535,6 +646,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  galleryImage: {
+    width: '47%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    backgroundColor: colors.cardBorder,
   },
   amenitiesRow: {
     flexDirection: 'row',
