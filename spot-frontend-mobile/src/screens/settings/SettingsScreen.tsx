@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
-import { clearToken } from '@/utils/authStorage';
+import { clearAllTokens } from '@/utils/authStorage';
 import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 // Alert.alert's button-array form (React Native's only way to offer a
 // multi-choice picker without a custom component) is a no-op on web —
@@ -185,7 +185,7 @@ export default function SettingsScreen({
   };
 
   const handleSignOut = async () => {
-    await clearToken();
+    await clearAllTokens();
     clearUser();
     onSignedOut();
   };

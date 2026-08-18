@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,29 +12,29 @@ import FiltersSheet from '@/components/booking/FiltersSheet';
 import AppHeader from '@/components/layout/AppHeader';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import BottomNav from '@/components/navigation/BottomNav';
+import { listVenues, PublicVenue } from '@/services/venueService';
 
-const VENUES: BookingVenue[] = [
-  {
-    id: 'skyline-arena',
-    name: 'Skyline Arena',
-    image: require('../../../assets/booking/venue-skyline-arena-action.jpg'),
-    price: '$40',
-    rating: 4.8,
-    distanceLabel: '2.4 km',
-    address: '123 Sports Lane, District 1, HCMC',
-    hours: '06:00 - 23:00',
-  },
-  {
-    id: 'metro-futsal-hub',
-    name: 'Metro Futsal Hub',
-    image: require('../../../assets/booking/venue-metro-futsal-hub.jpg'),
-    price: '$35',
-    rating: 4.6,
-    distanceLabel: '3.1 km',
-    address: '456 Metro Blvd, District 7, HCMC',
-    hours: '07:00 - 22:00',
-  },
-];
+// GET /venues has no per-venue photo/price at list level (data-model.md
+// PublicVenue) — this is a static placeholder image/price, not real data.
+const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/booking/venue-skyline-arena-action.jpg');
+const NOT_AVAILABLE_LABEL = '—';
+
+function mapVenueToCard(venue: PublicVenue): BookingVenue {
+  return {
+    id: String(venue.venueId),
+    name: venue.name,
+    image: VENUE_PLACEHOLDER_IMAGE,
+    distanceLabel:
+      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    price: NOT_AVAILABLE_LABEL,
+    rating: venue.avgRating,
+    address: venue.address,
+    hours:
+      venue.openingHours && venue.closingHours
+        ? `${venue.openingHours} - ${venue.closingHours}`
+        : NOT_AVAILABLE_LABEL,
+  };
+}
 
 type Sport = 'football' | 'badminton';
 
@@ -49,6 +49,20 @@ export default function BookingScreen({ onAvatarPress, avatarInitial }: Props) {
   const router = useRouter();
   const [sport, setSport] = useState<Sport>('football');
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [venues, setVenues] = useState<BookingVenue[]>([]);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listVenues(sport).then((result) => {
+      if (result.success) {
+        setVenues((result.venues ?? []).map(mapVenueToCard));
+        setVenuesError(null);
+      } else {
+        setVenues([]);
+        setVenuesError(result.message ?? 'Something went wrong. Please try again.');
+      }
+    });
+  }, [sport]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -80,15 +94,21 @@ export default function BookingScreen({ onAvatarPress, avatarInitial }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {VENUES.map((venue) => (
-          <BookingVenueCard
-            key={venue.id}
-            venue={venue}
-            onBookPress={() => router.push(venueDetailRoute(venue.id))}
-            onFavoritePress={() => comingSoon('Save venue')}
-            onNavigatePress={() => comingSoon('Navigate to venue')}
-          />
-        ))}
+        {venuesError ? (
+          <Text style={styles.venuesEmptyText}>{venuesError}</Text>
+        ) : venues.length === 0 ? (
+          <Text style={styles.venuesEmptyText}>No venues found for this sport yet.</Text>
+        ) : (
+          venues.map((venue) => (
+            <BookingVenueCard
+              key={venue.id}
+              venue={venue}
+              onBookPress={() => router.push(venueDetailRoute(venue.id))}
+              onFavoritePress={() => comingSoon('Save venue')}
+              onNavigatePress={() => comingSoon('Navigate to venue')}
+            />
+          ))
+        )}
       </ScrollView>
 
       {/* Bottom navigation */}
@@ -148,5 +168,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32,
     gap: 24,
+  },
+  venuesEmptyText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: colors.bodyText,
   },
 });

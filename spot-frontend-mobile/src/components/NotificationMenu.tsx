@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import {
   getNotifications,
   markAllNotificationsRead,
@@ -8,6 +8,7 @@ import {
   NotificationItem,
 } from '../services/notificationService';
 import { colors } from '@/constants/colors';
+import { showAlert } from '@/utils/showAlert';
 
 interface NotificationMenuProps {
   visible: boolean;
@@ -68,7 +69,7 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
     const result = await markAllNotificationsRead();
     if (!result.success) {
       setItems(previous);
-      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert('Error', result.message || 'Something went wrong. Please try again.');
     }
   };
 
@@ -86,7 +87,7 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
   };
 
   const handleViewAll = () => {
-    Alert.alert('Coming soon', 'A full notifications screen is not available yet.');
+    showAlert('Coming soon', 'A full notifications screen is not available yet.');
   };
 
   return (

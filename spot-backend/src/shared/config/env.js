@@ -3,11 +3,32 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Docker Compose's `environment:` block sets REDIS_HOST=redis before this
+// process even starts (so the backend container reaches the `redis`
+// service, not itself). .env's override:true below is needed so DB_*/JWT
+// creds always win over stray shell vars — but that same override was also
+// clobbering Docker's REDIS_HOST with .env's localhost-oriented value,
+// making Redis unreachable in Docker (ECONNREFUSED ::1:6379) while still
+// soft-failing silently (OTP/rating caching). Preserve Redis vars that were
+// already set (i.e. by Docker) before .env can override them.
+const preDotenvRedis = {
+  REDIS_HOST: process.env.REDIS_HOST,
+  REDIS_PORT: process.env.REDIS_PORT,
+  REDIS_DB: process.env.REDIS_DB,
+};
+
 // Always load spot-backend/.env (not cwd), and let it win over shell env vars
 dotenv.config({
   path: path.resolve(__dirname, '../../../.env'),
   override: true,
 });
+
+for (const [key, value] of Object.entries(preDotenvRedis)) {
+  if (value !== undefined) {
+    process.env[key] = value;
+  }
+}
 
 function resolveDbSsl(host, url) {
   if (process.env.DB_SSL !== undefined && process.env.DB_SSL !== '') {

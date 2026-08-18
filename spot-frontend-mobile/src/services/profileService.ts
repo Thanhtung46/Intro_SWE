@@ -1,6 +1,5 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '../utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 
 export interface ProfileUpdatePayload {
   fullName?: string;
@@ -22,21 +21,14 @@ export interface ProfileUpdateResult {
   success: boolean;
   user?: ProfileUpdateUser;
   message?: string;
+  statusCode?: number;
 }
-
-const client: AxiosInstance = axios.create();
 
 /** PATCH /users/me — profile fields only (fullName/gender/avatarUrl). Not
  * the same endpoint as preferencesService (that's /users/me/preferences). */
 export async function updateProfile(payload: ProfileUpdatePayload): Promise<ProfileUpdateResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.patch<{ message: string; user: ProfileUpdateUser }>(
-      `${API_URL}/users/me`,
-      payload,
-      { headers }
-    );
+    const res = await apiClient.patch<{ message: string; user: ProfileUpdateUser }>('/users/me', payload);
     return { success: true, user: res.data.user };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -45,15 +37,17 @@ export async function updateProfile(payload: ProfileUpdatePayload): Promise<Prof
       return { success: false, message: 'Network error. Please check your connection and try again.' };
     }
 
-    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+    return {
+      success: false,
+      message: error.response.data?.message || 'Something went wrong. Please try again.',
+      statusCode: error.response.status,
+    };
   }
 }
 
 export async function getProfile(): Promise<ProfileUpdateResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.get<{ user: ProfileUpdateUser }>(`${API_URL}/users/me`, { headers });
+    const res = await apiClient.get<{ user: ProfileUpdateUser }>('/users/me');
     return { success: true, user: res.data.user };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -62,7 +56,11 @@ export async function getProfile(): Promise<ProfileUpdateResult> {
       return { success: false, message: 'Network error. Please check your connection and try again.' };
     }
 
-    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+    return {
+      success: false,
+      message: error.response.data?.message || 'Something went wrong. Please try again.',
+      statusCode: error.response.status,
+    };
   }
 }
 
@@ -80,16 +78,12 @@ export interface MainProfileResult {
   user?: ProfileUpdateUser;
   stats?: MainProfileStats;
   message?: string;
+  statusCode?: number;
 }
 
 export async function getMainProfile(): Promise<MainProfileResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.get<{ user: ProfileUpdateUser; stats: MainProfileStats }>(
-      `${API_URL}/users/me/profile`,
-      { headers }
-    );
+    const res = await apiClient.get<{ user: ProfileUpdateUser; stats: MainProfileStats }>('/users/me/profile');
     return { success: true, user: res.data.user, stats: res.data.stats };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -98,6 +92,10 @@ export async function getMainProfile(): Promise<MainProfileResult> {
       return { success: false, message: 'Network error. Please check your connection and try again.' };
     }
 
-    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+    return {
+      success: false,
+      message: error.response.data?.message || 'Something went wrong. Please try again.',
+      statusCode: error.response.status,
+    };
   }
 }

@@ -43,6 +43,8 @@ Thumbs.db
 .eslintcache
 .prettierignore
 
-# Local avatar uploads
-uploads/
 
+.claude/
+.specify/
+specs/
+uploads/

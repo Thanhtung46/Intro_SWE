@@ -10,6 +10,8 @@ import geoRoutes from './domains/matchmaking/geo.routes.js';
 import usersRoutes from './domains/users/routes.js';
 import notificationRoutes from './domains/notification/routes.js';
 import reviewRoutes from './domains/review/routes.js';
+import venueRoutes from './domains/venue/routes.js';
+import bookingRoutes from './domains/booking/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +46,10 @@ app.use('/notifications', notificationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/reviews', reviewRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/venues', venueRoutes);
+app.use('/api/venues', venueRoutes);
+app.use('/bookings', bookingRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 app.use(errorHandler);
 
