@@ -1,7 +1,9 @@
 -- Venue + booking + social matches (squashed).
--- No PostGIS. booking_time_range is tstzrange for Asia/Bangkok-safe bounds.
+-- booking_time_range is tstzrange for Asia/Bangkok-safe bounds.
+-- location is PostGIS geography(Point) for distance search.
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 CREATE SCHEMA IF NOT EXISTS schema_venue;
 CREATE SCHEMA IF NOT EXISTS schema_booking;
@@ -13,7 +15,9 @@ CREATE TABLE IF NOT EXISTS schema_venue.venues (
   name VARCHAR(150) NOT NULL,
   address TEXT NOT NULL,
   amenities TEXT NULL,
-  opening_hours VARCHAR(100) NULL,
+  opening_hours TIME NULL,
+  closing_hours TIME NULL,
+  location GEOGRAPHY(POINT, 4326) NULL,
   avg_rating NUMERIC(3, 2) NOT NULL DEFAULT 0
     CHECK (avg_rating >= 0 AND avg_rating <= 5),
   rating_count INT NOT NULL DEFAULT 0
@@ -24,6 +28,9 @@ CREATE TABLE IF NOT EXISTS schema_venue.venues (
 
 CREATE INDEX IF NOT EXISTS idx_venues_owner
   ON schema_venue.venues (owner_id);
+
+CREATE INDEX IF NOT EXISTS idx_venues_location
+  ON schema_venue.venues USING GIST (location);
 
 CREATE TABLE IF NOT EXISTS schema_venue.fields (
   field_id SERIAL PRIMARY KEY,
