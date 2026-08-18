@@ -20,6 +20,7 @@ import * as matchCourtRepository from '../repository/match-court.repository.js';
 import * as joinRequestRepository from '../repository/join-request.repository.js';
 import * as matchFavoriteRepository from '../repository/match-favorite.repository.js';
 import { parseCreateMatchDto } from '../dto/create-match.dto.js';
+import { parseJoinMatchDto } from '../dto/join-match.dto.js';
 import {
   vnCityName,
   vnProvinceName,
