@@ -4,7 +4,6 @@ import { parseVenueSuggestionsQuery } from '../dto/venue-suggestions.dto.js';
 import { parseListMatchesQuery } from '../dto/list-matches.dto.js';
 import { parseListMineQuery } from '../dto/list-mine.dto.js';
 import { parseMyJoinRequestsQuery } from '../dto/my-join-requests.dto.js';
-import { parseJoinMatchDto } from '../dto/join-match.dto.js';
 import { parseUpdateMatchDto } from '../dto/update-match.dto.js';
 import * as matchService from '../service/match.service.js';
 
@@ -62,11 +61,10 @@ export async function detail(req, res, next) {
 
 export async function join(req, res, next) {
   try {
-    const dto = parseJoinMatchDto(req.body);
     const result = await matchService.joinMatch(
       req.user.userId,
       req.params.id,
-      dto,
+      req.body,
     );
     return res.status(201).json(result);
   } catch (err) {

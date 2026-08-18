@@ -40,6 +40,7 @@ planned.
 ```bash
 docker compose up -d postgres redis          # always works
 docker compose up -d --build admin-console   # also works
+docker compose run --rm backend npm run migrate
 ```
 
 `backend`, `frontend-web`, and the three AI services don't build yet (see
