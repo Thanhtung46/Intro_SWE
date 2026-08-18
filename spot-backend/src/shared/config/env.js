@@ -54,6 +54,12 @@ const config = {
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
   },
 
+  /** Public origin for uploaded avatar URLs (no trailing slash). */
+  publicBaseUrl: (
+    process.env.PUBLIC_BASE_URL ||
+    `http://localhost:${process.env.PORT || 3000}`
+  ).replace(/\/$/, ''),
+
   otp: {
     ttlSeconds: Number(process.env.OTP_TTL_SECONDS) || 300,
     debug:

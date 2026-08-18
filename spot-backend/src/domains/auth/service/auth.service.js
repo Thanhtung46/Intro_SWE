@@ -32,6 +32,7 @@ import * as userRepository from '../repository/user.repository.js';
 import * as otpRepository from '../repository/otp.repository.js';
 import { toPublicUser } from '../entity/user.entity.js';
 import config from '../../../shared/config/env.js';
+import { getMe } from '../../users/service/users.service.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -486,19 +487,9 @@ export async function refreshSession(input) {
   }
 }
 
+/** Alias of users.getMe — kept for any internal callers. */
 export async function getCurrentUser(userId) {
-  const client = await pool.connect();
-  try {
-    const user = await userRepository.findById(client, userId);
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
-    return {
-      user: toPublicUser(user),
-    };
-  } finally {
-    client.release();
-  }
+  return getMe(userId);
 }
 
 export async function selectRole(input) {

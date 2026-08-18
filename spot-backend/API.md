@@ -1,16 +1,16 @@
 # SPOT Backend — API Reference
 
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-Chỉ mô tả endpoint đã implement. Domain khác (`booking`, `venue`, …) chưa có API.
+Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / payment / … chưa có API đầy đủ (có **View Schedule** read + **Reviews**).
 
 | | |
 | :--- | :--- |
 | Base URL (local) | `http://localhost:3000` |
 | Content-Type | `application/json` |
 | Auth hiện tại | Access JWT trên protected routes (`Authorization: Bearer …`); refresh qua `POST /auth/refresh` |
-| Alias | Mọi route `/auth/*` cũng có bản `/api/auth/*` (cùng handler) |
+| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
 
-**Khuyến nghị FE:** dùng prefix `/api/auth` (ví dụ `http://localhost:3000/api/auth/login`).
+**Khuyến nghị FE:** dùng prefix `/api/auth`, `/api/users`, `/api/notifications`, `/api/reviews`.
 
 ---
 
@@ -22,10 +22,13 @@ Chỉ mô tả endpoint đã implement. Domain khác (`booking`, `venue`, …) c
 4. [Luồng nghiệp vụ](#4-luồng-nghiệp-vụ)
 5. [System endpoints](#5-system-endpoints)
 6. [Auth endpoints](#6-auth-endpoints)
-7. [JWT & FE integration](#7-jwt--fe-integration)
-8. [Checklist test](#8-checklist-test)
-9. [Smoke scripts](#9-smoke-scripts)
-10. [Chưa có / sắp làm](#10-chưa-có--sắp-làm)
+7. [Users / Profile endpoints](#7-users--profile-endpoints)
+8. [Notifications endpoints](#8-notifications-endpoints)
+9. [Reviews endpoints](#9-reviews-endpoints)
+10. [JWT & FE integration](#10-jwt--fe-integration)
+11. [Checklist test](#11-checklist-test)
+12. [Smoke scripts](#12-smoke-scripts)
+13. [Chưa có / sắp làm](#13-chưa-có--sắp-làm)
 
 ---
 
@@ -581,7 +584,7 @@ curl -s -X POST http://localhost:3000/auth/refresh \
 
 ### 6.7 `GET /auth/me`
 
-Sample API **protected** — kiểm tra JWT / lấy profile hiện tại.
+Alias của `GET /users/me` — cùng handler / cùng `{ user }` shape.
 
 **Headers**
 
@@ -594,12 +597,17 @@ Authorization: Bearer <accessToken>
 ```json
 {
   "user": {
-    "userId": "...",
+    "userId": 1,
     "email": "player@example.com",
+    "fullName": "Nguyen Van A",
+    "phoneNumber": "0901234567",
+    "gender": "male",
     "role": "PLAYER",
     "status": "ACTIVE",
     "emailVerified": true,
-    "roleSelected": true
+    "roleSelected": true,
+    "roleSelectedAt": "...",
+    "createdAt": "..."
   }
 }
 ```
@@ -712,7 +720,316 @@ curl -s -X POST http://localhost:3000/auth/reset-password \
 
 ---
 
-## 7. JWT & FE integration
+## 7. Users / Profile endpoints
+
+Profile Hub: identity trên `schema_auth.users`, display/prefs trên
+`schema_auth.user_profiles` (JOIN). JSON `user` giữ nguyên cho FE.  
+Mọi route dưới đây cũng có alias `/api/users/*`. Cần `Authorization: Bearer <accessToken>`.
+
+| Method | Path | Body | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/users/me` | — | `200` `{ user }` (cùng shape với `GET /auth/me`) |
+| `GET` | `/users/me/profile` | — | `200` `{ user, stats }` Main Profile stats |
+| `PATCH` | `/users/me` | partial profile/prefs (≥1 field) | `200` `{ message, user }` |
+| `GET` | `/users/me/preferences` | — | `200` `{ preferences }` Settings prefs |
+| `PATCH` | `/users/me/preferences` | language / appearance / push / location | `200` `{ message, preferences }` |
+| `POST` | `/users/me/password` | `{ currentPassword, newPassword, confirmPassword }` | `200` `{ message }` |
+| `POST` | `/users/me/avatar` | multipart `avatar` (jpeg/png/webp/gif ≤2MB) | `200` `{ message, user }` |
+| `POST` | `/users/me/email/request` | `{ newEmail }` | `200` OTP gửi tới **email mới** (`purpose=CHANGE_EMAIL`) |
+| `POST` | `/users/me/email/confirm` | `{ newEmail, otp }` | `200` `{ message, user }` — cập nhật email + `email_verified_at` |
+| `POST` | `/users/me/phone/request` | `{ newPhone }` | `200` OTP gửi tới **email hiện tại** (`purpose=CHANGE_PHONE`) |
+| `POST` | `/users/me/phone/confirm` | `{ newPhone, otp }` | `200` `{ message, user }` |
+| `GET` | `/users/me/schedule` | query `type`/`from`/`to`/`limit` | `200` `{ items, timezone }` |
+| `POST` | `/users/me/schedule/dev/seed` | optional `{ includeMatch, daysFromNow }` | `201` venue/field/booking/match — **dev only** |
+
+**PATCH** cho phép `fullName`, `gender`, `avatarUrl`, `language`, `appearance`, `pushNotificationsEnabled`, `locationServicesEnabled`. Gửi `email` / `phone` → `400` (strict Zod). Đổi email/phone bắt buộc qua request → confirm OTP (FR-1.4).
+
+### 7.1 `GET /users/me`
+
+Giống `GET /auth/me`. `user` gồm prefs defaults: `language: "en"`, `appearance: "light"`, toggles `true`, `avatarUrl: null`.
+
+### 7.1b `GET /users/me/profile` (Main Profile)
+
+Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ bookings/matches (không denormalize, không Redis trong MVP).
+
+**Success `200`**
+
+```json
+{
+  "user": { "...": "same as GET /users/me" },
+  "stats": {
+    "hostedMatches": 0,
+    "joinedMatches": 0,
+    "completedBookings": 0,
+    "reviewsCount": 0,
+    "avgRating": null,
+    "joinedAt": "2026-07-18T10:00:00.000Z"
+  }
+}
+```
+
+| Field | Nguồn |
+| :--- | :--- |
+| `hostedMatches` | `COUNT` `schema_social.matches` where `host_id = me` |
+| `joinedMatches` | `match_participants` `APPROVED` (không tính host) |
+| `completedBookings` | bookings `status = COMPLETED` |
+| `reviewsCount` / `avgRating` | stub `0` / `null` (chưa có host-review) |
+| `joinedAt` | `users.created_at` |
+
+### 7.2 `PATCH /users/me`
+
+**Body** (ít nhất một field)
+
+| Field | Type | Notes |
+| :--- | :--- | :--- |
+| `fullName` | string (1–100) | |
+| `gender` | `male` \| `female` \| `other` \| `prefer_not_to_say` | |
+| `avatarUrl` | string URL http(s) \| `null` | `null` xóa avatar; hoặc `POST /users/me/avatar` |
+| `language` | `en` \| `vi` | |
+| `appearance` | `light` \| `dark` \| `system` | |
+| `pushNotificationsEnabled` | boolean | |
+| `locationServicesEnabled` | boolean | |
+
+**Success `200`**
+
+```json
+{
+  "message": "Profile updated successfully",
+  "user": { "...": "..." }
+}
+```
+
+**Errors:** `400` validation / unrecognized keys, `401`, `404`.
+
+```bash
+curl -s -X PATCH http://localhost:3000/users/me \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"fullName":"Nguyen Van B","gender":"female","language":"vi","appearance":"dark"}'
+```
+
+### 7.2b `POST /users/me/password` (Change Password)
+
+**Body:** `currentPassword`, `newPassword`, `confirmPassword` (rule giống register).
+
+**Success `200`:** `{ "message": "Password updated successfully" }`
+
+### 7.2c `POST /users/me/avatar`
+
+Multipart field **`avatar`** (jpeg/png/webp/gif, ≤2MB). Lưu `uploads/avatars/`, URL qua `/uploads/avatars/*`. Set `PUBLIC_BASE_URL` cho device LAN.
+
+```bash
+curl -s -X POST http://localhost:3000/users/me/avatar \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "avatar=@./photo.jpg"
+```
+
+### 7.2d `GET/PATCH /users/me/preferences` (Settings)
+
+Preference + Layout (Figma Settings). Data trên `user_profiles`; view `schema_auth.user_prefs`. Sync đa thiết bị = cùng row DB.
+
+**GET `200`:** `{ "preferences": { language, appearance, pushNotificationsEnabled, locationServicesEnabled } }`
+
+**PATCH** (≥1 field): `language` (`en`|`vi`), `appearance` (`light`|`dark`|`system`), toggles. Strict — không nhận `fullName`/email.
+
+**PATCH `200`:** `{ "message": "Preferences updated successfully", "preferences": { ... } }`
+
+### 7.3 Đổi email (OTP)
+
+1. `POST /users/me/email/request` `{ "newEmail": "new@example.com" }`
+2. `POST /users/me/email/confirm` `{ "newEmail": "new@example.com", "otp": "123456" }`
+
+OTP gửi tới **email mới**. OTP row dùng `purpose = CHANGE_EMAIL:{sha256(newEmail)[:32]}` để gắn đúng địa chỉ. Trùng email khác user → `409`. Email giống hiện tại → `400`. OTP sai / hết hạn giống auth (`400` / `429`).
+
+### 7.4 Đổi phone (OTP)
+
+1. `POST /users/me/phone/request` `{ "newPhone": "0901234567" }`
+2. `POST /users/me/phone/confirm` `{ "newPhone": "0901234567", "otp": "123456" }`
+
+OTP gửi tới **email hiện tại** (chưa có SMS). Purpose: `CHANGE_PHONE:{newPhone}`. Phone VN 10 số (cùng rule register).
+
+### 7.5 `GET /users/me/schedule` (View Schedule)
+
+Lịch cá nhân: booking của player + social match (host hoặc participant `APPROVED`).  
+Join `schema_booking` + `schema_social` + `schema_venue`. Timezone lịch: **`Asia/Bangkok`**.
+
+**Query**
+
+| Param | Default | Notes |
+| :--- | :--- | :--- |
+| `type` | `all` | `all` \| `booking` \| `match` |
+| `from` | hôm nay (Bangkok) | `YYYY-MM-DD` |
+| `to` | `from` + 30 ngày | `YYYY-MM-DD`; phải ≥ `from` |
+| `limit` | `50` | 1–100 |
+
+Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `[from 00:00+07, to+1 00:00+07)` rồi so với `booking_time_range` (`tstzrange`).
+
+**Success `200`**
+
+```json
+{
+  "items": [
+    {
+      "type": "BOOKING",
+      "bookingId": 1,
+      "matchId": null,
+      "startsAt": "2026-08-20T11:00:00.000Z",
+      "endsAt": "2026-08-20T12:00:00.000Z",
+      "bookingDate": "2026-08-20",
+      "status": "PAID",
+      "venueName": "Smoke Venue",
+      "fieldName": "Pitch A",
+      "address": "123 Nguyen Trai, Dist 1, HCMC",
+      "sportType": "Football"
+    },
+    {
+      "type": "MATCH",
+      "bookingId": 1,
+      "matchId": 9,
+      "role": "HOST",
+      "startsAt": "2026-08-20T11:00:00.000Z",
+      "endsAt": "2026-08-20T12:00:00.000Z",
+      "bookingDate": "2026-08-20",
+      "status": "PAID",
+      "venueName": "Smoke Venue",
+      "fieldName": "Pitch A",
+      "address": "123 Nguyen Trai, Dist 1, HCMC",
+      "sportType": "Football"
+    }
+  ],
+  "timezone": "Asia/Bangkok"
+}
+```
+
+`bookingId` / `matchId` đủ để FE navigate detail / cancellation policy. Bỏ `CANCELLED`.
+
+```bash
+curl -s "http://localhost:3000/users/me/schedule?type=all" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+### 7.6 `POST /users/me/schedule/dev/seed` (dev only)
+
+Tạo venue + field + booking (+ match nếu `includeMatch`, default `true`) gắn user hiện tại. Không có trong production.
+
+```bash
+curl -s -X POST http://localhost:3000/users/me/schedule/dev/seed \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"includeMatch":true,"daysFromNow":3}'
+```
+
+---
+
+## 8. Notifications endpoints
+
+Inbox in-app + badge unread + mark read (SPOT-153/154). Schema: `schema_notification`.  
+Alias `/api/notifications/*`. Tất cả route cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `GET` | `/notifications` | Inbox: `?limit=20&beforeId=&unreadOnly=` → `{ items, nextCursor }` |
+| `GET` | `/notifications/unread-count` | `{ count }` cho bell badge |
+| `PATCH` | `/notifications/:id/read` | Đánh dấu một thông báo đã đọc |
+| `POST` | `/notifications/read-all` | Đánh dấu tất cả đã đọc → `{ updated }` |
+| `POST` | `/notifications/dev/seed` | Dev only — tạo inbox (+ optional `dueReminderNow` / schedule) |
+| `POST` | `/notifications/dev/process-due` | Dev only — chạy một tick reminder worker |
+
+Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `SYSTEM`.  
+Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`.  
+Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
+
+```bash
+curl -s http://localhost:3000/notifications/unread-count \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+## 9. Reviews endpoints
+
+Đánh giá sân sau booking (SPOT-165/166). Schema: `schema_review` + cột `avg_rating` / `rating_count` trên `schema_venue.venues`.  
+Alias `/api/reviews/*`. Cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `POST` | `/reviews` | Player tạo review cho booking `COMPLETED` |
+| `POST` | `/reviews/:id/reply` | Venue owner trả lời (1 reply / review) |
+| `GET` | `/reviews/venues/:venueId/rating` | Aggregate rating (DB + Redis cache `venue:rating:{id}`) |
+| `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review |
+
+**Rules**
+
+- 1 review / `booking_id` (`UNIQUE`)
+- Chỉ `status = COMPLETED`
+- Spam filter cơ bản (Zod): rating 1–5, text ≤ 2000, reject text “spammy”
+- Rate limit: tối đa 10 review / player / 24h → `429`
+- Reply: chỉ `venues.owner_id ===` user hiện tại; 1 reply / review
+- Sau create: cập nhật `venues.avg_rating` / `rating_count`, invalidate Redis cache
+
+### 9.1 `POST /reviews`
+
+**Body**
+
+```json
+{
+  "bookingId": 1,
+  "rating": 5,
+  "reviewText": "Clean field and friendly staff"
+}
+```
+
+**Success `201`**
+
+```json
+{
+  "review": {
+    "reviewId": 1,
+    "bookingId": 1,
+    "venueId": 1,
+    "playerId": 1,
+    "rating": 5,
+    "reviewText": "Clean field and friendly staff",
+    "createdAt": "...",
+    "reply": null
+  },
+  "venueRating": {
+    "venueId": 1,
+    "avgRating": 5,
+    "ratingCount": 1
+  }
+}
+```
+
+**Errors:** `400` (chưa COMPLETED / validation), `401`, `404` booking, `409` đã review, `429` spam rate.
+
+### 9.2 `POST /reviews/:id/reply`
+
+```json
+{ "replyText": "Thanks for your feedback!" }
+```
+
+**Success `201`** → `{ review, reply }`.  
+**Errors:** `403` không phải owner, `404`, `409` đã reply.
+
+### 9.3 `GET /reviews/venues/:venueId/rating`
+
+```json
+{ "venueId": 1, "avgRating": 5, "ratingCount": 1, "source": "db" }
+```
+
+`source` là `cache` hoặc `db`.
+
+```bash
+curl -s -X POST http://localhost:3000/reviews \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"bookingId":1,"rating":5,"reviewText":"Great pitch"}'
+```
+
+---
+
+## 10. JWT & FE integration
 
 ### Claims
 
@@ -753,6 +1070,11 @@ api.interceptors.request.use((config) => {
 | `role` | string | `PLAYER` / `OWNER` / `REFEREE` / … |
 | `status` | string | `ACTIVE` / `PENDING` / `LOCKED` |
 | `gender` | string? | |
+| `avatarUrl` | string \| null | URL ảnh; chưa có upload BE |
+| `language` | `en` \| `vi` | default `en` |
+| `appearance` | `light` \| `dark` \| `system` | default `light` |
+| `pushNotificationsEnabled` | boolean | default `true` |
+| `locationServicesEnabled` | boolean | default `true` |
 | `roleSelected` | boolean | |
 | `roleSelectedAt` | string \| null | ISO datetime |
 | `emailVerified` | boolean | |
@@ -760,9 +1082,9 @@ api.interceptors.request.use((config) => {
 
 ---
 
-## 8. Checklist test
+## 11. Checklist test
 
-Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth**.
+Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth** / **Users** / **Notifications** / **Reviews**.
 
 ### Happy path — PLAYER
 
@@ -774,8 +1096,21 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 4 | `POST /auth/otp/verify` (otp từ email/`debugOtp`) | `200` verified |
 | 5 | `POST /auth/login` | `200` + `accessToken` |
 | 6 | `GET /auth/me` + Bearer access | `200` + `user` |
-| 7 | `POST /auth/refresh` | `200` + token mới |
-| 8 | `GET /auth/me` với access mới | `200` |
+| 7 | `GET /users/me` | cùng `user` như `/auth/me` |
+| 8 | `PATCH /users/me` `{ fullName, gender }` | `200` + user cập nhật |
+| 9 | `PATCH /users/me` prefs (`language`, `appearance`, toggles, `avatarUrl`) | `200` |
+| 10 | `POST /users/me/email/request` → `confirm` | `200` email mới |
+| 11 | `POST /users/me/phone/request` → `confirm` | `200` phone mới |
+| 12 | `POST /users/me/schedule/dev/seed` | `201` + booking (+ match) |
+| 13 | `GET /users/me/schedule` (+ `type=booking\|match`) | `200` + items |
+| 14 | `POST /reviews/dev/seed-booking` | `201` + booking `COMPLETED` |
+| 15 | `POST /reviews` | `201` + `venueRating` |
+| 16 | `POST /reviews/:id/reply` | `201` (user là venue owner) |
+| 17 | `GET /reviews/venues/:venueId/rating` | `200` |
+| 18 | `POST /notifications/dev/seed` | `201` + notification |
+| 19 | `GET /notifications` / `unread-count` | `200` |
+| 20 | `PATCH /notifications/:id/read` + `POST /read-all` | `200` |
+| 21 | `POST /auth/refresh` | `200` + token mới |
 
 ### Negative / edge
 
@@ -797,6 +1132,12 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | Reset rồi login password mới | `200` |
 | `GET /auth/me` không token | `401` |
 | `POST /auth/refresh` bằng access token | `401` |
+| `PATCH /users/me` với `email` | `400` (strict) |
+| Email/phone change trùng user khác | `409` |
+| Email/phone change giống giá trị hiện tại | `400` |
+| Review duplicate booking / non-COMPLETED | `409` / `400` |
+| Reply khi không phải venue owner | `403` |
+| `PATCH /notifications/999999/read` (không thuộc user) | `404` |
 
 ### Forgot password path
 
@@ -809,13 +1150,18 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 
 ---
 
-## 9. Smoke scripts
+## 12. Smoke scripts
 
 Chạy khi server đang `npm run dev` và (nên) `OTP_DEBUG=true`:
 
 ```bash
 npm run smoke:otp      # register → verify
 npm run smoke:login    # register → role → verify → login → me → refresh
+npm run smoke:profile  # login → GET/PATCH me → email/phone OTP change
+npm run smoke:notifications  # inbox + mark read + due reminder
+npm run smoke:schedule       # seed schedule → GET /users/me/schedule
+npm run smoke:reviews        # seed COMPLETED booking → review → reply
+npm run worker:reminders     # background T-24h/T-2h processor
 node scripts/smoke-forgot-password.js
 node scripts/smoke-register.js
 ```
@@ -828,17 +1174,24 @@ npm test
 
 ---
 
-## 10. Chưa có / sắp làm
+## 13. Chưa có / sắp làm
 
 | Hạng mục | Status |
 | :--- | :--- |
 | `authenticate` / `requireRole` middleware | Done |
 | `POST /auth/refresh` | Done |
-| `GET /auth/me` (sample protected) | Done |
+| `GET /auth/me` / `GET /users/me` | Done |
+| `PATCH /users/me` + OTP email/phone change | Done |
+| Prefs / `avatar_url` (`002_user_prefs.sql`) | Done |
+| Notifications inbox + reminders (`003`/`004`) | Done |
+| `GET /users/me/schedule` + venue/booking/social schema (`005`) | Done |
+| `POST /reviews` + reply + venue rating (`006`) | Done |
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Chưa |
 | Logout | Chưa |
-| Booking / venue / payment / … | Scaffold rỗng — chưa có route |
+| Avatar file upload (S3) / stats | Chưa |
+| FCM / device tokens | Chưa |
+| Booking create/pay/cancel, matchmaking lobby, payment, … | Chưa (schedule read + reviews only) |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 

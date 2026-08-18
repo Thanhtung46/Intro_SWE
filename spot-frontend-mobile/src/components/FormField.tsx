@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 interface FormFieldProps extends TextInputProps {
   label: string;
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   required: {
-    color: colors.required,
+    color: colors.formError,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -69,11 +69,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   inputError: {
-    borderColor: colors.error,
+    borderColor: colors.formError,
   },
   errorText: {
     marginTop: 4,
     fontSize: 12,
-    color: colors.error,
+    color: colors.formError,
   },
 });

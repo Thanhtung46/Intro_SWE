@@ -5,4 +5,4 @@ export const API_URL = 'http://localhost:3000/api';
 // spot-backend has no package.json/API yet — hardcoded true until a real
 // backend exists. Flip to false to point authService at the real API_URL,
 // no UI code changes needed.
-export const USE_MOCK_API = true;
+export const USE_MOCK_API = false;

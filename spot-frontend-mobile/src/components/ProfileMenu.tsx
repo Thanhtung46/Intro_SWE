@@ -1,9 +1,13 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import { useUser } from '../context/UserContext';
-import { colors } from '../theme/colors';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { ROUTES } from '@/constants/routes';
+import { comingSoon } from '@/utils/comingSoon';
+import { clearToken } from '@/utils/authStorage';
+import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 
 interface ProfileMenuProps {
   visible: boolean;
@@ -23,64 +27,149 @@ interface MenuItemConfig {
   onPress: () => void;
 }
 
+/** Language/Appearance rows expand a small options list directly beneath
+ * them, inside the menu card — not a navigation, not a separate modal. */
+function ExpandableRow({
+  testID,
+  icon,
+  label,
+  valueLabel,
+  expanded,
+  onToggle,
+  options,
+  onSelect,
+}: {
+  testID: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  valueLabel: string;
+  expanded: boolean;
+  onToggle: () => void;
+  options: { label: string; value: string }[];
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <View>
+      <TouchableOpacity testID={testID} style={styles.item} onPress={onToggle}>
+        <Ionicons name={icon} size={20} color={colors.text} style={styles.itemIcon} />
+        <Text style={styles.itemLabel}>{label}</Text>
+        <Text style={styles.secondaryLabel}>{valueLabel}</Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={colors.subtitle}
+          style={styles.expandChevron}
+        />
+      </TouchableOpacity>
+      {expanded ? (
+        <View style={styles.expandedList}>
+          {options.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              testID={`${testID}-option-${option.value}`}
+              style={styles.expandedOption}
+              onPress={() => onSelect(option.value)}
+            >
+              <Text style={styles.expandedOptionText}>{option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const LANGUAGE_OPTIONS: { label: string; value: Language }[] = [
+  { label: 'English', value: 'en' },
+  { label: 'Tiếng Việt', value: 'vi' },
+];
+
+const APPEARANCE_OPTIONS: { label: string; value: Appearance }[] = [
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+  { label: 'System', value: 'system' },
+];
+
 export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   const router = useRouter();
   const { user, clearUser } = useUser();
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
+  const [language, setLanguage] = useState<Language>('en');
+  const [appearance, setAppearance] = useState<Appearance>('light');
+  const [expanded, setExpanded] = useState<'language' | 'appearance' | null>(null);
 
-  const handleSignOut = () => {
+  useEffect(() => {
+    if (!visible) {
+      setExpanded(null);
+      return;
+    }
+    getPreferences().then((result) => {
+      if (result.success && result.preferences) {
+        setLanguage(result.preferences.language);
+        setAppearance(result.preferences.appearance);
+      }
+    });
+  }, [visible]);
+
+  const handleSignOut = async () => {
+    await clearToken();
     clearUser();
     onClose();
-    router.replace('/auth/login');
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   const handleOpenProfile = () => {
     onClose();
-    router.push('/profile');
+    router.push(ROUTES.PROFILE);
   };
 
-  const handleOpenSettings = () => {
+  const handleSelectLanguage = async (value: Language) => {
+    const previous = language;
+    setLanguage(value);
+    setExpanded(null);
+    const result = await updatePreferences({ language: value });
+    if (!result.success) {
+      setLanguage(previous);
+      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleSelectAppearance = async (value: Appearance) => {
+    const previous = appearance;
+    setAppearance(value);
+    setExpanded(null);
+    const result = await updatePreferences({ appearance: value });
+    if (!result.success) {
+      setAppearance(previous);
+      Alert.alert('Error', result.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleGoHome = () => {
     onClose();
-    router.push('/settings');
+    router.replace(ROUTES.HOME);
   };
 
   const menuItems: MenuItemConfig[] = [
-    { key: 'home', label: 'Home', icon: 'home-outline', onPress: onClose },
-    {
-      key: 'appearance',
-      label: 'Appearance',
-      icon: 'color-palette-outline',
-      secondaryLabel: 'Light >',
-      onPress: handleOpenSettings,
-    },
-    {
-      key: 'language',
-      label: 'Language',
-      icon: 'globe-outline',
-      secondaryLabel: 'English >',
-      onPress: handleOpenSettings,
-    },
+    { key: 'home', label: 'Home', icon: 'home-outline', onPress: handleGoHome },
     {
       key: 'ai-assistant',
       label: 'AI Assistant',
       mciIcon: 'creation',
-      labelColor: colors.primary,
-      iconColor: colors.primary,
-      onPress: () => showComingSoon('AI Assistant'),
+      labelColor: colors.primaryDark,
+      iconColor: colors.primaryDark,
+      onPress: () => comingSoon('AI Assistant'),
     },
   ];
 
   const supportItems: MenuItemConfig[] = [
-    { key: 'help-center', label: 'Help Center', icon: 'help-circle-outline', onPress: () => showComingSoon('Help Center') },
-    { key: 'contact-us', label: 'Contact Us', icon: 'mail-outline', onPress: () => showComingSoon('Contact Us') },
+    { key: 'help-center', label: 'Help Center', icon: 'help-circle-outline', onPress: () => comingSoon('Help Center') },
+    { key: 'contact-us', label: 'Contact Us', icon: 'mail-outline', onPress: () => comingSoon('Contact Us') },
     {
       key: 'report-issue',
       label: 'Report an Issue',
       icon: 'alert-circle-outline',
-      onPress: () => showComingSoon('Report an Issue'),
+      onPress: () => comingSoon('Report an Issue'),
     },
   ];
 
@@ -119,13 +208,34 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
 
               {menuItems.map(renderItem)}
 
+              <ExpandableRow
+                testID="profile-menu-appearance"
+                icon="color-palette-outline"
+                label="Appearance"
+                valueLabel={`${appearance.charAt(0).toUpperCase() + appearance.slice(1)}`}
+                expanded={expanded === 'appearance'}
+                onToggle={() => setExpanded(expanded === 'appearance' ? null : 'appearance')}
+                options={APPEARANCE_OPTIONS}
+                onSelect={(value) => handleSelectAppearance(value as Appearance)}
+              />
+              <ExpandableRow
+                testID="profile-menu-language"
+                icon="globe-outline"
+                label="Language"
+                valueLabel={`${language === 'vi' ? 'Tiếng Việt' : 'English'}`}
+                expanded={expanded === 'language'}
+                onToggle={() => setExpanded(expanded === 'language' ? null : 'language')}
+                options={LANGUAGE_OPTIONS}
+                onSelect={(value) => handleSelectLanguage(value as Language)}
+              />
+
               <View style={styles.divider} />
 
               {supportItems.map(renderItem)}
 
               <TouchableOpacity testID="profile-menu-sign-out" style={styles.item} onPress={handleSignOut}>
-                <Ionicons name="log-out-outline" size={20} color={colors.error} style={styles.itemIcon} />
-                <Text style={[styles.itemLabel, { color: colors.error, fontWeight: '600' }]}>Sign Out</Text>
+                <Ionicons name="log-out-outline" size={20} color={colors.formError} style={styles.itemIcon} />
+                <Text style={[styles.itemLabel, { color: colors.formError, fontWeight: '600' }]}>Sign Out</Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -170,7 +280,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 16,
   },
@@ -208,5 +318,23 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: 8,
+  },
+  expandChevron: {
+    marginLeft: 6,
+  },
+  expandedList: {
+    backgroundColor: colors.screenBackground,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  expandedOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  expandedOptionText: {
+    fontSize: 13,
+    color: colors.text,
   },
 });
