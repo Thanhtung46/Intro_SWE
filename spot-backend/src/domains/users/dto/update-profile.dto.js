@@ -26,7 +26,7 @@ export const updateProfileSchema = z
       .enum(GENDERS, {
         errorMap: () => ({
           message:
-            'Gender must be one of: male, female, other, prefer_not_to_say',
+            'Gender must be one of: male, female',
         }),
       })
       .optional(),

@@ -1,22 +1,16 @@
 # SPOT Backend — API Reference
 
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-<<<<<<< HEAD
 Endpoint đã implement: **auth** + **matchmaking** (host / list / detail / join / approve / kick / mine / edit / cancel).
-=======
 Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / payment / … chưa có API đầy đủ (có **View Schedule** read + **Reviews**).
->>>>>>> develop
 
 | | |
 | :--- | :--- |
 | Base URL (local) | `http://localhost:3000` |
 | Content-Type | `application/json` |
 | Auth hiện tại | Access JWT trên protected routes (`Authorization: Bearer …`); refresh qua `POST /auth/refresh` |
-<<<<<<< HEAD
 | Alias | Mọi route `/auth/*` cũng có bản `/api/auth/*`. `/matches/*` ↔ `/api/matches/*`. |
-=======
 | Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
->>>>>>> develop
 
 **Khuyến nghị FE:** dùng prefix `/api/auth`, `/api/users`, `/api/notifications`, `/api/reviews`.
 
@@ -30,13 +24,11 @@ Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / pay
 4. [Luồng nghiệp vụ](#4-luồng-nghiệp-vụ)
 5. [System endpoints](#5-system-endpoints)
 6. [Auth endpoints](#6-auth-endpoints)
-<<<<<<< HEAD
 7. [Matchmaking endpoints](#7-matchmaking-endpoints)
 8. [JWT & FE integration](#8-jwt--fe-integration)
 9. [Checklist test](#9-checklist-test)
 10. [Smoke scripts](#10-smoke-scripts)
 11. [Chưa có / sắp làm](#11-chưa-có--sắp-làm)
-=======
 7. [Users / Profile endpoints](#7-users--profile-endpoints)
 8. [Notifications endpoints](#8-notifications-endpoints)
 9. [Reviews endpoints](#9-reviews-endpoints)
@@ -44,7 +36,6 @@ Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / pay
 11. [Checklist test](#11-checklist-test)
 12. [Smoke scripts](#12-smoke-scripts)
 13. [Chưa có / sắp làm](#13-chưa-có--sắp-làm)
->>>>>>> develop
 
 ---
 
@@ -129,7 +120,7 @@ Khi bị chặn: `429`. Response có thể theo format của `express-rate-limit
 
 ### Gender (`register`)
 
-`male` | `female` | `other` | `prefer_not_to_say`
+`male` | `female` 
 
 ### Sports & skill levels (profile)
 
@@ -689,11 +680,8 @@ curl -s -X POST http://localhost:3000/auth/refresh \
 
 ### 6.7 `GET /auth/me`
 
-<<<<<<< HEAD
 API **protected** — lấy profile hiện tại (kèm skill 2 sport).
-=======
 Alias của `GET /users/me` — cùng handler / cùng `{ user }` shape.
->>>>>>> develop
 
 **Headers**
 
@@ -710,28 +698,22 @@ Authorization: Bearer <accessToken>
     "email": "player@example.com",
     "fullName": "Nguyen Van A",
     "phoneNumber": "0901234567",
-<<<<<<< HEAD
-=======
     "gender": "male",
->>>>>>> develop
     "role": "PLAYER",
     "status": "ACTIVE",
     "gender": "male",
     "roleSelected": true,
     "roleSelectedAt": "...",
     "emailVerified": true,
-<<<<<<< HEAD
     "avatarUrl": null,
     "createdAt": "...",
     "skills": {
       "badminton": "BEGINNER",
       "football": "LEARNING"
     }
-=======
     "roleSelected": true,
     "roleSelectedAt": "...",
     "createdAt": "..."
->>>>>>> develop
   }
 }
 ```
@@ -959,7 +941,6 @@ curl -s -X POST http://localhost:3000/auth/reset-password \
 
 ---
 
-<<<<<<< HEAD
 ## 7. Matchmaking endpoints
 
 Base: `/matches` hoặc `/api/matches`. Mọi route cần `Authorization: Bearer <accessToken>`.  
@@ -1052,7 +1033,6 @@ Tạo kèo tự do (không cần booking).
     "courtCount": 1,
     "courts": [{ "courtId": 1, "name": "1", "sortOrder": 0 }],
     "createdAt": "..."
-=======
 ## 7. Users / Profile endpoints
 
 Profile Hub: identity trên `schema_auth.users`, display/prefs trên
@@ -1097,12 +1077,10 @@ Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ book
     "reviewsCount": 0,
     "avgRating": null,
     "joinedAt": "2026-07-18T10:00:00.000Z"
->>>>>>> develop
   }
 }
 ```
 
-<<<<<<< HEAD
 `yourShare`: `GENDER_RANGE` + female → `priceMin`; male → `priceMax`; `SPLIT_EVENLY` → `ceil(priceMin / filledCount)` (giảm khi thêm người).
 
 `host.matchCount` = số kèo host đã tạo, trừ `CANCELLED`. `host.rating` luôn `null` ở slice này (chưa có review). Figma card `4.9` = trung bình điểm **sau khi kèo xong**: người `ACCEPTED` đánh giá host; 1 user / 1 kèo. Domain `review` + `POST` complete/rate **chưa làm** — FE ẩn sao khi `null`. `participantAvatars` tối đa 3 URL (host rồi người ACCEPTED, bỏ trống nếu chưa có avatar). `isFavorited` theo caller.
@@ -1180,7 +1158,6 @@ Gợi ý **địa điểm** cho form Host (`99:2`). **Không** dùng cho Homepag
 **Query:** `location` (required), `sport?`, `limit?` (default 10, max 10).
 
 Pool: mọi kèo `status <> CANCELLED` (gồm COMPLETED, FULL, OPEN…). Search unaccent + fuzzy trên `title`, `venueName`, `venueAddress`. Trả **distinct venue** (không trả title kèo).
-=======
 | Field | Nguồn |
 | :--- | :--- |
 | `hostedMatches` | `COUNT` `schema_social.matches` where `host_id = me` |
@@ -1196,19 +1173,17 @@ Pool: mọi kèo `status <> CANCELLED` (gồm COMPLETED, FULL, OPEN…). Search 
 | Field | Type | Notes |
 | :--- | :--- | :--- |
 | `fullName` | string (1–100) | |
-| `gender` | `male` \| `female` \| `other` \| `prefer_not_to_say` | |
+| `gender` | `male` \| `female`  | |
 | `avatarUrl` | string URL http(s) \| `null` | `null` xóa avatar; hoặc `POST /users/me/avatar` |
 | `language` | `en` \| `vi` | |
 | `appearance` | `light` \| `dark` \| `system` | |
 | `pushNotificationsEnabled` | boolean | |
 | `locationServicesEnabled` | boolean | |
->>>>>>> develop
 
 **Success `200`**
 
 ```json
 {
-<<<<<<< HEAD
   "suggestions": [
     {
       "venueName": "San ABC",
@@ -1261,7 +1236,6 @@ List kèo còn slot (`OPEN`, `filledCount < maxPlayers`, `endsAt > now`). Kèo `
 | `latitude` / `longitude` / `radiusKm` | Radio **Distance**. Cả ba **cùng lúc**. GPS user + bán kính 1–20 km. Haversine; kèo không có toạ độ bị loại. **Không** gửi cùng `location`. |
 | `limit` | Default 20, max 50 |
 | `offset` | Default 0 |
-=======
   "message": "Profile updated successfully",
   "user": { "...": "..." }
 }
@@ -1331,13 +1305,11 @@ Join `schema_booking` + `schema_social` + `schema_venue`. Timezone lịch: **`As
 | `limit` | `50` | 1–100 |
 
 Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `[from 00:00+07, to+1 00:00+07)` rồi so với `booking_time_range` (`tstzrange`).
->>>>>>> develop
 
 **Success `200`**
 
 ```json
 {
-<<<<<<< HEAD
   "total": 2,
   "limit": 20,
   "offset": 0,
@@ -1395,7 +1367,6 @@ Skill ngoài range kèo → **vẫn tạo request**, `skillWarning: true`. Skill
 
 `AUTO`: request `ACCEPTED`, `filledCount` tăng, `shareAmount` ghi nhận, `paymentStatus: SUCCESS`.  
 `APPROVAL`: request `PENDING`, `filledCount` chưa đổi; share ghi lúc accept.
-=======
   "items": [
     {
       "type": "BOOKING",
@@ -1506,13 +1477,11 @@ Alias `/api/reviews/*`. Cần Bearer access.
   "reviewText": "Clean field and friendly staff"
 }
 ```
->>>>>>> develop
 
 **Success `201`**
 
 ```json
 {
-<<<<<<< HEAD
   "message": "Join request submitted",
   "skillWarning": false,
   "warning": null,
@@ -1721,7 +1690,6 @@ List `GET /matches` có `isFavorited` trên từng phần tử.
 ---
 
 ## 8. JWT & FE integration
-=======
   "review": {
     "reviewId": 1,
     "bookingId": 1,
@@ -1769,7 +1737,6 @@ curl -s -X POST http://localhost:3000/reviews \
 ---
 
 ## 10. JWT & FE integration
->>>>>>> develop
 
 ### Claims
 
@@ -1826,11 +1793,8 @@ api.interceptors.request.use((config) => {
 
 ---
 
-<<<<<<< HEAD
 ## 9. Checklist test
-=======
 ## 11. Checklist test
->>>>>>> develop
 
 Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth** / **Users** / **Notifications** / **Reviews**.
 
@@ -1843,7 +1807,6 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 3 | `POST /auth/role` `PLAYER` | `200` + `status: ACTIVE` |
 | 4 | `POST /auth/otp/verify` (otp từ email/`debugOtp`) | `200` verified |
 | 5 | `POST /auth/login` | `200` + `accessToken` |
-<<<<<<< HEAD
 | 6 | `GET /auth/me` + Bearer access | `200` + `user` (kèm `skills`) |
 | 7 | `PATCH /auth/me` `{ skills: { badminton, football } }` | `200` + cả hai skill |
 | 8 | `GET /auth/me` | `200` skill đã lưu |
@@ -1875,7 +1838,6 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 13 | `PATCH /matches/:id` `{ "title": "..." }` trước giờ | `200` title mới |
 | 14 | `POST /matches/:id/cancel` | `CANCELLED`; kèo biến khỏi list public |
 | 15 | `GET /matches/:id/requests` sau reject | không còn request đó (chỉ `PENDING`) |
-=======
 | 6 | `GET /auth/me` + Bearer access | `200` + `user` |
 | 7 | `GET /users/me` | cùng `user` như `/auth/me` |
 | 8 | `PATCH /users/me` `{ fullName, gender }` | `200` + user cập nhật |
@@ -1892,7 +1854,6 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 19 | `GET /notifications` / `unread-count` | `200` |
 | 20 | `PATCH /notifications/:id/read` + `POST /read-all` | `200` |
 | 21 | `POST /auth/refresh` | `200` + token mới |
->>>>>>> develop
 
 ### Negative / edge
 
@@ -1933,26 +1894,20 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 
 ---
 
-<<<<<<< HEAD
 ## 10. Smoke scripts
-=======
 ## 12. Smoke scripts
->>>>>>> develop
 
 Chạy khi server đang `npm run dev` và (nên) `OTP_DEBUG=true`:
 
 ```bash
 npm run smoke:otp      # register → verify
 npm run smoke:login    # register → role → verify → login → me → refresh
-<<<<<<< HEAD
 npm run smoke:matches  # 2 PLAYER → host/join/approve/kick/mine/edit/cancel
-=======
 npm run smoke:profile  # login → GET/PATCH me → email/phone OTP change
 npm run smoke:notifications  # inbox + mark read + due reminder
 npm run smoke:schedule       # seed schedule → GET /users/me/schedule
 npm run smoke:reviews        # seed COMPLETED booking → review → reply
 npm run worker:reminders     # background T-24h/T-2h processor
->>>>>>> develop
 node scripts/smoke-forgot-password.js
 node scripts/smoke-register.js
 ```
@@ -1965,17 +1920,13 @@ npm test
 
 ---
 
-<<<<<<< HEAD
 ## 11. Chưa có / sắp làm
-=======
 ## 13. Chưa có / sắp làm
->>>>>>> develop
 
 | Hạng mục | Status |
 | :--- | :--- |
 | `authenticate` / `requireRole` middleware | Done |
 | `POST /auth/refresh` | Done |
-<<<<<<< HEAD
 | `GET /auth/me` | Done — kèm `user.skills` |
 | `GET /users/:id` | Done — public host profile (không email/SĐT); `rating`/`reviewCount` stub |
 | `PATCH /auth/me` | Done — set/clear skill per sport |
@@ -1989,20 +1940,18 @@ npm test
 | Matchmaking smoke (`npm run smoke:matches`) | Done — Phase 5 |
 | Host rating (`host.rating` / Figma `4.9`) | **Hoãn.** Sau kèo `COMPLETED` (hoặc `endsAt` đã qua), player `ACCEPTED` rate host → trung bình. Chưa có bảng review, chưa có `POST` complete/rate. Field API giữ `null`. |
 | Figma homepage: AI chatbot, notification (chuông), Booking, Schedule, Groups, Tournaments | **Khóa / chưa đụng** — không có route |
-=======
 | `GET /auth/me` / `GET /users/me` | Done |
 | `PATCH /users/me` + OTP email/phone change | Done |
-| Prefs / `avatar_url` (`002_user_prefs.sql`) | Done |
-| Notifications inbox + reminders (`003`/`004`) | Done |
-| `GET /users/me/schedule` + venue/booking/social schema (`005`) | Done |
-| `POST /reviews` + reply + venue rating (`006`) | Done |
+| Prefs / `avatar_url` (`001` `user_profiles`) | Done |
+| Notifications inbox + reminders (`003`) | Done |
+| `GET /users/me/schedule` + venue/booking/social schema (`004`) | Done |
+| `POST /reviews` + reply + venue rating (`005`) | Done |
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Chưa |
 | Logout | Chưa |
 | Avatar file upload (S3) / stats | Chưa |
 | FCM / device tokens | Chưa |
 | Booking create/pay/cancel, matchmaking lobby, payment, … | Chưa (schedule read + reviews only) |
->>>>>>> develop
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 

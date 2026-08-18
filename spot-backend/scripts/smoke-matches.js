@@ -383,8 +383,11 @@ const publicIds = (publicList.json.matches || []).map((row) => row.matchId);
 if (publicIds.includes(approvalId)) {
   fail('cancelled match still in public list', publicList.json);
 }
-if (!publicIds.includes(autoId)) {
-  fail('AUTO match missing from public list', publicList.json);
+if (publicIds.includes(autoId)) {
+  fail('kicked AUTO still in public list', publicList.json);
+}
+if (!publicIds.includes(rejectId)) {
+  fail('REJECTED match missing from public list', publicList.json);
 }
 if (!Array.isArray(publicList.json.suggestions)) {
   fail('public list missing suggestions[]', publicList.json);

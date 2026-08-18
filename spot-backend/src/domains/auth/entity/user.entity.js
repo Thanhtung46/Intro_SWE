@@ -35,7 +35,6 @@ export function toPublicUser(row, skillRows = []) {
     roleSelected: Boolean(row.role_selected_at),
     roleSelectedAt: row.role_selected_at ?? null,
     emailVerified: Boolean(row.email_verified_at),
-    avatarUrl: row.avatar_url ?? null,
     createdAt: row.created_at,
     skills: skillsFromRows(skillRows),
   };

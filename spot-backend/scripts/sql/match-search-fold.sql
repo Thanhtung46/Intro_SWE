@@ -1,6 +1,7 @@
--- Delta when 003 already ran without search objects (this DB applied 004).
--- Idempotent: fresh installs also get these from 003.
+-- Re-apply search fold + GIN (npm run apply:match-search).
+-- Canonical copy lives in 006_schema_matchmaking.sql.
 
+CREATE SCHEMA IF NOT EXISTS schema_matchmaking;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE OR REPLACE FUNCTION schema_matchmaking.fold_search_text(input text)

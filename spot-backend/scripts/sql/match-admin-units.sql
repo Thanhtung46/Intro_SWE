@@ -1,6 +1,5 @@
--- Live delta: 003 already applied without province/city.
--- Idempotent. Re-run: node scripts/apply-match-admin.js
--- Pre-2025 map: 63 tỉnh/TP + quận/huyện. Codes from GET /geo/vn.
+-- Re-apply province/city on matches (npm run apply:match-admin).
+-- Canonical copy lives in 006_schema_matchmaking.sql. Pre-2025 GSO codes.
 
 ALTER TABLE schema_matchmaking.matches
   ADD COLUMN IF NOT EXISTS province VARCHAR(5) NULL,

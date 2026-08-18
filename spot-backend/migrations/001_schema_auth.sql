@@ -1,10 +1,5 @@
-<<<<<<< HEAD
--- Auth schema (canonical for fresh installs).
--- Name/gender live on schema_auth.user_profiles, not on users.
-=======
--- Canonical auth schema (squashed). Fresh installs only.
--- users = identity/auth; user_profiles = display + Settings prefs; user_prefs = view alias.
->>>>>>> develop
+-- 001 — schema_auth. Depends: none.
+-- users = identity; user_profiles = display + Settings prefs; user_prefs = view.
 
 CREATE SCHEMA IF NOT EXISTS schema_auth;
 
@@ -30,24 +25,18 @@ CREATE TABLE IF NOT EXISTS schema_auth.user_profiles (
     REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
   full_name VARCHAR(100) NOT NULL,
   gender VARCHAR(30) NOT NULL
-    CHECK (gender IN ('male', 'female', 'other', 'prefer_not_to_say')),
-<<<<<<< HEAD
+    CHECK (gender IN ('male', 'female')),
   avatar_url VARCHAR(2048) NULL,
-=======
-  avatar_url TEXT NULL,
   language VARCHAR(10) NOT NULL DEFAULT 'en'
     CHECK (language IN ('en', 'vi')),
   appearance VARCHAR(20) NOT NULL DEFAULT 'light'
     CHECK (appearance IN ('light', 'dark', 'system')),
   push_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   location_services_enabled BOOLEAN NOT NULL DEFAULT TRUE,
->>>>>>> develop
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-<<<<<<< HEAD
-=======
 CREATE OR REPLACE VIEW schema_auth.user_prefs AS
 SELECT
   user_id,
@@ -58,7 +47,6 @@ SELECT
   updated_at
 FROM schema_auth.user_profiles;
 
->>>>>>> develop
 CREATE TABLE IF NOT EXISTS schema_auth.otp_verifications (
   otp_id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES schema_auth.users(user_id) ON DELETE CASCADE,
@@ -72,9 +60,6 @@ CREATE TABLE IF NOT EXISTS schema_auth.otp_verifications (
 CREATE INDEX IF NOT EXISTS idx_otp_verifications_user_purpose
   ON schema_auth.otp_verifications (user_id, purpose)
   WHERE is_used = FALSE;
-<<<<<<< HEAD
 
 -- Legacy scaffold only. Do not drop user_profiles.
 DROP TABLE IF EXISTS schema_auth.otp_tokens CASCADE;
-=======
->>>>>>> develop

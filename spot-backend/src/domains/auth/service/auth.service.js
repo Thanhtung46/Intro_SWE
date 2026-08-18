@@ -34,11 +34,7 @@ import * as userSportSkillRepository from '../repository/user-sport-skill.reposi
 import { toPublicUser, toPublicHostProfile } from '../entity/user.entity.js';
 import { SPORTS } from '../../../shared/constants/sports.js';
 import config from '../../../shared/config/env.js';
-<<<<<<< HEAD
 import * as matchRepository from '../../matchmaking/repository/match.repository.js';
-=======
-import { getMe } from '../../users/service/users.service.js';
->>>>>>> develop
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -518,7 +514,6 @@ export async function refreshSession(input) {
 
 /** Alias of users.getMe — kept for any internal callers. */
 export async function getCurrentUser(userId) {
-<<<<<<< HEAD
   const client = await pool.connect();
   try {
     const user = await userRepository.findById(client, userId);
@@ -594,9 +589,6 @@ export async function updateCurrentUser(userId, { skills, avatarUrl }) {
   } finally {
     client.release();
   }
-=======
-  return getMe(userId);
->>>>>>> develop
 }
 
 export async function selectRole(input) {
@@ -626,7 +618,6 @@ export async function selectRole(input) {
       role,
       status,
     });
-    const withProfile = await userRepository.findById(client, updated.user_id);
 
     return {
       message:
@@ -634,7 +625,7 @@ export async function selectRole(input) {
           ? 'Role selected. Account is pending approval.'
           : 'Role selected successfully',
       nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
-      user: await publicUserWithSkills(client, withProfile),
+      user: await publicUserWithSkills(client, updated),
     };
   } finally {
     client.release();

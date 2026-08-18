@@ -8,19 +8,14 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 **Stack:** `pg` → Supabase Session pooler (SSL); `ioredis` (OTP/rate-limit, soft-fail if down); `argon2id`; Zod DTOs; Gmail SMTP (`OTP_DEBUG` returns `debugOtp` in non-prod).
 
-<<<<<<< HEAD
 Implemented so far:
 
-**Auth**
-=======
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
->>>>>>> develop
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
 
 ## Status (done vs not)
 
 | Done | Notes |
 | :--- | :--- |
-<<<<<<< HEAD
 | `POST /auth/register` | Done — creates user + hashed OTP; sends OTP via Gmail SMTP (`nodemailer`) |
 | `POST /auth/role` | Done — Register Step 2; selectable `PLAYER` / `OWNER` / `REFEREE` (once) |
 | `POST /auth/otp/verify` | Done — argon2 verify, sets `email_verified_at`, invalidates OTP |
@@ -71,7 +66,6 @@ Implemented so far:
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
 Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
-=======
 | Auth | register → role → OTP → login/refresh; forgot/reset password |
 | Profile | `GET/PATCH /users/me`, Main Profile stats, preferences, password change, avatar upload |
 | Contact change | OTP email/phone under `/users/me/email|phone/...` |
@@ -79,15 +73,13 @@ Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN
 | Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
 | Reviews | create + owner reply; venue rating cache |
 
-**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD / matchmaking / payment.
->>>>>>> develop
+**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment.
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
 
 ## Commands
 
 ```bash
-<<<<<<< HEAD
 npm install
 cp .env.example .env   # then fill Supabase DB_* + SMTP_* + JWT_SECRET
 npm run migrate        # apply pending SQL under migrations/
@@ -99,22 +91,15 @@ node scripts/check-db.js
 node scripts/smoke-register.js
 npm run smoke:otp      # register → verify (needs server + OTP_DEBUG=true)
 npm run smoke:login    # register → role → verify → login JWT
+npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
-npm run apply:match-search   # live DB: re-apply 004 fold + GIN (004 already migrated)
-npm run apply:match-admin    # live DB: re-apply 005 province/city (005 already migrated)
+npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
+npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
 node scripts/smoke-forgot-password.js  # register → role → verify → forgot → reset → login
-=======
-# from spot-backend/
-npm install && cp .env.example .env   # fill DB_*, SMTP_*, JWT_SECRET
-npm run migrate                      # apply pending migrations/
-npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
-npm run dev                          # http://localhost:3000
-npm test
-npm run smoke:otp|login|profile|schedule|notifications|reviews
-node scripts/smoke-forgot-password.js
+npm run smoke:schedule|notifications|reviews
 npm run worker:reminders
->>>>>>> develop
+npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
 ```
 
 Docker from **repo root** `Intro_SWE/`:
@@ -122,13 +107,10 @@ Docker from **repo root** `Intro_SWE/`:
 ```bash
 docker compose up -d --build redis backend
 docker compose run --rm backend npm run migrate
-<<<<<<< HEAD
 docker restart spot-backend
 docker compose logs -f backend
 docker compose down
-=======
 
->>>>>>> develop
 ```
 
 Compose uses `env_file: ./spot-backend/.env`, forces `REDIS_HOST=redis`. Optional local Postgres: `docker compose --profile local-db up -d postgres` (do not `depends_on` it while on that profile).
@@ -138,7 +120,6 @@ Compose uses `env_file: ./spot-backend/.env`, forces `REDIS_HOST=redis`. Optiona
 ```
 src/
 ├── server.js / app.js
-<<<<<<< HEAD
 ├── domains/auth/
 │   ├── routes.js                 # /auth/*
 │   ├── user.routes.js            # /users/:id public host profile
@@ -170,11 +151,13 @@ src/
     ├── types/                    # reserved
     └── utils/{logger,otp,password,jwt,mailer,foldSearchText}.js
 migrations/
-├── 001_schema_auth.sql           # users + user_profiles + otp
-├── 002_user_sport_skills.sql     # schema_auth.user_sport_skills
-├── 003_schema_matchmaking.sql    # canonical kèo + fold_search_text + GIN + province/city
-├── 004_match_search_fold.sql     # live delta if 003 ran without search (idempotent)
-├── 005_match_admin_units.sql     # live delta: province + city + matches_admin_pair
+├── 001_schema_auth.sql           # users + user_profiles + prefs + otp
+├── 002_user_sport_skills.sql     # badminton / football ladders
+├── 003_schema_notification.sql   # inbox + reminder_jobs
+├── 004_schema_venue_booking_social.sql  # venues, bookings, schema_social.matches
+├── 005_schema_review.sql         # reviews + owner replies
+├── 006_schema_matchmaking.sql    # pickup kèo + fold + province/city
+├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
 ├── apply-homepage-card.js / apply-match-search.js / apply-match-admin.js
@@ -199,35 +182,26 @@ geo at `/geo` and `/api/geo` (see `app.js`). Register **before** `GET /:id`:
 
 `req.user` after `authenticate`: `{ userId, role, email }`. JWT `sub` is a
 **string** — coerce with `Number` when comparing to DB ids.
-=======
-├── domains/{auth,users,notification,booking,review}/   # implemented
-├── domains/{admin,matchmaking,payment,referee,venue}/  # empty scaffolds
-└── shared/{config,constants,database,middleware,utils}/
-migrations/          # 001 auth → 002 notification → 003 venue/booking/social → 004 review
-scripts/             # migrate, reset-and-migrate, smoke-*, reminder-worker
-tests/unit/
-```
 
-Match domain layering. Schedule lives in booking domain; route is on users.
->>>>>>> develop
+Schedule lives in the booking domain; the HTTP route is on `/users/me/schedule`.
+`GET /users/me*` is mounted **before** `GET /users/:id` so Profile Hub is not
+captured as a numeric id.
 
 ## Auth & profile (short)
 
-<<<<<<< HEAD
 1. `POST /auth/register` → `{ nextStep: "SELECT_ROLE", userId, email }` (+ OTP email)
 2. `POST /auth/role` `{ email, role }` → `PLAYER` stays `ACTIVE`; `OWNER`/`REFEREE` → `PENDING`
 3. `POST /auth/otp/verify` `{ email, otp }` → sets `email_verified_at`
 4. `POST /auth/login` `{ email, password }` → `{ accessToken, refreshToken, user }`
 5. Protected APIs: `Authorization: Bearer <accessToken>` via `authenticate`
 6. `POST /auth/refresh` `{ refreshToken }` → new access + refresh when access expires
-7. `GET /auth/me` — own profile (email/phone/skills)
+7. `GET /auth/me` / `GET /users/me` — own profile (email/phone/skills + prefs)
 8. `GET /users/:id` — public host card (no email/phone)
-=======
+9. `GET /users/me/profile` — Main Profile stats; `GET/PATCH /users/me/preferences` — Settings
 1. `POST /auth/register` → select role → `POST /auth/otp/verify` → `POST /auth/login`
 2. Protected: `Authorization: Bearer <access>` via `authenticate` / `requireRole(...)`
 3. Login needs verified email, role selected, not `LOCKED`/`PENDING`, no lockout
 4. JWT access: `sub`, `role`, `email`, `type: access` (15m); refresh: `sub`, `role`, `type: refresh` (7d)
->>>>>>> develop
 
 **Schema `schema_auth`:** `users` = identity (email/phone/password/role/status); `user_profiles` = display + prefs (`full_name`, `gender`, `avatar_url`, language/appearance/toggles); view `user_prefs`; shared `otp_verifications` by `purpose` (`REGISTER` | `FORGOT_PASSWORD` | `CHANGE_EMAIL` | `CHANGE_PHONE`).
 
@@ -247,7 +221,6 @@ Also: Redis, `JWT_SECRET` / expiry, `SMTP_*` / `EMAIL_FROM`, OTP limits, `LOGIN_
 
 ## Guidelines
 
-<<<<<<< HEAD
 Password rules match register (min 8, upper/lower/digit/**special char**, confirm match).
 Phone: exactly 10 digits.
 Invalid/expired OTP or unknown email on reset → 400 generic
@@ -620,14 +593,16 @@ is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
 - `POST /matches/:id/cancel` — pending join requests → `REJECTED`; match `CANCELLED` (frees pitch).
   ACCEPTED rows stay as history.
 
-**Schema (`schema_matchmaking`)** — `003` is canonical for fresh installs:
+**Schema (`schema_matchmaking`)** — `006_schema_matchmaking.sql` is canonical:
 `matches` (incl. `province`/`city`, `matches_admin_pair`, `fold_search_text`,
 GIN + partial `idx_matches_province_city`), `match_courts`,
-`match_join_requests`, `match_guests`, `match_favorites`. `004` / `005` are
-**idempotent live deltas** (`CREATE OR REPLACE` / `IF NOT EXISTS`) for DBs
-that already applied an older `003`. `migrate.js` skips filenames already in
-`schema_migrations` — re-apply with `npm run apply:match-search` (`004`) or
-`npm run apply:match-admin` (`005`). Do **not** add `006+` ALTER-only files.
+`match_join_requests`, `match_guests`, `match_favorites`. Chain: `001` auth →
+`002` skills → `003` notification → `004` venue/booking/social → `005` review →
+`006` kèo. `migrate.js` skips filenames already in `schema_migrations`.
+Re-apply search/admin with `npm run apply:match-search` or
+`npm run apply:match-admin` (`scripts/sql/`). Do **not** add `007+` ALTER-only
+matchmaking files; use `apply-*.js`. Leftover old filenames in
+`schema_migrations` — do not delete.
 `user_profiles.avatar_url` in `001`. Live homepage-card columns:
 `npm run apply:homepage-card`. Leftover `schema_migrations` rows — do not
 delete. Do not `INSERT` name/gender on `users`.
@@ -690,8 +665,7 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
 - This directory is tracked by the root repo (no nested `.git`).
 - **Name/gender** live on `schema_auth.user_profiles`. Login and match list
   `LEFT JOIN` that table (`full_name`, `gender`). Do not drop `user_profiles`.
-  Matchmaking fee gender is `male`/`female` only (auth register still allows
-  `other` / `prefer_not_to_say`).
+  Matchmaking fee gender is `male`/`female` only (auth register still allows).
 - **Matchmaking:** one join request per `(match, user)`; kick is per-kèo not
   per-host; waiting list is PENDING only; `GET /mine` before `GET /:id`.
   List: Location XOR Distance; `province`/`city` may combine with either;
@@ -706,9 +680,7 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
 - FE role-based navigation reads `role` from login JWT / `user`. Protect later
   APIs with `authenticate` / `requireRole` from `shared/middleware/authenticate.js`.
   Sample: `GET /auth/me`, `GET /users/:id`. Refresh via `POST /auth/refresh` `{ refreshToken }`.
-=======
 - Compose from **repo root**; never commit `.env`
 - Auth uses `pg` + `ioredis` — do not assume `@supabase/supabase-js` is wired
 - Style: 2 spaces, single quotes, trailing commas; camelCase / PascalCase (no linter yet)
 - Full API details: `docs/API.md` / `API.md`
->>>>>>> develop

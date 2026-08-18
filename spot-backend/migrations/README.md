@@ -1,18 +1,35 @@
 # Migrations
 
-Canonical chain (squashed). Apply with `npm run migrate`.
+Canonical chain. Apply with `npm run migrate` (skips filenames already in
+`public.schema_migrations`). All files are idempotent (`IF NOT EXISTS` /
+`CREATE OR REPLACE`).
 
-| File | Contents |
-| :--- | :--- |
-| `001_schema_auth.sql` | `users`, `user_profiles`, view `user_prefs`, `otp_verifications` |
-| `002_schema_notification.sql` | `notifications`, `reminder_jobs` |
-| `003_schema_venue_booking_social.sql` | venues/fields, bookings, matches/participants + reminder FK |
-| `004_schema_review.sql` | `reviews`, `review_replies` |
+| File | Schema | Depends on |
+| :--- | :--- | :--- |
+| `001_schema_auth.sql` | `users`, `user_profiles` + Settings prefs, view `user_prefs`, `otp_verifications` | — |
+| `002_user_sport_skills.sql` | badminton / football skill ladders | 001 |
+| `003_schema_notification.sql` | `notifications`, `reminder_jobs` | 001 |
+| `004_schema_venue_booking_social.sql` | venues/fields, bookings, `schema_social.matches` + reminder FK | 001, 003 |
+| `005_schema_review.sql` | `reviews`, `review_replies` | 001, 004 |
+| `006_schema_matchmaking.sql` | pickup kèo: matches, courts, joins, guests, favorites, search fold + GIN, `province`/`city` | 001 |
 
-**Reset (destructive — wipes all app data on the target DB):**
+`schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
+
+**Live DB after this squash:** `npm run migrate` records the new filenames and
+re-runs `CREATE IF NOT EXISTS` (no data wipe). Leftover rows for old names
+(`002_schema_notification.sql`, `003_schema_matchmaking.sql`, `004_match_search_fold.sql`,
+`006_user_profile_prefs.sql`, …) stay in `schema_migrations` — do not delete them.
+
+**Re-apply without renaming** (when `006` is already recorded):
 
 ```bash
-node scripts/reset-and-migrate.js
+npm run apply:match-search   # scripts/sql/match-search-fold.sql
+npm run apply:match-admin    # scripts/sql/match-admin-units.sql
+npm run apply:homepage-card  # cover_url / avatar_url / favorites
 ```
 
-Do this on every environment (Supabase / local) after pulling the squash, or schemas will disagree with `schema_migrations`.
+**Reset (destructive — wipes all app data):**
+
+```bash
+npm run migrate:reset
+```

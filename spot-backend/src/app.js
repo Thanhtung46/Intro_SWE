@@ -4,15 +4,12 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import authRoutes from './domains/auth/routes.js';
-<<<<<<< HEAD
-import userRoutes from './domains/auth/user.routes.js';
+import userAuthRoutes from './domains/auth/user.routes.js';
 import matchRoutes from './domains/matchmaking/routes.js';
 import geoRoutes from './domains/matchmaking/geo.routes.js';
-=======
 import usersRoutes from './domains/users/routes.js';
 import notificationRoutes from './domains/notification/routes.js';
 import reviewRoutes from './domains/review/routes.js';
->>>>>>> develop
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,21 +32,18 @@ app.get('/api', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
-<<<<<<< HEAD
-app.use('/users', userRoutes);
-app.use('/api/users', userRoutes);
+app.use('/users', usersRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/users', userAuthRoutes);
+app.use('/api/users', userAuthRoutes);
 app.use('/geo', geoRoutes);
 app.use('/api/geo', geoRoutes);
 app.use('/matches', matchRoutes);
 app.use('/api/matches', matchRoutes);
-=======
-app.use('/users', usersRoutes);
-app.use('/api/users', usersRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/reviews', reviewRoutes);
 app.use('/api/reviews', reviewRoutes);
->>>>>>> develop
 
 app.use(errorHandler);
 

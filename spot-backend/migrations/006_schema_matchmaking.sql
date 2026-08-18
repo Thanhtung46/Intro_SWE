@@ -1,6 +1,5 @@
--- Pickup matches (kèo) — free listing, no booking_id.
--- Courts, join requests, guests, favorites, venue + optional map coords.
--- Search: pg_trgm + fold_search_text (Vietnamese unaccent; no Geoapify).
+-- 006 — pickup kèo (free listing, no booking_id). Depends: 001.
+-- Includes courts, joins, guests, favorites, fold_search_text + GIN, province/city.
 
 CREATE SCHEMA IF NOT EXISTS schema_matchmaking;
 
