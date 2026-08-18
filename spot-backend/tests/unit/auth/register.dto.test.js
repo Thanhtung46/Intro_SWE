@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { registerSchema } from '../../src/domains/auth/dto/register.dto.js';
+import { registerSchema } from '../../../src/domains/auth/dto/register.dto.js';
 
 const valid = {
   fullName: 'Nguyen Van A',

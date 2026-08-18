@@ -15,6 +15,7 @@ async function reset() {
     console.log('Dropping schemas (CASCADE) and schema_migrations...');
     await client.query('BEGIN');
     await client.query(`
+      DROP SCHEMA IF EXISTS schema_matchmaking CASCADE;
       DROP SCHEMA IF EXISTS schema_review CASCADE;
       DROP SCHEMA IF EXISTS schema_social CASCADE;
       DROP SCHEMA IF EXISTS schema_booking CASCADE;

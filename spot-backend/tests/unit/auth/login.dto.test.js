@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loginSchema } from '../../src/domains/auth/dto/login.dto.js';
+import { loginSchema } from '../../../src/domains/auth/dto/login.dto.js';
 
 describe('loginSchema', () => {
   it('accepts a valid payload', () => {

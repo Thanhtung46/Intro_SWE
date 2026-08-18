@@ -23,6 +23,7 @@ import { AppError } from '../../../shared/middleware/errorHandler.js';
 import { AVATAR_UPLOAD_DIR } from '../../../shared/middleware/avatarUpload.js';
 import * as userRepository from '../../auth/repository/user.repository.js';
 import * as otpRepository from '../../auth/repository/otp.repository.js';
+import * as userSportSkillRepository from '../../auth/repository/user-sport-skill.repository.js';
 import { toPublicUser, toPublicPreferences } from '../../auth/entity/user.entity.js';
 import config from '../../../shared/config/env.js';
 import * as bookingService from '../../booking/service/booking.service.js';
@@ -148,8 +149,12 @@ export async function getMe(userId) {
     if (!user) {
       throw new AppError('User not found', 404);
     }
+    const skillRows = await userSportSkillRepository.findByUserId(
+      client,
+      user.user_id,
+    );
     return {
-      user: toPublicUser(user),
+      user: toPublicUser(user, skillRows),
     };
   } finally {
     client.release();
@@ -188,9 +193,13 @@ export async function patchMe(userId, input) {
       locationServicesEnabled: input.locationServicesEnabled,
     });
 
+    const skillRows = await userSportSkillRepository.findByUserId(
+      client,
+      userId,
+    );
     return {
       message: 'Profile updated successfully',
-      user: toPublicUser(updated),
+      user: toPublicUser(updated, skillRows),
     };
   } finally {
     client.release();

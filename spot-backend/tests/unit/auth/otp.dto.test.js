@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   verifyOtpSchema,
   resendOtpSchema,
-} from '../../src/domains/auth/dto/otp.dto.js';
+} from '../../../src/domains/auth/dto/otp.dto.js';
 
 describe('verifyOtpSchema', () => {
   it('accepts a valid payload and defaults purpose', () => {

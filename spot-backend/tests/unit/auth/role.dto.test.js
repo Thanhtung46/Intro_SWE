@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectRoleSchema } from '../../src/domains/auth/dto/role.dto.js';
+import { selectRoleSchema } from '../../../src/domains/auth/dto/role.dto.js';
 
 describe('selectRoleSchema', () => {
   it('accepts PLAYER', () => {
