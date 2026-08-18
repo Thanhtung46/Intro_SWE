@@ -41,7 +41,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
     refreshUnreadCount();
   }, []);
 
-  const goToTab = (tab: TabKey, path: '/home' | '/schedule' | '/settings') => {
+  const goToTab = (tab: TabKey, path: '/home' | '/matches' | '/schedule' | '/settings') => {
     if (activeTab === tab) return;
     router.replace(path);
   };
@@ -87,7 +87,12 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
       <View style={styles.bottomNav}>
         <BottomNavItem icon="home" label="Home" active={activeTab === 'home'} onPress={() => goToTab('home', '/home')} />
         <BottomNavItem icon="ticket-outline" label="Booking" active={activeTab === 'booking'} onPress={() => comingSoon('Booking')} />
-        <BottomNavItem icon="trophy-outline" label="Matches" active={activeTab === 'matches'} onPress={() => comingSoon('Matches')} />
+        <BottomNavItem
+          icon="trophy-outline"
+          label="Matches"
+          active={activeTab === 'matches'}
+          onPress={() => goToTab('matches', '/matches')}
+        />
         <BottomNavItem
           icon="calendar-outline"
           label="Schedule"

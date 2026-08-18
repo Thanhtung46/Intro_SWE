@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   Share,
@@ -15,11 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BottomNavBar } from '@/components/common/BottomNavBar';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import FilterSheet from '@/components/matches/FilterSheet';
 import MatchCard from '@/components/matches/MatchCard';
-import { ProfileMenu } from '@/components/ProfileMenu';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
@@ -62,30 +59,29 @@ function getFabActions(subTab: SubTab, props: Props, comingSoon: (feature: strin
   ];
 }
 
-// FAB popover position/size — tied to clearing BottomNavBar's height and
-// the FAB's own 56px size, not the xs/sm/md/lg/xl content-spacing scale, so
-// these stay local constants rather than spacing.ts tokens. 192 matches the
-// Figma popover width (node 95:2927).
+// FAB popover position/size — tied to clearing AppShell's bottom nav height
+// and the FAB's own 56px size, not the xs/sm/md/lg/xl content-spacing scale,
+// so these stay local constants rather than spacing.ts tokens. 192 matches
+// the Figma popover width (node 95:2927).
 const FAB_BOTTOM_OFFSET = 96;
 const FAB_MENU_BOTTOM_OFFSET = 160;
 const FAB_MENU_WIDTH = 192;
 
-// Header glass buttons (AI/notifications/avatar) and the map button read
-// noticeably smaller/tighter than the reference than the xs/sm spacing
-// scale gives — sized up a bit past the strict pencil-node numbers per
-// user feedback comparing the rendered app against the reference image.
-const HEADER_BUTTON_SIZE = 44;
-const HEADER_ACTIONS_GAP = 12;
+// The map button reads noticeably smaller/tighter than the reference than
+// the xs/sm spacing scale gives — sized up a bit past the strict
+// pencil-node number per user feedback comparing the rendered app against
+// the reference image.
 const MAP_BUTTON_SIZE = 44;
 
 /**
  * Matches Homepage (Figma node 95:2417, SPOT-76). Presentation-only per
  * .claude/rules/code-style.md: navigation decisions (onOpenMap/onOpenMatch/
- * ...) are callback props owned by app/matches/index.tsx. ProfileMenu/
- * BottomNavBar/FilterSheet are self-contained Modal-based components (own
- * their own visibility state or router calls, like src/components/
- * ProfileMenu.tsx already does) so rendering them here isn't a routing
- * decision by this screen — Filter has no destination to navigate to.
+ * ...) are callback props owned by app/matches/index.tsx. Header/bottom
+ * nav/ProfileMenu now live in AppShell (see app/matches/index.tsx), same as
+ * Home/Schedule/Settings. FilterSheet is a self-contained Modal-based
+ * component (owns its own visibility state, like src/components/
+ * ProfileMenu.tsx) so rendering it here isn't a routing decision by this
+ * screen — Filter has no destination to navigate to.
  *
  * Groups/Tournaments sub-tab + their FAB actions are locked per the user's
  * note #1 ("Group, Tournament — chưa làm") — see SPOT-76 plan mục 2.5.
@@ -99,7 +95,6 @@ export default function MatchesHomepageScreen(props: Props) {
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
@@ -163,37 +158,7 @@ export default function MatchesHomepageScreen(props: Props) {
   const fabActions = getFabActions(subTab, props, comingSoon);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <Image source={require('../../../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.brandText}>SPOT</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            testID="matches-ai"
-            style={styles.headerGlassButton}
-            onPress={() => comingSoon('AI Assistant')}
-          >
-            <Ionicons name="sparkles-outline" size={18} color={colors.primaryDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="matches-notifications"
-            style={styles.headerGlassButton}
-            onPress={() => comingSoon('Notifications')}
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.headingText} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="matches-avatar"
-            style={[styles.headerGlassButton, styles.avatarButton]}
-            onPress={() => setMenuVisible(true)}
-          >
-            <Text style={styles.avatarButtonText}>V</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <View style={styles.sportToggle}>
         {(['FOOTBALL', 'BADMINTON'] as Sport[]).map((item) => {
           const isActive = item === sport;
@@ -324,8 +289,6 @@ export default function MatchesHomepageScreen(props: Props) {
         <Ionicons name={fabOpen ? 'close' : 'add'} size={26} color={colors.white} />
       </TouchableOpacity>
 
-      <BottomNavBar active="matches" />
-      <ProfileMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
       <FilterSheet
         visible={filterVisible}
         sport={sport}
@@ -339,33 +302,6 @@ export default function MatchesHomepageScreen(props: Props) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.screenBackground },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  logo: { width: 40, height: 40 },
-  brandText: { fontSize: 22, fontWeight: '800', color: colors.primaryDark, letterSpacing: -0.5 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: HEADER_ACTIONS_GAP },
-  // Glass circle button (AI/notifications/avatar) — pencil node 95:2417's
-  // rjfUV/lxWcB/wg1Xx, sized up a bit past the pencil-node 40x40 per user
-  // feedback ("bigger, more spread out" vs the rendered app).
-  headerGlassButton: {
-    width: HEADER_BUTTON_SIZE,
-    height: HEADER_BUTTON_SIZE,
-    borderRadius: HEADER_BUTTON_SIZE / 2,
-    backgroundColor: colors.glassSurfaceBackground,
-    borderWidth: 2,
-    borderColor: colors.headerButtonBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarButton: { backgroundColor: colors.primary },
-  avatarButtonText: { color: colors.white, fontWeight: '700', fontSize: 14 },
-
   sportToggle: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,

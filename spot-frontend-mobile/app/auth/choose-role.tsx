@@ -1,6 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import ChooseRoleScreen from '@/screens/auth/ChooseRoleScreen';
 import { selectRole } from '@/services/authService';
@@ -39,6 +38,13 @@ export default function ChooseRoleRoute() {
   const handleContinue = async () => {
     if (!selectedRole || submitting) return;
 
+    if (!email) {
+      // No account exists yet (reached from app/onboarding.tsx) — old
+      // placeholder navigation, no API call.
+      router.push(DESTINATION[selectedRole]);
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
     const result = await selectRole(email, selectedRole);
@@ -49,20 +55,6 @@ export default function ChooseRoleRoute() {
       return;
     }
 
-    if (selectedRole === 'player') {
-      router.replace(ROUTES.HOME);
-    } else {
-      router.push(DESTINATION[selectedRole]);
-    }
-
-    setError('');
-    setSubmitting(true);
-    const result = await selectRole(email, selectedRole);
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.message || 'Something went wrong. Please try again.');
-      return;
-    }
     router.push({ pathname: '/auth/otp', params: { email } });
   };
 

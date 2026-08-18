@@ -10,6 +10,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/screens/matches/MatchesHomepageScreen', () => jest.fn(() => null));
+jest.mock('@/components/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => children }));
 
 function lastProps() {
   return (MatchesHomepageScreen as unknown as jest.Mock).mock.calls.at(-1)[0];
