@@ -1,7 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 // import MockAdapter from 'axios-mock-adapter';
 import { API_URL } from '../config/env';
-import type { RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import type { CurrentUserProfile, RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import { getToken } from '@/utils/authStorage';
 
 export interface RegisterPayload {
   fullName: string;
