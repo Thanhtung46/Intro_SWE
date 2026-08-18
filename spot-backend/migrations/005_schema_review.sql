@@ -1,5 +1,5 @@
--- Reviews & Ratings (squashed).
--- One review per booking; owner replies in review_replies.
+-- 005 — venue reviews + owner replies. Depends: 001, 004.
+-- One review per booking.
 
 CREATE SCHEMA IF NOT EXISTS schema_review;
 

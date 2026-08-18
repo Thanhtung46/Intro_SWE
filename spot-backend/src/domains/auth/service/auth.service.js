@@ -30,9 +30,11 @@ import logger from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
 import * as userRepository from '../repository/user.repository.js';
 import * as otpRepository from '../repository/otp.repository.js';
-import { toPublicUser } from '../entity/user.entity.js';
+import * as userSportSkillRepository from '../repository/user-sport-skill.repository.js';
+import { toPublicUser, toPublicHostProfile } from '../entity/user.entity.js';
+import { SPORTS } from '../../../shared/constants/sports.js';
 import config from '../../../shared/config/env.js';
-import { getMe } from '../../users/service/users.service.js';
+import * as matchRepository from '../../matchmaking/repository/match.repository.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -135,6 +137,29 @@ async function setResendCooldown(email, purpose) {
   } catch (err) {
     logger.warn('Failed to set OTP resend cooldown', { error: err.message });
   }
+}
+
+async function publicUserWithSkills(client, user) {
+  const skillRows = await userSportSkillRepository.findByUserId(
+    client,
+    user.user_id,
+  );
+  return toPublicUser(user, skillRows);
+}
+
+async function applySkillPatch(client, userId, sport, value) {
+  if (value === undefined) {
+    return;
+  }
+  if (value === null) {
+    await userSportSkillRepository.deleteSkill(client, { userId, sport });
+    return;
+  }
+  await userSportSkillRepository.upsertSkill(client, {
+    userId,
+    sport,
+    skillLevel: value,
+  });
 }
 
 export async function registerPlayer(input) {
@@ -432,7 +457,7 @@ export async function login(input) {
       refreshToken,
       tokenType: 'Bearer',
       expiresIn: getAccessTokenTtlSeconds(),
-      user: toPublicUser(user),
+      user: await publicUserWithSkills(client, user),
     };
   } finally {
     client.release();
@@ -480,7 +505,7 @@ export async function refreshSession(input) {
       refreshToken,
       tokenType: 'Bearer',
       expiresIn: getAccessTokenTtlSeconds(),
-      user: toPublicUser(user),
+      user: await publicUserWithSkills(client, user),
     };
   } finally {
     client.release();
@@ -489,7 +514,81 @@ export async function refreshSession(input) {
 
 /** Alias of users.getMe — kept for any internal callers. */
 export async function getCurrentUser(userId) {
-  return getMe(userId);
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    return {
+      user: await publicUserWithSkills(client, user),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function getPublicUserProfile(userId) {
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user || user.status !== USER_STATUSES.ACTIVE) {
+      throw new AppError('User not found', 404);
+    }
+    const skillRows = await userSportSkillRepository.findByUserId(
+      client,
+      user.user_id,
+    );
+    const matchCount = await matchRepository.countHostedByUser(
+      client,
+      user.user_id,
+    );
+    return {
+      user: toPublicHostProfile(user, skillRows, { matchCount }),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateCurrentUser(userId, { skills, avatarUrl }) {
+  const client = await pool.connect();
+  try {
+    const user = await userRepository.findById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    await client.query('BEGIN');
+    try {
+      if (skills) {
+        await applySkillPatch(client, userId, SPORTS.BADMINTON, skills.badminton);
+        await applySkillPatch(client, userId, SPORTS.FOOTBALL, skills.football);
+      }
+      if (avatarUrl !== undefined) {
+        const updatedProfile = await userRepository.updateAvatarUrl(
+          client,
+          userId,
+          avatarUrl,
+        );
+        if (!updatedProfile) {
+          throw new AppError('User profile not found', 404);
+        }
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    const fresh = await userRepository.findById(client, userId);
+    return {
+      message: 'Profile updated',
+      user: await publicUserWithSkills(client, fresh),
+    };
+  } finally {
+    client.release();
+  }
 }
 
 export async function selectRole(input) {
@@ -526,7 +625,7 @@ export async function selectRole(input) {
           ? 'Role selected. Account is pending approval.'
           : 'Role selected successfully',
       nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
-      user: toPublicUser(updated),
+      user: await publicUserWithSkills(client, updated),
     };
   } finally {
     client.release();

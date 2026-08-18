@@ -99,7 +99,7 @@ export async function listScheduleForUser(
 }
 
 /**
- * Main Profile stats (SPOT-189/190): aggregates only — no denormalized counters.
+ * Main Profile stats: booking-linked social matches + pickup kèo.
  * reviewsCount / avgRating stay stubbed until host-review model exists.
  */
 export async function getProfileStatsForUser(client, userId) {
@@ -107,11 +107,19 @@ export async function getProfileStatsForUser(client, userId) {
     `SELECT
        (SELECT COUNT(*)::int
           FROM schema_social.matches m
-         WHERE m.host_id = $1) AS hosted_matches,
+         WHERE m.host_id = $1)
+       + (SELECT COUNT(*)::int
+          FROM schema_matchmaking.matches m
+         WHERE m.host_user_id = $1
+           AND m.status <> 'CANCELLED') AS hosted_matches,
        (SELECT COUNT(*)::int
           FROM schema_social.match_participants mp
          WHERE mp.player_id = $1
-           AND mp.join_status = 'APPROVED') AS joined_matches,
+           AND mp.join_status = 'APPROVED')
+       + (SELECT COUNT(*)::int
+          FROM schema_matchmaking.match_join_requests r
+         WHERE r.user_id = $1
+           AND r.status = 'ACCEPTED') AS joined_matches,
        (SELECT COUNT(*)::int
           FROM schema_booking.bookings b
          WHERE b.player_id = $1

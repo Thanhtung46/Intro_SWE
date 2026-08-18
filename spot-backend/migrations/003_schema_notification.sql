@@ -1,4 +1,5 @@
--- Notification inbox + reminder jobs (squashed; timestamptz from the start).
+-- 003 — notification inbox + reminder jobs. Depends: 001.
+-- timestamptz from the start. booking_id FK is attached in 004.
 
 CREATE SCHEMA IF NOT EXISTS schema_notification;
 
