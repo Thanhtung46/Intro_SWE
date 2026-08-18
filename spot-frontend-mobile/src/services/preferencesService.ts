@@ -1,6 +1,5 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '../utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 
 export type Language = 'en' | 'vi';
 export type Appearance = 'light' | 'dark' | 'system';
@@ -18,17 +17,9 @@ export interface PreferencesResult {
   message?: string;
 }
 
-const client: AxiosInstance = axios.create();
-
-async function authHeader() {
-  const token = await getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function getPreferences(): Promise<PreferencesResult> {
   try {
-    const headers = await authHeader();
-    const res = await client.get<{ preferences: Preferences }>(`${API_URL}/users/me/preferences`, { headers });
+    const res = await apiClient.get<{ preferences: Preferences }>('/users/me/preferences');
     return { success: true, preferences: res.data.preferences };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
@@ -43,11 +34,9 @@ export async function getPreferences(): Promise<PreferencesResult> {
 
 export async function updatePreferences(patch: Partial<Preferences>): Promise<PreferencesResult> {
   try {
-    const headers = await authHeader();
-    const res = await client.patch<{ message: string; preferences: Preferences }>(
-      `${API_URL}/users/me/preferences`,
+    const res = await apiClient.patch<{ message: string; preferences: Preferences }>(
+      '/users/me/preferences',
       patch,
-      { headers }
     );
     return { success: true, preferences: res.data.preferences };
   } catch (err) {

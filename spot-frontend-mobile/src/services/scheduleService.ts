@@ -1,6 +1,5 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '../utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 
 export interface ScheduleItem {
   type: 'BOOKING' | 'MATCH';

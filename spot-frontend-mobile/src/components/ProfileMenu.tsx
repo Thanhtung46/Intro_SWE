@@ -7,7 +7,7 @@ import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
-import { clearToken } from '@/utils/authStorage';
+import { clearAllTokens } from '@/utils/authStorage';
 import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
 
 interface ProfileMenuProps {
@@ -113,7 +113,7 @@ export function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   }, [visible]);
 
   const handleSignOut = async () => {
-    await clearToken();
+    await clearAllTokens();
     clearUser();
     onClose();
     router.replace(ROUTES.AUTH_LOGIN);

@@ -1,53 +1,155 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-const AUTH_TOKEN_KEY = 'spot:auth_token';
+const ACCESS_TOKEN_KEY = 'spot_auth_access_token';
+const REFRESH_TOKEN_KEY = 'spot_auth_refresh_token';
+
+/** Legacy keys — colon in access key is invalid for SecureStore on native. */
+const LEGACY_ACCESS_TOKEN_KEY = 'spot:auth_token';
+const LEGACY_REFRESH_TOKEN_KEY = 'refreshToken';
 
 /**
- * Auth token storage — expo-secure-store on native (see
- * .claude/rules/api-conventions.md). `expo-secure-store` has NO web
- * implementation at all (its web build is a literal `export default {}`),
- * so on web this falls back to `window.localStorage` instead — purely so
- * the app is testable via `npm run web` (dev/QA convenience, same trade-off
- * every Expo app with SecureStore auth makes; native behavior is
- * unchanged). Not AsyncStorage — that's a separate React Native module,
- * this is the browser's own storage on the actual web platform.
+ * Auth token storage — expo-secure-store on native. SecureStore keys must
+ * contain only alphanumeric characters, ".", "-", and "_" (no ":").
+ * On web, falls back to window.localStorage for dev/QA via `npm run web`.
  */
-export async function getToken(): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    try {
-      return window.localStorage.getItem(AUTH_TOKEN_KEY);
-    } catch (error) {
-      return null;
-    }
-  }
+async function readNative(key: string): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-  } catch (error) {
+    return await SecureStore.getItemAsync(key);
+  } catch {
     return null;
   }
 }
 
+async function writeNative(key: string, value: string): Promise<void> {
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function deleteNative(key: string): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // Non-critical.
+  }
+}
+
+function readWeb(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeWeb(key: string, value: string): void {
+  window.localStorage.setItem(key, value);
+}
+
+function deleteWeb(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Non-critical.
+  }
+}
+
+async function migrateLegacyAccessToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const legacy = readWeb(LEGACY_ACCESS_TOKEN_KEY);
+    if (legacy) {
+      writeWeb(ACCESS_TOKEN_KEY, legacy);
+      deleteWeb(LEGACY_ACCESS_TOKEN_KEY);
+      return legacy;
+    }
+    return null;
+  }
+
+  const legacy = await readNative(LEGACY_ACCESS_TOKEN_KEY);
+  if (legacy) {
+    await writeNative(ACCESS_TOKEN_KEY, legacy);
+    await deleteNative(LEGACY_ACCESS_TOKEN_KEY);
+    return legacy;
+  }
+  return null;
+}
+
+async function migrateLegacyRefreshToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    const legacy = readWeb(LEGACY_REFRESH_TOKEN_KEY);
+    if (legacy) {
+      writeWeb(REFRESH_TOKEN_KEY, legacy);
+      deleteWeb(LEGACY_REFRESH_TOKEN_KEY);
+      return legacy;
+    }
+    return null;
+  }
+
+  const legacy = await readNative(LEGACY_REFRESH_TOKEN_KEY);
+  if (legacy) {
+    await writeNative(REFRESH_TOKEN_KEY, legacy);
+    await deleteNative(LEGACY_REFRESH_TOKEN_KEY);
+    return legacy;
+  }
+  return null;
+}
+
+export async function getToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return readWeb(ACCESS_TOKEN_KEY) ?? (await migrateLegacyAccessToken());
+  }
+
+  const current = await readNative(ACCESS_TOKEN_KEY);
+  if (current) return current;
+  return migrateLegacyAccessToken();
+}
+
 export async function setToken(token: string): Promise<void> {
   if (Platform.OS === 'web') {
-    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    writeWeb(ACCESS_TOKEN_KEY, token);
     return;
   }
-  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+  await writeNative(ACCESS_TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
   if (Platform.OS === 'web') {
-    try {
-      window.localStorage.removeItem(AUTH_TOKEN_KEY);
-    } catch (error) {
-      // Non-critical.
-    }
+    deleteWeb(ACCESS_TOKEN_KEY);
+    deleteWeb(LEGACY_ACCESS_TOKEN_KEY);
     return;
   }
-  try {
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-  } catch (error) {
-    // Non-critical: worst case a stale key lingers until next write.
+  await deleteNative(ACCESS_TOKEN_KEY);
+  await deleteNative(LEGACY_ACCESS_TOKEN_KEY);
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return readWeb(REFRESH_TOKEN_KEY) ?? (await migrateLegacyRefreshToken());
   }
+
+  const current = await readNative(REFRESH_TOKEN_KEY);
+  if (current) return current;
+  return migrateLegacyRefreshToken();
+}
+
+export async function setRefreshToken(token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    writeWeb(REFRESH_TOKEN_KEY, token);
+    return;
+  }
+  await writeNative(REFRESH_TOKEN_KEY, token);
+}
+
+export async function clearRefreshToken(): Promise<void> {
+  if (Platform.OS === 'web') {
+    deleteWeb(REFRESH_TOKEN_KEY);
+    deleteWeb(LEGACY_REFRESH_TOKEN_KEY);
+    return;
+  }
+  await deleteNative(REFRESH_TOKEN_KEY);
+  await deleteNative(LEGACY_REFRESH_TOKEN_KEY);
+}
+
+export async function clearAllTokens(): Promise<void> {
+  await clearToken();
+  await clearRefreshToken();
 }

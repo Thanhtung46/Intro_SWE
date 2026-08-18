@@ -1,5 +1,4 @@
 import { Link } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
   Image,
@@ -19,7 +18,7 @@ import { LoginFieldErrors, loginSchema } from '@/schemas/loginSchema';
 import { login } from '@/services/authService';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
-import { setToken } from '../../utils/authStorage';
+import { setRefreshToken, setToken } from '../../utils/authStorage';
 
 export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string) => void }) {
   const { setUser } = useUser();
@@ -54,10 +53,10 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
     if (response.success && response.accessToken && response.refreshToken) {
       try {
         await setToken(response.accessToken);
-        await SecureStore.setItemAsync('refreshToken', response.refreshToken);
-      } catch (error) {
-        // SecureStore isn't available on every platform (e.g. web) — token
-        // persistence is best-effort and shouldn't block navigation.
+        await setRefreshToken(response.refreshToken);
+      } catch {
+        setFormError('Could not save session. Please try again.');
+        return;
       }
       setUser(response.user || null);
 

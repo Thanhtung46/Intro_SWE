@@ -1,6 +1,5 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '../utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 
 export interface CreateReviewPayload {
   bookingId: number;
@@ -43,9 +42,7 @@ export async function getVenueRating(venueId: number): Promise<VenueRatingResult
 
 export async function createReview(payload: CreateReviewPayload): Promise<ReviewResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    await client.post(`${API_URL}/reviews`, payload, { headers });
+    await apiClient.post('/reviews', payload);
     return { success: true };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;

@@ -25,11 +25,16 @@
       "android",
       "web"
     ],
+    "extra": {
+      "apiUrl": "http://localhost:3000/api",
+      "apiUrlAndroid": "http://10.0.2.2:3000/api"
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

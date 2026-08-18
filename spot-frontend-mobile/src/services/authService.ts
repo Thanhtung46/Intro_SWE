@@ -488,6 +488,44 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
   }
 }
 
+export interface RefreshSessionResult {
+  success: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  user?: LoginUser;
+  message?: string;
+}
+
+interface RefreshSuccessBody {
+  message?: string;
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: LoginUser;
+}
+
+/** POST /auth/refresh — used by apiClient interceptor; plain axios to avoid loops. */
+export async function refreshSession(refreshToken: string): Promise<RefreshSessionResult> {
+  try {
+    const res = await client.post<RefreshSuccessBody>(`${API_URL}/auth/refresh`, { refreshToken });
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      user: res.data.user,
+    };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    return { success: false, message: error.response.data?.message || 'Invalid or expired refresh token.' };
+  }
+}
+
 /**
  * MOCK — Owner/Referee registration and role selection have no real
  * `spot-backend` endpoint yet (per plan: "mock first, wire real API
