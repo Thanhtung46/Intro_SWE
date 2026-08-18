@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 
 import SplashScreen, { SplashStatus } from '@/screens/splash/SplashScreen';
+import { getProfile } from '@/services/profileService';
 import { getOnboardingCompleted } from '@/utils/onboardingStorage';
-import { getToken } from '@/utils/authStorage';
+import { clearToken, getToken } from '@/utils/authStorage';
+import { ROUTES } from '@/constants/routes';
 
-type Destination = '/onboarding' | '/auth/choose-role' | '/home';
+type Destination = typeof ROUTES.ONBOARDING | typeof ROUTES.AUTH_LOGIN | typeof ROUTES.HOME;
 
 const AUTO_NAVIGATE_ENABLED = true;
 
@@ -15,9 +17,8 @@ const AUTO_NAVIGATE_ENABLED = true;
  * Bootstraps the session (onboarding flag + secure token) while the Splash
  * screen plays its progress animation, then navigates once both are done:
  *  - no token, onboarding not done -> /onboarding
- *  - no token, onboarding done     -> /auth/choose-role
- *  - token present                 -> /home (Dashboard placeholder — no
- *    real dashboard/tabs entry exists yet)
+ *  - no token, onboarding done     -> /auth/login
+ *  - token present                 -> /home (Dashboard)
  *
  * On bootstrap failure (e.g. expo-secure-store unavailable on `npm run web`)
  * shows the retry state instead of navigating.
@@ -43,11 +44,21 @@ export default function Splash() {
         if (cancelled) return;
 
         if (token) {
-          setDestination('/home');
+          const check = await getProfile();
+          if (cancelled) return;
+
+          if (check.success) {
+            setDestination(ROUTES.HOME);
+          } else {
+            // Token hết hạn/không hợp lệ — xoá token cũ, không tự ý vào Home nữa.
+            await clearToken();
+            if (cancelled) return;
+            setDestination(ROUTES.AUTH_LOGIN);
+          }
         } else if (!onboardingCompleted) {
-          setDestination('/onboarding');
+          setDestination(ROUTES.ONBOARDING);
         } else {
-          setDestination('/auth/choose-role');
+          setDestination(ROUTES.AUTH_LOGIN);
         }
       } catch (error) {
         if (cancelled) return;

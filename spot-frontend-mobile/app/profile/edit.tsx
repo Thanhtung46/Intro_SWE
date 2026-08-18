@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import EditProfileScreen from '../../src/screens/profile/EditProfileScreen';
+import EditProfileScreen from '@/screens/profile/EditProfileScreen';
 
 export default function EditProfileRoute() {
   const router = useRouter();

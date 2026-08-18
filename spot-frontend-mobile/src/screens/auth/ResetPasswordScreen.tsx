@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,22 +9,25 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { OtpInput } from '../../components/OtpInput';
-import { PasswordField } from '../../components/PasswordField';
-import { ResetPasswordFieldErrors, resetPasswordSchema } from '../../schemas/resetPasswordSchema';
-import { resetPassword } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { OtpInput } from '@/components/OtpInput';
+import { PasswordField } from '@/components/PasswordField';
+import { ResetPasswordFieldErrors, resetPasswordSchema } from '@/schemas/resetPasswordSchema';
+import { resetPassword } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 export default function ResetPasswordScreen({
   email,
+  otp,
   onBack,
   onResetComplete,
 }: {
   email: string;
+  /** Collected on the previous OTP screen — this screen only asks for the
+   * new password, per the split-flow design (SPOT flow fix, 2026-08-16). */
+  otp: string;
   onBack: () => void;
   onResetComplete: () => void;
 }) {
-  const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<ResetPasswordFieldErrors>({});
@@ -59,11 +61,7 @@ export default function ResetPasswordScreen({
     setSubmitting(false);
 
     if (response.success) {
-      Alert.alert(
-        'Success',
-        response.message || 'Password has been reset successfully. You can now log in.',
-        [{ text: 'OK', onPress: onResetComplete }]
-      );
+      onResetComplete();
       return;
     }
 
@@ -87,17 +85,13 @@ export default function ResetPasswordScreen({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="lock-open" size={26} color={colors.primary} />
+            <Ionicons name="lock-open" size={26} color={colors.primaryDark} />
           </View>
 
           <Text style={styles.title}>Create New Password</Text>
           <Text style={styles.subtitle}>
             Your new password must be different from previous used passwords.
           </Text>
-
-          <Text style={styles.otpLabel}>OTP Code</Text>
-          <OtpInput value={otp} onChange={setOtp} error={!!errors.otp} containerStyle={styles.otpRow} />
-          {errors.otp ? <Text style={styles.otpError}>{errors.otp}</Text> : null}
 
           <PasswordField
             label="New Password"
@@ -138,14 +132,14 @@ export default function ResetPasswordScreen({
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
     paddingHorizontal: 16,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   topBarTitle: {
     flex: 1,
@@ -212,16 +206,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
     fontSize: 12,
-    color: colors.error,
+    color: colors.formError,
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 12,
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

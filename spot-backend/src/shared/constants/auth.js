@@ -25,18 +25,15 @@ export const GENDERS = Object.freeze([
   'prefer_not_to_say',
 ]);
 
-/** Vietnamese 10-digit mobile/landline (02/03/05/07/08/09). */
-export const VN_PHONE_REGEX = /^0(2|3|5|7|8|9)[0-9]{8}$/;
+export const LANGUAGES = Object.freeze(['en', 'vi']);
 
-export const VN_PHONE_MESSAGE =
-  'Phone number must be a valid Vietnamese number (10 digits, starting with 02, 03, 05, 07, 08, or 09)';
-
-/** Postgres `INTEGER` / `SERIAL` max (`user_id`, `match_id`, …). */
-export const PG_INT4_MAX = 2_147_483_647;
+export const APPEARANCES = Object.freeze(['light', 'dark', 'system']);
 
 export const OTP_PURPOSES = Object.freeze({
   REGISTER: 'REGISTER',
   FORGOT_PASSWORD: 'FORGOT_PASSWORD',
+  CHANGE_EMAIL: 'CHANGE_EMAIL',
+  CHANGE_PHONE: 'CHANGE_PHONE',
 });
 
 export const OTP_TTL_SECONDS = Number(process.env.OTP_TTL_SECONDS) || 300;

@@ -1,16 +1,16 @@
 # SPOT Backend — API Reference
 
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-Endpoint đã implement: **auth** + **matchmaking** (host / list / detail / join / approve / kick / mine / edit / cancel).
+Chỉ mô tả endpoint đã implement. Domain booking CRUD / venue search / payment / … chưa có API đầy đủ (có **View Schedule** read + **Reviews**).
 
 | | |
 | :--- | :--- |
 | Base URL (local) | `http://localhost:3000` |
 | Content-Type | `application/json` |
 | Auth hiện tại | Access JWT trên protected routes (`Authorization: Bearer …`); refresh qua `POST /auth/refresh` |
-| Alias | Mọi route `/auth/*` cũng có bản `/api/auth/*`. `/matches/*` ↔ `/api/matches/*`. |
+| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
 
-**Khuyến nghị FE:** dùng prefix `/api/auth` (ví dụ `http://localhost:3000/api/auth/login`).
+**Khuyến nghị FE:** dùng prefix `/api/auth`, `/api/users`, `/api/notifications`, `/api/reviews`.
 
 ---
 
@@ -22,11 +22,13 @@ Endpoint đã implement: **auth** + **matchmaking** (host / list / detail / join
 4. [Luồng nghiệp vụ](#4-luồng-nghiệp-vụ)
 5. [System endpoints](#5-system-endpoints)
 6. [Auth endpoints](#6-auth-endpoints)
-7. [Matchmaking endpoints](#7-matchmaking-endpoints)
-8. [JWT & FE integration](#8-jwt--fe-integration)
-9. [Checklist test](#9-checklist-test)
-10. [Smoke scripts](#10-smoke-scripts)
-11. [Chưa có / sắp làm](#11-chưa-có--sắp-làm)
+7. [Users / Profile endpoints](#7-users--profile-endpoints)
+8. [Notifications endpoints](#8-notifications-endpoints)
+9. [Reviews endpoints](#9-reviews-endpoints)
+10. [JWT & FE integration](#10-jwt--fe-integration)
+11. [Checklist test](#11-checklist-test)
+12. [Smoke scripts](#12-smoke-scripts)
+13. [Chưa có / sắp làm](#13-chưa-có--sắp-làm)
 
 ---
 
@@ -671,7 +673,7 @@ curl -s -X POST http://localhost:3000/auth/refresh \
 
 ### 6.7 `GET /auth/me`
 
-API **protected** — lấy profile hiện tại (kèm skill 2 sport).
+Alias của `GET /users/me` — cùng handler / cùng `{ user }` shape.
 
 **Headers**
 
@@ -684,22 +686,20 @@ Authorization: Bearer <accessToken>
 ```json
 {
   "user": {
-    "userId": "...",
+    "userId": 1,
     "email": "player@example.com",
     "fullName": "Nguyen Van A",
     "phoneNumber": "0901234567",
+    "gender": "male",
     "role": "PLAYER",
     "status": "ACTIVE",
     "gender": "male",
     "roleSelected": true,
     "roleSelectedAt": "...",
     "emailVerified": true,
-    "avatarUrl": null,
-    "createdAt": "...",
-    "skills": {
-      "badminton": "BEGINNER",
-      "football": "LEARNING"
-    }
+    "roleSelected": true,
+    "roleSelectedAt": "...",
+    "createdAt": "..."
   }
 }
 ```
@@ -927,511 +927,316 @@ curl -s -X POST http://localhost:3000/auth/reset-password \
 
 ---
 
-## 7. Matchmaking endpoints
+## 7. Users / Profile endpoints
 
-Base: `/matches` hoặc `/api/matches`. Mọi route cần `Authorization: Bearer <accessToken>`.  
-`POST /matches` và `POST /matches/:id/join` thêm `requireRole('PLAYER')`.
+Profile Hub: identity trên `schema_auth.users`, display/prefs trên
+`schema_auth.user_profiles` (JOIN). JSON `user` giữ nguyên cho FE.  
+Mọi route dưới đây cũng có alias `/api/users/*`. Cần `Authorization: Bearer <accessToken>`.
 
-Host = 1 slot lúc tạo. Join AUTO tăng `filledCount` ngay; APPROVAL tăng khi accept. Payment là stub `SUCCESS`.
-
----
-
-### 7.1 `POST /matches`
-
-Tạo kèo tự do (không cần booking).
-
-**Body**
-
-| Field | Type | Required | Notes |
+| Method | Path | Body | Success |
 | :--- | :--- | :--- | :--- |
-| `sport` | string | ✓ | `BADMINTON` \| `FOOTBALL` |
-| `format` | string | ✓ | Đúng ladder của sport |
-| `title` | string | ✓ | ≤ 150 |
-| `notes` | string | | ≤ 2000 |
-| `venueName` | string | ✓ | Tên sân (vd. `San ABC`) |
-| `venueAddress` | string | ✓ | Số nhà / đường (≤ 500). Không thay dropdown tỉnh/quận |
-| `province` | string | ✓ | Mã tỉnh/TP **bản đồ cũ** (63 đơn vị). Vd. HCM = `79`. List: `GET /geo/vn` |
-| `city` | string | ✓ | Mã quận/huyện/thị xã/TP thuộc tỉnh, **phải thuộc** `province`. Vd. Quận 7 = `778` |
-| `latitude` / `longitude` | number | | Optional, phải gửi cặp. Pin map; không dùng cho occupancy |
-| `startsAt` | datetime | ✓ | ISO, phải ở tương lai |
-| `endsAt` | datetime | ✓ | Sau `startsAt`; kéo dài **tối thiểu 1 giờ**, không trần |
-| `isMultiDay` | boolean | | Default `false` (không generate thêm ngày) |
-| `isRecurring` | boolean | | Default `false` |
-| `maxPlayers` | int | ✓ | 2–40 |
-| `allLevels` | boolean | | `true` → full ladder sport đó |
-| `skillMin` / `skillMax` | string | nếu không `allLevels` | Code cùng sport; min rank ≤ max |
-| `feeType` | string | ✓ | `GENDER_RANGE` \| `SPLIT_EVENLY` |
-| `priceMin` / `priceMax` | int | theo `feeType` | `GENDER_RANGE`: nữ min, nam max. `SPLIT_EVENLY`: chỉ `priceMin` = tổng tiền, không gửi `priceMax`. |
-| `joinMode` | string | ✓ | `AUTO` \| `APPROVAL` |
-| `courtCount` | int | | Optional; nếu gửi phải = `courts.length` |
-| `courts` | `{ name }[]` | ✓ | Mỗi sân **bắt buộc tên/số** (`"1"`, `"Court 1"`). Tên không trùng. |
-| `coverUrl` | string | | URL `http`/`https` ảnh cover (≤ 2048). Không upload S3. |
+| `GET` | `/users/me` | — | `200` `{ user }` (cùng shape với `GET /auth/me`) |
+| `GET` | `/users/me/profile` | — | `200` `{ user, stats }` Main Profile stats |
+| `PATCH` | `/users/me` | partial profile/prefs (≥1 field) | `200` `{ message, user }` |
+| `GET` | `/users/me/preferences` | — | `200` `{ preferences }` Settings prefs |
+| `PATCH` | `/users/me/preferences` | language / appearance / push / location | `200` `{ message, preferences }` |
+| `POST` | `/users/me/password` | `{ currentPassword, newPassword, confirmPassword }` | `200` `{ message }` |
+| `POST` | `/users/me/avatar` | multipart `avatar` (jpeg/png/webp/gif ≤2MB) | `200` `{ message, user }` |
+| `POST` | `/users/me/email/request` | `{ newEmail }` | `200` OTP gửi tới **email mới** (`purpose=CHANGE_EMAIL`) |
+| `POST` | `/users/me/email/confirm` | `{ newEmail, otp }` | `200` `{ message, user }` — cập nhật email + `email_verified_at` |
+| `POST` | `/users/me/phone/request` | `{ newPhone }` | `200` OTP gửi tới **email hiện tại** (`purpose=CHANGE_PHONE`) |
+| `POST` | `/users/me/phone/confirm` | `{ newPhone, otp }` | `200` `{ message, user }` |
+| `GET` | `/users/me/schedule` | query `type`/`from`/`to`/`limit` | `200` `{ items, timezone }` |
+| `POST` | `/users/me/schedule/dev/seed` | optional `{ includeMatch, daysFromNow }` | `201` venue/field/booking/match — **dev only** |
 
-**Success `201`**
+**PATCH** cho phép `fullName`, `gender`, `avatarUrl`, `language`, `appearance`, `pushNotificationsEnabled`, `locationServicesEnabled`. Gửi `email` / `phone` → `400` (strict Zod). Đổi email/phone bắt buộc qua request → confirm OTP (FR-1.4).
+
+### 7.1 `GET /users/me`
+
+Giống `GET /auth/me`. `user` gồm prefs defaults: `language: "en"`, `appearance: "light"`, toggles `true`, `avatarUrl: null`.
+
+### 7.1b `GET /users/me/profile` (Main Profile)
+
+Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ bookings/matches (không denormalize, không Redis trong MVP).
+
+**Success `200`**
 
 ```json
 {
-  "message": "Match created",
-  "match": {
-    "matchId": 1,
-    "hostUserId": 12,
-    "hostFullName": "Nguyen Van A",
-    "host": {
-      "userId": 12,
-      "fullName": "Nguyen Van A",
-      "avatarUrl": null,
-      "matchCount": 1,
-      "rating": null
-    },
-    "hostPhoneNumber": "0901234567",
-    "coverUrl": null,
-    "isFavorited": false,
-    "participantAvatars": [],
-    "sport": "FOOTBALL",
-    "format": "SEVEN_A_SIDE",
-    "title": "Saturday 7v7",
-    "notes": null,
-    "venueName": "San ABC",
-    "venueAddress": "123 Nguyen Van Linh, Q7, TP.HCM",
-    "province": "79",
-    "provinceName": "Thành phố Hồ Chí Minh",
-    "city": "778",
-    "cityName": "Quận 7",
-    "latitude": 10.729,
-    "longitude": 106.721,
-    "startsAt": "2026-09-01T02:00:00.000Z",
-    "endsAt": "2026-09-01T04:00:00.000Z",
-    "isMultiDay": false,
-    "isRecurring": false,
-    "maxPlayers": 14,
-    "filledCount": 1,
-    "spotsLeft": 13,
-    "squad": { "filled": 1, "max": 14 },
-    "skillMin": "REC_BASIC",
-    "skillMax": "SEMI_PRO",
-    "allLevels": false,
-    "feeType": "SPLIT_EVENLY",
-    "priceMin": 1400000,
-    "priceMax": null,
-    "yourShare": 1400000,
-    "joinMode": "APPROVAL",
-    "status": "OPEN",
-    "courtCount": 1,
-    "courts": [{ "courtId": 1, "name": "1", "sortOrder": 0 }],
-    "createdAt": "..."
+  "user": { "...": "same as GET /users/me" },
+  "stats": {
+    "hostedMatches": 0,
+    "joinedMatches": 0,
+    "completedBookings": 0,
+    "reviewsCount": 0,
+    "avgRating": null,
+    "joinedAt": "2026-07-18T10:00:00.000Z"
   }
 }
 ```
 
-`yourShare`: `GENDER_RANGE` + female → `priceMin`; male → `priceMax`; `SPLIT_EVENLY` → `ceil(priceMin / filledCount)` (giảm khi thêm người).
-
-`host.matchCount` = số kèo host đã tạo, trừ `CANCELLED`. `host.rating` luôn `null` ở slice này (chưa có review). Figma card `4.9` = trung bình điểm **sau khi kèo xong**: người `ACCEPTED` đánh giá host; 1 user / 1 kèo. Domain `review` + `POST` complete/rate **chưa làm** — FE ẩn sao khi `null`. `participantAvatars` tối đa 3 URL (host rồi người ACCEPTED, bỏ trống nếu chưa có avatar). `isFavorited` theo caller.
-
-`hostPhoneNumber`: có trên create/update (caller là host). **Không** có trên `GET /matches` / `GET /matches/mine` / `GET /users/:id`. Chi tiết: xem 7.3.
-
-Map / chỉ đường (**FE + [Geoapify](https://apidocs.geoapify.com/docs/routing/)**, không gọi từ `spot-backend`):
-
-- **Pin kèo:** `GET /matches` trả `latitude` / `longitude`. Chỉ pin khi cả hai khác `null`. Nút map trên list mở map tiles Geoapify + marker từng kèo.
-- **Chỉ đường:** icon máy bay trên card kèo **không phải share**. FE lấy GPS user → [Routing API](https://apidocs.geoapify.com/docs/routing/) `waypoints=userLat,userLng|matchLat,matchLng&mode=drive`. Không có lat/lng trên kèo thì [Geocoding](https://www.geoapify.com/maps-api/) `venueName` + `venueAddress` rồi mới route.
-- **Host gõ địa chỉ:** Autocomplete/Geocoding trên form tạo kèo, rồi `POST /matches` gửi cặp `latitude`/`longitude`. Occupancy **không** dùng toạ độ.
-- Key Geoapify chỉ trên FE (restrict HTTP referrer / bundle ID). **Không** đưa `GEOAPIFY_API_KEY` vào backend / `.env` server.
-
-**Errors**
-
-| Status | Message |
+| Field | Nguồn |
 | :--- | :--- |
-| `400` | Validation failed |
-| `401` | Missing / invalid token |
-| `403` | Only PLAYER accounts can host a match |
-| `404` | User not found |
-| `409` | This pitch is already booked at an overlapping time (`details.matchId`, `courtName`, `hostUserId`) |
+| `hostedMatches` | `COUNT` `schema_social.matches` where `host_id = me` |
+| `joinedMatches` | `match_participants` `APPROVED` (không tính host) |
+| `completedBookings` | bookings `status = COMPLETED` |
+| `reviewsCount` / `avgRating` | stub `0` / `null` (chưa có host-review) |
+| `joinedAt` | `users.created_at` |
 
-**curl**
+### 7.2 `PATCH /users/me`
 
-```bash
-curl -s -X POST http://localhost:3000/matches \
-  -H "Authorization: Bearer <accessToken>" \
-  -H "Content-Type: application/json" \
-  -d "{\"sport\":\"FOOTBALL\",\"format\":\"SEVEN_A_SIDE\",\"title\":\"Saturday 7v7\",\"venueName\":\"San ABC\",\"venueAddress\":\"123 Nguyen Van Linh, Q7, TP.HCM\",\"province\":\"79\",\"city\":\"778\",\"latitude\":10.729,\"longitude\":106.721,\"startsAt\":\"2026-09-01T09:00:00+07:00\",\"endsAt\":\"2026-09-01T11:00:00+07:00\",\"maxPlayers\":14,\"skillMin\":\"REC_BASIC\",\"skillMax\":\"SEMI_PRO\",\"feeType\":\"SPLIT_EVENLY\",\"priceMin\":1400000,\"joinMode\":\"APPROVAL\",\"courts\":[{\"name\":\"1\"}]}"
-```
+**Body** (ít nhất một field)
 
----
-
-### 7.1b `POST /matches/bulk`
-
-Tạo **nhiều kèo** cùng template (Vmito-style: clone ngày cụ thể hoặc lịch tuần — FE expand ra `schedules[]` trước khi gọi). PLAYER host. `isMultiDay` luôn `false`. `isRecurring: true` khi `schedules.length > 1`.
-
-**Body**
-
-| Field | Type | Required | Notes |
-| :--- | :--- | :--- | :--- |
-| `template` | object | ✓ | Giống `POST /matches` **trừ** `startsAt`, `endsAt`, `isMultiDay` (luôn false) |
-| `schedules` | `{ startsAt, endsAt }[]` | ✓ | 1–100 phần tử; mỗi slot validate như create (≥1h, tương lai) |
-
-**Success `201`**
-
-```json
-{
-  "message": "Some matches were created",
-  "totalRequested": 4,
-  "totalCreated": 3,
-  "created": [ { "matchId": 1, "startsAt": "..." } ],
-  "failed": [
-    {
-      "startsAt": "...",
-      "endsAt": "...",
-      "message": "This pitch is already booked at an overlapping time",
-      "details": { "matchId": 2, "courtName": "1" }
-    }
-  ]
-}
-```
-
-Một số slot **409** (sân trùng) vẫn tạo được slot khác. Nếu **không** tạo được kèo nào → `409` + `failed[]`.
-
-Toggle recurring **tắt** trên FE → gửi 1 phần tử `schedules` hoặc dùng `POST /matches`.
-
----
-
-### 7.1c `GET /matches/venue-suggestions`
-
-Gợi ý **địa điểm** cho form Host (`99:2`). **Không** dùng cho Homepage browse.
-
-**Query:** `location` (required), `sport?`, `limit?` (default 10, max 10).
-
-Pool: mọi kèo `status <> CANCELLED` (gồm COMPLETED, FULL, OPEN…). Search unaccent + fuzzy trên `title`, `venueName`, `venueAddress`. Trả **distinct venue** (không trả title kèo).
+| Field | Type | Notes |
+| :--- | :--- | :--- |
+| `fullName` | string (1–100) | |
+| `gender` | `male` \| `female` \| `other` \| `prefer_not_to_say` | |
+| `avatarUrl` | string URL http(s) \| `null` | `null` xóa avatar; hoặc `POST /users/me/avatar` |
+| `language` | `en` \| `vi` | |
+| `appearance` | `light` \| `dark` \| `system` | |
+| `pushNotificationsEnabled` | boolean | |
+| `locationServicesEnabled` | boolean | |
 
 **Success `200`**
 
 ```json
 {
-  "suggestions": [
-    {
-      "venueName": "San ABC",
-      "venueAddress": "123 Nguyen Van Linh, Q7, TP.HCM",
-      "province": "79",
-      "provinceName": "Thành phố Hồ Chí Minh",
-      "city": "778",
-      "cityName": "Quận 7",
-      "latitude": 10.729,
-      "longitude": 106.721
-    }
-  ]
+  "message": "Profile updated successfully",
+  "user": { "...": "..." }
 }
 ```
 
-Không có trong DB → `suggestions: []` → FE mở map Geoapify. Không Geoapify trên BE.
+**Errors:** `400` validation / unrecognized keys, `401`, `404`.
 
----
+```bash
+curl -s -X PATCH http://localhost:3000/users/me \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"fullName":"Nguyen Van B","gender":"female","language":"vi","appearance":"dark"}'
+```
 
-### `GET /geo/vn`
+### 7.2b `POST /users/me/password` (Change Password)
 
-Dropdown 2 cấp **bản đồ hành chính trước 1/7/2025**: 63 tỉnh/thành phố + 705 quận/huyện/thị xã/TP thuộc tỉnh. JSON tĩnh trong backend, **không** gọi API ngoài. Cần Bearer.
+**Body:** `currentPassword`, `newPassword`, `confirmPassword` (rule giống register).
 
-**Success `200`:** `{ "map": "pre-2025", "provinces": [ { "code": "79", "name": "Thành phố Hồ Chí Minh", "cities": [ { "code": "778", "name": "Quận 7" } ] } ] }`
+**Success `200`:** `{ "message": "Password updated successfully" }`
 
-FE: chọn `province` rồi `city` từ list này; gửi đúng `code` lúc `POST /matches` và `GET /matches?province=&city=`.
+### 7.2c `POST /users/me/avatar`
 
----
+Multipart field **`avatar`** (jpeg/png/webp/gif, ≤2MB). Lưu `uploads/avatars/`, URL qua `/uploads/avatars/*`. Set `PUBLIC_BASE_URL` cho device LAN.
 
-### 7.2 `GET /matches`
+```bash
+curl -s -X POST http://localhost:3000/users/me/avatar \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "avatar=@./photo.jpg"
+```
 
-List kèo còn slot (`OPEN`, `filledCount < maxPlayers`, `endsAt > now`). Kèo `FULL` **không** xuất hiện trên homepage browse; vẫn thấy qua `GET /matches?hostUserId=` (profile host: `OPEN`/`FULL` còn hạn). Sort `startsAt` tăng dần.
+### 7.2d `GET/PATCH /users/me/preferences` (Settings)
 
-**Ẩn khỏi browse mặc định** (không áp dụng khi `hostUserId=`): kèo caller **đang host**; kèo caller có join request `PENDING`, `ACCEPTED`, hoặc `KICKED`. **`REJECTED`** → kèo **hiện lại** (join lại được). Xem lại qua **Manage Matches** / `GET /matches/:id`. Cùng rule khi `favorited=true`.
+Preference + Layout (Figma Settings). Data trên `user_profiles`; view `schema_auth.user_prefs`. Sync đa thiết bị = cùng row DB.
+
+**GET `200`:** `{ "preferences": { language, appearance, pushNotificationsEnabled, locationServicesEnabled } }`
+
+**PATCH** (≥1 field): `language` (`en`|`vi`), `appearance` (`light`|`dark`|`system`), toggles. Strict — không nhận `fullName`/email.
+
+**PATCH `200`:** `{ "message": "Preferences updated successfully", "preferences": { ... } }`
+
+### 7.3 Đổi email (OTP)
+
+1. `POST /users/me/email/request` `{ "newEmail": "new@example.com" }`
+2. `POST /users/me/email/confirm` `{ "newEmail": "new@example.com", "otp": "123456" }`
+
+OTP gửi tới **email mới**. OTP row dùng `purpose = CHANGE_EMAIL:{sha256(newEmail)[:32]}` để gắn đúng địa chỉ. Trùng email khác user → `409`. Email giống hiện tại → `400`. OTP sai / hết hạn giống auth (`400` / `429`).
+
+### 7.4 Đổi phone (OTP)
+
+1. `POST /users/me/phone/request` `{ "newPhone": "0901234567" }`
+2. `POST /users/me/phone/confirm` `{ "newPhone": "0901234567", "otp": "123456" }`
+
+OTP gửi tới **email hiện tại** (chưa có SMS). Purpose: `CHANGE_PHONE:{newPhone}`. Phone VN 10 số (cùng rule register).
+
+### 7.5 `GET /users/me/schedule` (View Schedule)
+
+Lịch cá nhân: booking của player + social match (host hoặc participant `APPROVED`).  
+Join `schema_booking` + `schema_social` + `schema_venue`. Timezone lịch: **`Asia/Bangkok`**.
 
 **Query**
 
-| Param | Notes |
-| :--- | :--- |
-| `sport` | `BADMINTON` \| `FOOTBALL` |
-| `date` | `YYYY-MM-DD` (ngày `startsAt` theo `Asia/Ho_Chi_Minh`) |
-| `timeFrom` / `timeTo` | `HH:mm` (24h, timezone `Asia/Ho_Chi_Minh`). Có `date`: kèo **chồng giờ** với cửa sổ `[date+from, date+to]` (`startsAt < to` và `endsAt > from`; thiếu from → `00:00`, thiếu to → `23:59:59`). Không `date`: lọc **giờ bắt đầu** kèo (`startsAt::time >= timeFrom`, `< timeTo`). `timeTo` phải sau `timeFrom`. |
-| `skill` | Cần kèm `sport`. Một hoặc nhiều code (lặp `skill=` hoặc `skill=A,B`). Kèo **chứa ít nhất một** rank đã chọn trong `[skillMin, skillMax]` (OR). Tối đa 10. |
-| `priceMin` / `priceMax` | Integer **VND** (FE đổi `$20–$150` trước khi gửi). Cả hai: `GENDER_RANGE` nếu khoảng `[price_min, price_max]` **chồng** `[priceMin, priceMax]`; `SPLIT_EVENLY` nếu `ceil(price_min / maxPlayers)` nằm trong khoảng. Chỉ `priceMax`: như cũ (`price_min` hoặc share-khi-đầy `<= priceMax`). Chỉ `priceMin`: giá kèo `>= priceMin`. `priceMin <= priceMax`. |
-| `location` | Tên kèo, tên sân **hoặc** địa chỉ (`venueAddress`). **Không dấu** (`san` = `Sân`), **gần đúng** (typo / lệch chữ, ≥ 3 ký tự), hoặc **mọi từ** đều xuất hiện trong title+venue+address. **Không** Geoapify. Có `location` thì `suggestions` (tối đa 5 `{ text, kind: title\|venueName\|venueAddress }`) gợi ý khi user gõ. Radio **Location**. **Không** gửi cùng `latitude`/`longitude`/`radiusKm`. |
-| `province` | Mã tỉnh/TP bản đồ **trước 2025** (exact). Kết hợp được với `location` hoặc Distance. Kèo cũ `province` null thì không khớp filter này. |
-| `city` | Mã quận/huyện, **phải kèm** `province`. Exact. |
-| `favorited` | `true` → chỉ kèo caller đã tim (`match_favorites`). Kết hợp được với `location` **hoặc** distance (không cả hai). Bỏ trống / `false` = không lọc tim. |
-| `hostUserId` | Chỉ kèo do user này host (`OPEN`/`FULL` còn hạn). Dùng cho màn profile host (Hosted Matches). Kết hợp được với filter khác. User không tồn tại → `total: 0`. |
-| `latitude` / `longitude` / `radiusKm` | Radio **Distance**. Cả ba **cùng lúc**. GPS user + bán kính 1–20 km. Haversine; kèo không có toạ độ bị loại. **Không** gửi cùng `location`. |
-| `limit` | Default 20, max 50 |
-| `offset` | Default 0 |
+| Param | Default | Notes |
+| :--- | :--- | :--- |
+| `type` | `all` | `all` \| `booking` \| `match` |
+| `from` | hôm nay (Bangkok) | `YYYY-MM-DD` |
+| `to` | `from` + 30 ngày | `YYYY-MM-DD`; phải ≥ `from` |
+| `limit` | `50` | 1–100 |
+
+Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `[from 00:00+07, to+1 00:00+07)` rồi so với `booking_time_range` (`tstzrange`).
 
 **Success `200`**
 
 ```json
 {
-  "total": 2,
-  "limit": 20,
-  "offset": 0,
-  "matches": [ { "matchId": 1, "spotsLeft": 13, "yourShare": 1400000 } ],
-  "suggestions": [
-    { "text": "Sân ABC", "kind": "venueName" },
-    { "text": "Saturday 7v7", "kind": "title" },
-    { "text": "123 Nguyen Van Linh, Q7", "kind": "venueAddress" }
-  ]
+  "items": [
+    {
+      "type": "BOOKING",
+      "bookingId": 1,
+      "matchId": null,
+      "startsAt": "2026-08-20T11:00:00.000Z",
+      "endsAt": "2026-08-20T12:00:00.000Z",
+      "bookingDate": "2026-08-20",
+      "status": "PAID",
+      "venueName": "Smoke Venue",
+      "fieldName": "Pitch A",
+      "address": "123 Nguyen Trai, Dist 1, HCMC",
+      "sportType": "Football"
+    },
+    {
+      "type": "MATCH",
+      "bookingId": 1,
+      "matchId": 9,
+      "role": "HOST",
+      "startsAt": "2026-08-20T11:00:00.000Z",
+      "endsAt": "2026-08-20T12:00:00.000Z",
+      "bookingDate": "2026-08-20",
+      "status": "PAID",
+      "venueName": "Smoke Venue",
+      "fieldName": "Pitch A",
+      "address": "123 Nguyen Trai, Dist 1, HCMC",
+      "sportType": "Football"
+    }
+  ],
+  "timezone": "Asia/Bangkok"
 }
 ```
 
-Mỗi phần tử cùng shape với `match` ở 7.1, **trừ** `hostPhoneNumber` (không lộ trên list). `suggestions` luôn là mảng (rỗng nếu không gửi `location` hoặc không có tên gần). `kind` = `title` \| `venueName` \| `venueAddress`. Không Geoapify.
+`bookingId` / `matchId` đủ để FE navigate detail / cancellation policy. Bỏ `CANCELLED`.
 
----
-
-### 7.3 `GET /matches/:id`
-
-Chi tiết 1 kèo (kể cả đã qua giờ / cancelled).
-
-**Success `200`**
-
-```json
-{
-  "match": { },
-  "canJoin": true,
-  "yourRequest": null,
-  "participants": [
-    { "userId": 12, "fullName": "Host", "role": "HOST", "heads": 1, "guests": [] }
-  ]
-}
+```bash
+curl -s "http://localhost:3000/users/me/schedule?type=all" \
+  -H "Authorization: Bearer <accessToken>"
 ```
 
-`match` cùng shape 7.1. `hostPhoneNumber` **chỉ** có khi caller là host hoặc `yourRequest.status === ACCEPTED` (đã vào kèo). List / viewer chưa join / `PENDING` / `KICKED` không có field này. `yourRequest` là request `PENDING`/`ACCEPTED`/`KICKED` của caller (hoặc `null` nếu chưa join / đã `REJECTED`). `canJoin` = không phải host, kèo `OPEN`, còn slot, chưa có request active, **không bị kick**. Khi `filledCount >= maxPlayers` → `status` = `FULL`, `spotsLeft` = `0` (FE ẩn Join).
+### 7.6 `POST /users/me/schedule/dev/seed` (dev only)
 
-`participants[0]` (HOST) cũng có `phoneNumber` trong cùng điều kiện. Player khác không thấy SĐT host nếu chưa `ACCEPTED`.
+Tạo venue + field + booking (+ match nếu `includeMatch`, default `true`) gắn user hiện tại. Không có trong production.
 
-**Errors:** `400` Invalid match id · `401` · `404` Match not found
+```bash
+curl -s -X POST http://localhost:3000/users/me/schedule/dev/seed \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"includeMatch":true,"daysFromNow":3}'
+```
 
 ---
 
-### 7.4 `POST /matches/:id/join`
+## 8. Notifications endpoints
 
-PLAYER xin vào kèo. Body có thể `{}` (một mình, không guests).
+Inbox in-app + badge unread + mark read (SPOT-153/154). Schema: `schema_notification`.  
+Alias `/api/notifications/*`. Tất cả route cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `GET` | `/notifications` | Inbox: `?limit=20&beforeId=&unreadOnly=` → `{ items, nextCursor }` |
+| `GET` | `/notifications/unread-count` | `{ count }` cho bell badge |
+| `PATCH` | `/notifications/:id/read` | Đánh dấu một thông báo đã đọc |
+| `POST` | `/notifications/read-all` | Đánh dấu tất cả đã đọc → `{ updated }` |
+| `POST` | `/notifications/dev/seed` | Dev only — tạo inbox (+ optional `dueReminderNow` / schedule) |
+| `POST` | `/notifications/dev/process-due` | Dev only — chạy một tick reminder worker |
+
+Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `SYSTEM`.  
+Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`.  
+Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
+
+```bash
+curl -s http://localhost:3000/notifications/unread-count \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+## 9. Reviews endpoints
+
+Đánh giá sân sau booking (SPOT-165/166). Schema: `schema_review` + cột `avg_rating` / `rating_count` trên `schema_venue.venues`.  
+Alias `/api/reviews/*`. Cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `POST` | `/reviews` | Player tạo review cho booking `COMPLETED` |
+| `POST` | `/reviews/:id/reply` | Venue owner trả lời (1 reply / review) |
+| `GET` | `/reviews/venues/:venueId/rating` | Aggregate rating (DB + Redis cache `venue:rating:{id}`) |
+| `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review |
+
+**Rules**
+
+- 1 review / `booking_id` (`UNIQUE`)
+- Chỉ `status = COMPLETED`
+- Spam filter cơ bản (Zod): rating 1–5, text ≤ 2000, reject text “spammy”
+- Rate limit: tối đa 10 review / player / 24h → `429`
+- Reply: chỉ `venues.owner_id ===` user hiện tại; 1 reply / review
+- Sau create: cập nhật `venues.avg_rating` / `rating_count`, invalidate Redis cache
+
+### 9.1 `POST /reviews`
 
 **Body**
 
-| Field | Type | Required | Notes |
-| :--- | :--- | :--- | :--- |
-| `message` | string | | ≤ 500 |
-| `phoneNumber` | string | | SĐT liên lạc của **người xin kèo**. Bỏ trống → dùng SĐT account. Số VN 10 chữ số. |
-| `guests` | `{ name, skill, gender, phoneNumber }[]` | | Max 10. `phoneNumber` **bắt buộc** (host gọi khách). `skill` đúng ladder sport. `gender`: `female` \| `male`. |
-
-Skill ngoài range kèo → **vẫn tạo request**, `skillWarning: true`. Skill sai sport → `400`.
-
-`AUTO`: request `ACCEPTED`, `filledCount` tăng, `shareAmount` ghi nhận, `paymentStatus: SUCCESS`.  
-`APPROVAL`: request `PENDING`, `filledCount` chưa đổi; share ghi lúc accept.
+```json
+{
+  "bookingId": 1,
+  "rating": 5,
+  "reviewText": "Clean field and friendly staff"
+}
+```
 
 **Success `201`**
 
 ```json
 {
-  "message": "Join request submitted",
-  "skillWarning": false,
-  "warning": null,
-  "request": {
-    "requestId": 1,
-    "matchId": 8,
-    "userId": 20,
-    "phoneNumber": "0912345678",
-    "status": "PENDING",
-    "skillWarning": false,
-    "heads": 3,
-    "shareAmount": null,
-    "paymentStatus": null,
-    "guests": [
-      { "guestId": 1, "name": "Minh", "skill": "REC_BASIC", "gender": "male", "phoneNumber": "0901111111" }
-    ]
+  "review": {
+    "reviewId": 1,
+    "bookingId": 1,
+    "venueId": 1,
+    "playerId": 1,
+    "rating": 5,
+    "reviewText": "Clean field and friendly staff",
+    "createdAt": "...",
+    "reply": null
   },
-  "match": { "filledCount": 1, "spotsLeft": 13, "status": "OPEN" }
+  "venueRating": {
+    "venueId": 1,
+    "avgRating": 5,
+    "ratingCount": 1
+  }
 }
 ```
 
-AUTO → `message: "Joined match"`, `request.status: "ACCEPTED"`, `shareAmount` = tổng share của joiner + guests.
+**Errors:** `400` (chưa COMPLETED / validation), `401`, `404` booking, `409` đã review, `429` spam rate.
 
-`GENDER_RANGE`: profile joiner phải `male`/`female` (guest cũng vậy). `SPLIT_EVENLY`: `shareAmount` = `(1 + guests.length) * ceil(priceMin / filledCountAfter)`.
-
-**Errors**
-
-| Status | Message |
-| :--- | :--- |
-| `400` | Validation failed / Invalid match id / Host cannot join / Match is full / Not enough spots left / Match is cancelled / gender missing for GENDER_RANGE |
-| `401` | Missing / invalid token |
-| `403` | Only PLAYER accounts can join a match / You were kicked from this match |
-| `404` | Match not found |
-| `409` | You already have a pending or accepted request for this match |
-
-**curl**
-
-```bash
-curl -s -X POST http://localhost:3000/matches/8/join \
-  -H "Authorization: Bearer <accessToken>" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"Can I bring friends?\",\"phoneNumber\":\"0912345678\",\"guests\":[{\"name\":\"Minh\",\"skill\":\"REC_BASIC\",\"gender\":\"male\",\"phoneNumber\":\"0901111111\"},{\"name\":\"Lan\",\"skill\":\"LEARNING\",\"gender\":\"female\",\"phoneNumber\":\"0902222222\"}]}"
-```
-
----
-
-### 7.5 `GET /matches/:id/requests`
-
-Host xem **danh sách chờ**: chỉ request `PENDING`. Rejected / accepted / kicked không nằm đây (accepted nằm `participants` ở detail). Mỗi request có `phoneNumber` (người xin) và `guests[].phoneNumber` để host gọi.
-
-**Success `200`:** `{ "matchId", "total", "requests": [ ... ] }`
-
-**Errors:** `403` Only the host can list join requests · `404` Match not found
-
----
-
-### 7.6 `POST /matches/:id/requests/:requestId/accept`
-
-Host duyệt. Chỉ `PENDING`. Slot: `heads` phải ≤ `spotsLeft`. Ghi `shareAmount` + `paymentStatus: SUCCESS`, tăng `filledCount`.
-
-**Success `200`:** `{ "message": "Join request accepted", "request", "match" }`
-
-**Errors:** `400` not pending / not enough spots / match full · `403` not host · `404`
-
----
-
-### 7.7 `POST /matches/:id/requests/:requestId/reject`
-
-Host từ chối `PENDING`. User có thể join lại sau đó (**cùng `requestId`**, chỉ đổi `status`). `filledCount` không đổi.
-
-**Success `200`:** `{ "message": "Join request rejected", "request" }`
-
----
-
-### 7.8 `POST /matches/:id/participants/:userId/kick`
-
-Host kick joiner **ACCEPTED** (kèm toàn bộ guests của request đó). `filledCount -= heads`. Nếu đang `FULL` và còn slot → `OPEN`. Không kick được host. User bị kick **không join lại được** kèo đó (`403`).
-
-**Success `200`:** `{ "message": "Participant kicked", "request", "match" }`
-
----
-
-### 7.9 `GET /matches/mine`
-
-Manage Matches [`101:98`](https://www.figma.com/design/ZTpFWfkdcEpHH4xJaKaBxT/Spot?node-id=101-98) — tab **Active** / **Completed**. Card reuse Homepage; tap → `GET /matches/:id`.
-
-Query `tab` mặc định `active`. Cũng nhận `limit` / `offset` như list.
-
-| `tab` | Host (`myRole: HOST`) | Participant (`myRole: PARTICIPANT`) |
-| :--- | :--- | :--- |
-| `active` | `OPEN`/`FULL`, `endsAt` còn tương lai | Join request **`ACCEPTED`**, kèo chưa hết giờ, chưa `CANCELLED` |
-| `completed` | `CANCELLED`/`COMPLETED`, hoặc `OPEN`/`FULL` đã qua `endsAt` | **`KICKED`**, hoặc **`ACCEPTED`** + kèo đã hết giờ / cancelled / completed |
-
-**Không** gồm join request **`PENDING`** — chỉ tab **`GET /matches/my-join-requests`**.
-
-Mỗi phần tử match thêm:
-
-| Field | Notes |
-| :--- | :--- |
-| `myRole` | `HOST` \| `PARTICIPANT` |
-| `myRequestStatus` | Participant: thường `ACCEPTED` trên active; `KICKED` trên completed. Host: `null` |
-| `pendingRequestCount` | Host only — số request **`PENDING`** chờ duyệt. FE chip **"N chờ duyệt"** khi `> 0` và `joinMode=APPROVAL` |
-| `status` | Như list — FE chip **"Đủ người"** khi `FULL` |
-
-Host duyệt request: tap card → **Match detail** (`100:401` host view) → `GET /matches/:id/requests` → accept/reject.
-
-**Success `200`:** `{ "tab", "total", "limit", "offset", "matches": [ { ...match, "myRole", "myRequestStatus", "pendingRequestCount" } ] }`
-
-**curl**
-
-```bash
-curl -s "http://localhost:3000/matches/mine?tab=active" \
-  -H "Authorization: Bearer <accessToken>"
-```
-
-**Errors:** `400` tab không hợp lệ · `401`
-
----
-
-### 7.9b `GET /matches/my-join-requests`
-
-Manage Matches — tab **Join Requests** (joiner theo dõi). **Không** dùng cho host duyệt.
-
-Trả request của caller với `status` **`PENDING`** hoặc **`REJECTED`** (`ACCEPTED` → `/mine?tab=active`; `KICKED` → `/mine?tab=completed`). Sort: `PENDING` trước, rồi `updatedAt` giảm dần.
-
-**Success `200`**
+### 9.2 `POST /reviews/:id/reply`
 
 ```json
-{
-  "total": 1,
-  "limit": 20,
-  "offset": 0,
-  "requests": [
-    {
-      "requestId": 1,
-      "status": "PENDING",
-      "message": "Can I join?",
-      "heads": 1,
-      "createdAt": "...",
-      "match": {
-        "matchId": 5,
-        "title": "Saturday 7v7",
-        "startsAt": "...",
-        "venueName": "San ABC",
-        "hostFullName": "Nguyen Van A"
-      }
-    }
-  ]
-}
+{ "replyText": "Thanks for your feedback!" }
 ```
 
-Tap → `GET /matches/:id` (detail). `REJECTED` vẫn có thể join lại từ Homepage (browse hiện lại kèo).
+**Success `201`** → `{ review, reply }`.  
+**Errors:** `403` không phải owner, `404`, `409` đã reply.
 
-**Errors:** `401`
+### 9.3 `GET /reviews/venues/:venueId/rating`
 
----
+```json
+{ "venueId": 1, "avgRating": 5, "ratingCount": 1, "source": "db" }
+```
 
-### 7.10 `PATCH /matches/:id`
-
-Host sửa kèo **chưa bắt đầu** (`startsAt` > now). Body partial (ít nhất 1 field). Merge rồi validate như create (duration ≥ 1h, occupancy trừ chính kèo này).
-
-Nếu đã có người join (`filledCount > 1`): **không** đổi `sport` / `format` / `feeType` / giá. `maxPlayers` ≥ `filledCount`.
-
-**Success `200`:** `{ "message": "Match updated", "match" }`
-
-**curl**
+`source` là `cache` hoặc `db`.
 
 ```bash
-curl -s -X PATCH http://localhost:3000/matches/8 \
+curl -s -X POST http://localhost:3000/reviews \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d "{\"title\":\"Evening 7v7 updated\"}"
+  -d '{"bookingId":1,"rating":5,"reviewText":"Great pitch"}'
 ```
 
-**Errors:** `400` already started / cancelled / completed / validation / maxPlayers too small · `403` not host · `404` · `409` pitch overlap
-
 ---
 
-### 7.11 `POST /matches/:id/cancel`
-
-Host hủy. Request `PENDING` → `REJECTED`. Status `CANCELLED` (không còn chiếm sân). Joiner ACCEPTED giữ nguyên lịch sử.
-
-**Success `200`:** `{ "message": "Match cancelled", "match" }`
-
-**curl**
-
-```bash
-curl -s -X POST http://localhost:3000/matches/8/cancel \
-  -H "Authorization: Bearer <accessToken>"
-```
-
-**Errors:** `400` already cancelled / completed · `403` not host · `404`
-
----
-
-### 7.12 `POST /matches/:id/favorite` · `DELETE /matches/:id/favorite`
-
-Tim trên card homepage. `POST` gắn (idempotent). `DELETE` bỏ. Không cần body.
-
-**Success `200`:** `{ "message": "Match favorited" | "Match unfavorited", "isFavorited": true|false, "match" }`
-
-List `GET /matches` có `isFavorited` trên từng phần tử.
-
-**Errors:** `401` · `404` Match not found
-
----
-
-## 8. JWT & FE integration
+## 10. JWT & FE integration
 
 ### Claims
 
@@ -1472,6 +1277,11 @@ api.interceptors.request.use((config) => {
 | `role` | string | `PLAYER` / `OWNER` / `REFEREE` / … |
 | `status` | string | `ACTIVE` / `PENDING` / `LOCKED` |
 | `gender` | string? | |
+| `avatarUrl` | string \| null | URL ảnh; chưa có upload BE |
+| `language` | `en` \| `vi` | default `en` |
+| `appearance` | `light` \| `dark` \| `system` | default `light` |
+| `pushNotificationsEnabled` | boolean | default `true` |
+| `locationServicesEnabled` | boolean | default `true` |
 | `roleSelected` | boolean | |
 | `roleSelectedAt` | string \| null | ISO datetime |
 | `emailVerified` | boolean | |
@@ -1483,9 +1293,9 @@ api.interceptors.request.use((config) => {
 
 ---
 
-## 9. Checklist test
+## 11. Checklist test
 
-Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth**.
+Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth** / **Users** / **Notifications** / **Reviews**.
 
 ### Happy path — PLAYER
 
@@ -1496,37 +1306,22 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 3 | `POST /auth/role` `PLAYER` | `200` + `status: ACTIVE` |
 | 4 | `POST /auth/otp/verify` (otp từ email/`debugOtp`) | `200` verified |
 | 5 | `POST /auth/login` | `200` + `accessToken` |
-| 6 | `GET /auth/me` + Bearer access | `200` + `user` (kèm `skills`) |
-| 7 | `PATCH /auth/me` `{ skills: { badminton, football } }` | `200` + cả hai skill |
-| 8 | `GET /auth/me` | `200` skill đã lưu |
-| 9 | `PATCH /auth/me` `{ skills: { football: null } }` | football = `null` |
-| 10 | `PATCH /auth/me` `{ skills: { badminton: "ELITE" } }` | `400` |
-| 11 | `POST /auth/refresh` | `200` + token mới |
-| 12 | `GET /auth/me` với access mới | `200` |
-
-### Happy path — host + browse kèo
-
-| # | Request | Expect |
-| :--- | :--- | :--- |
-| 1 | `POST /matches` football `SEVEN_A_SIDE` `maxPlayers: 14` | `201`, `filledCount: 1`, `spotsLeft: 13` |
-| 2 | `POST /matches` badminton `DOUBLES` `allLevels: true` + `GENDER_RANGE` | `201`, `yourShare` theo gender |
-| 2b | `POST /matches` football + `SPLIT_EVENLY` + `priceMin` (tổng) | `201`, `yourShare` = ceil(priceMin / 1) |
-| 3 | `GET /matches?sport=FOOTBALL` | chứa kèo 7v7 |
-| 3b | `GET /users/:hostUserId` (joiner) | `fullName`, `skills`, `matchCount`; **không** có `email`/`phoneNumber`; `rating: null` |
-| 3c | `GET /matches?hostUserId=:hostUserId` | chỉ kèo OPEN/FULL còn hạn của host đó |
-| 4 | `GET /matches/:id` | `squad.filled/max`, `spotsLeft`, `canJoin`, `participants` |
-| 5 | `POST /matches/:id/join` `{}` (account 2, kèo AUTO) | `201`, `status: ACCEPTED`, `filledCount` += 1 |
-| 6 | `POST /matches/:id/join` 2 guests (kèo APPROVAL) | `201` `PENDING`, `heads: 3`, `filledCount` chưa tăng |
-| 7 | `GET /matches/:id/requests` (host) | thấy request PENDING |
-| 8 | `POST .../requests/:requestId/accept` | `ACCEPTED`, `filledCount` += 3, `paymentStatus: SUCCESS` |
-| 9 | Join khi `1+guests > spotsLeft` | `400` Not enough spots left |
-| 10 | Join lại khi đang PENDING/ACCEPTED | `409` |
-| 11 | `POST .../participants/:userId/kick` | `KICKED`, `filledCount` giảm |
-| 11b | Join lại kèo đã kick | `403` You were kicked from this match |
-| 12 | `GET /matches/mine?tab=active` (host) | kèo OPEN/FULL chưa hết giờ |
-| 13 | `PATCH /matches/:id` `{ "title": "..." }` trước giờ | `200` title mới |
-| 14 | `POST /matches/:id/cancel` | `CANCELLED`; kèo biến khỏi list public |
-| 15 | `GET /matches/:id/requests` sau reject | không còn request đó (chỉ `PENDING`) |
+| 6 | `GET /auth/me` + Bearer access | `200` + `user` |
+| 7 | `GET /users/me` | cùng `user` như `/auth/me` |
+| 8 | `PATCH /users/me` `{ fullName, gender }` | `200` + user cập nhật |
+| 9 | `PATCH /users/me` prefs (`language`, `appearance`, toggles, `avatarUrl`) | `200` |
+| 10 | `POST /users/me/email/request` → `confirm` | `200` email mới |
+| 11 | `POST /users/me/phone/request` → `confirm` | `200` phone mới |
+| 12 | `POST /users/me/schedule/dev/seed` | `201` + booking (+ match) |
+| 13 | `GET /users/me/schedule` (+ `type=booking\|match`) | `200` + items |
+| 14 | `POST /reviews/dev/seed-booking` | `201` + booking `COMPLETED` |
+| 15 | `POST /reviews` | `201` + `venueRating` |
+| 16 | `POST /reviews/:id/reply` | `201` (user là venue owner) |
+| 17 | `GET /reviews/venues/:venueId/rating` | `200` |
+| 18 | `POST /notifications/dev/seed` | `201` + notification |
+| 19 | `GET /notifications` / `unread-count` | `200` |
+| 20 | `PATCH /notifications/:id/read` + `POST /read-all` | `200` |
+| 21 | `POST /auth/refresh` | `200` + token mới |
 
 ### Negative / edge
 
@@ -1549,6 +1344,12 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | `GET /auth/me` không token | `401` |
 | `PATCH /auth/me` không token | `401` |
 | `POST /auth/refresh` bằng access token | `401` |
+| `PATCH /users/me` với `email` | `400` (strict) |
+| Email/phone change trùng user khác | `409` |
+| Email/phone change giống giá trị hiện tại | `400` |
+| Review duplicate booking / non-COMPLETED | `409` / `400` |
+| Reply khi không phải venue owner | `403` |
+| `PATCH /notifications/999999/read` (không thuộc user) | `404` |
 
 ### Forgot password path
 
@@ -1561,14 +1362,18 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 
 ---
 
-## 10. Smoke scripts
+## 12. Smoke scripts
 
 Chạy khi server đang `npm run dev` và (nên) `OTP_DEBUG=true`:
 
 ```bash
 npm run smoke:otp      # register → verify
 npm run smoke:login    # register → role → verify → login → me → refresh
-npm run smoke:matches  # 2 PLAYER → host/join/approve/kick/mine/edit/cancel
+npm run smoke:profile  # login → GET/PATCH me → email/phone OTP change
+npm run smoke:notifications  # inbox + mark read + due reminder
+npm run smoke:schedule       # seed schedule → GET /users/me/schedule
+npm run smoke:reviews        # seed COMPLETED booking → review → reply
+npm run worker:reminders     # background T-24h/T-2h processor
 node scripts/smoke-forgot-password.js
 node scripts/smoke-register.js
 ```
@@ -1581,25 +1386,24 @@ npm test
 
 ---
 
-## 11. Chưa có / sắp làm
+## 13. Chưa có / sắp làm
 
 | Hạng mục | Status |
 | :--- | :--- |
 | `authenticate` / `requireRole` middleware | Done |
 | `POST /auth/refresh` | Done |
-| `GET /auth/me` | Done — kèm `user.skills` |
-| `GET /users/:id` | Done — public host profile (không email/SĐT); `rating`/`reviewCount` stub |
-| `PATCH /auth/me` | Done — set/clear skill per sport |
+| `GET /auth/me` / `GET /users/me` | Done |
+| `PATCH /users/me` + OTP email/phone change | Done |
+| Prefs / `avatar_url` (`002_user_prefs.sql`) | Done |
+| Notifications inbox + reminders (`003`/`004`) | Done |
+| `GET /users/me/schedule` + venue/booking/social schema (`005`) | Done |
+| `POST /reviews` + reply + venue rating (`006`) | Done |
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Chưa |
 | Logout | Chưa |
-| Booking / venue / payment / … | Scaffold rỗng — chưa có route |
-| Matchmaking host / list / detail | Done — `POST/GET /matches`, `GET /matches/:id` |
-| Join / guests / approve / kick | Done — Phase 3 |
-| Host mine / edit / cancel | Done — Phase 4 |
-| Matchmaking smoke (`npm run smoke:matches`) | Done — Phase 5 |
-| Host rating (`host.rating` / Figma `4.9`) | **Hoãn.** Sau kèo `COMPLETED` (hoặc `endsAt` đã qua), player `ACCEPTED` rate host → trung bình. Chưa có bảng review, chưa có `POST` complete/rate. Field API giữ `null`. |
-| Figma homepage: AI chatbot, notification (chuông), Booking, Schedule, Groups, Tournaments | **Khóa / chưa đụng** — không có route |
+| Avatar file upload (S3) / stats | Chưa |
+| FCM / device tokens | Chưa |
+| Booking create/pay/cancel, matchmaking lobby, payment, … | Chưa (schedule read + reviews only) |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 

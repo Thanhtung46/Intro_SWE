@@ -1,14 +1,17 @@
 # CLAUDE.md — spot-frontend-mobile
 
 Scoped guide for this app. The repo-root `CLAUDE.md` (one level up) is the
-polyrepo map and general behavioral guidelines — read it first for
+cross-project map and general behavioral guidelines — read it first for
 cross-app context. This file is the local layer: what's actually true
 inside `spot-frontend-mobile/` today.
 
-Deeper, workflow-specific detail lives in `.claude/rules/*.md`
-(code style, API conventions, testing), `.claude/agents/*.md` (review
-subagents), and `.claude/skills/*` (scaffolders) — this file stays a
-quick-reference, not a duplicate of those.
+Only `.claude/skills/speckit-*` (the Spec Kit workflow skills) exist under
+`.claude/` today — there is no `.claude/rules/*.md`, `.claude/agents/*.md`,
+or scaffolder skills (`expo-screen-scaffolder`, `zustand-store-generator`,
+`api-service-scaffolder`) despite earlier versions of this file citing
+them repeatedly; verify with `find .claude -type f` before trusting a
+reference to one. This file is the source of truth for conventions until
+those are actually written.
 
 ## Project Overview
 
@@ -16,12 +19,12 @@ Mobile client for **SPOT** (Sport Pitch Online Ticketing — HCMUS Software
 Engineering coursework, Group 09), built with Expo + React Native +
 `expo-router` for file-based navigation, in TypeScript (`tsconfig.json` +
 `@/*` → `src/*` path alias, wired via `babel-plugin-module-resolver`).
-Despite the polyrepo framing in the root `CLAUDE.md` ("each app has its
-own nested `.git`"), there is **no `.git` inside this directory today** —
-verified directly (`ls -la .git` → not found). `git status`/`git commit`
-run from here operate on the single repo rooted at the polyrepo root; a
-plain-JS, no-TypeScript version of this app may be true history, but it
-isn't the state on disk now.
+There is **no `.git` inside this directory** — verified directly
+(`ls -la .git` → not found); this app was merged into the root repo
+(commit `a2dff26`) and is now tracked there like everything else.
+`git status`/`git commit` run from here operate on the single repo rooted
+at the top of the monorepo; a plain-JS, no-TypeScript version of this app
+may be true history, but it isn't the state on disk now.
 
 Scope: this app targets the **Player / Match Host** actors only (venue
 search, booking, matchmaking, reviews). Venue Owner / Referee / System
@@ -44,28 +47,62 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   routes are gone). `src/utils/onboardingStorage.ts` holds the
   AsyncStorage-backed `onboarding_completed` flag.
 - **Auth** (`app/auth/`): `choose-role`, `register`, `login`, `otp`,
-  `forgot-password`, `reset-password` — each a thin route over
-  `src/services/authService.ts` (axios + `axios-mock-adapter`, gated by
-  `USE_MOCK_API` in `src/config/env.ts` — see that file's header comment
-  for the manual-QA trigger emails/OTPs per endpoint) and
-  `src/schemas/*Schema.ts` (zod validation, each with a co-located
-  `.test.ts`). `src/screens/auth/ChooseRoleScreen.tsx` is the only screen
-  component under `src/screens/auth/`; the others render inline in their
-  `app/auth/*.tsx` route file rather than following the thin-route/
-  presentational-screen split described under Architecture below.
+  `forgot-password`, `reset-password` — each a thin route over a real
+  presentational screen component under `src/screens/auth/`
+  (`ChooseRoleScreen`, `RegisterScreen`, `LoginScreen`, `OtpScreen`,
+  `ForgotPasswordScreen`, `ResetPasswordScreen` — all 6 exist and follow
+  the thin-route/presentational-screen split), calling
+  `src/services/authService.ts` (axios; the `axios-mock-adapter` import
+  and mock block are commented-out dead code — `USE_MOCK_API` in
+  `src/config/env.ts` doesn't actually gate anything today, real network
+  calls always fire regardless of the flag) and `src/schemas/*Schema.ts`
+  (zod validation, each with a co-located `.test.ts`).
 - **Owner registration** (`app/owner/`): `register` (→
   `src/screens/owner/OwnerRegisterScreen.tsx`, calls `registerOwner` in
   authService) and `welcome` (→ `OwnerWelcomeScreen.tsx`, has a
-  copy-to-clipboard action via `expo-clipboard`). `app/pending.tsx` →
+  copy-to-clipboard action via `expo-clipboard`). `app/pending/index.tsx` →
   `src/screens/common/PendingApprovalScreen.tsx` is the shared
   post-registration waiting screen.
 - **Profile/session**: `app/profile/index.tsx`, `app/profile/edit.tsx`,
-  `app/settings.tsx`, `app/home.tsx`, all reading from
-  `src/context/UserContext.tsx` (wraps the app in `app/_layout.tsx`) and
-  `src/utils/authStorage.ts` (secure-store token helpers).
+  `app/settings/index.tsx`, all reading from `src/context/UserContext.tsx` (wraps
+  the app in `app/_layout.tsx`) and `src/utils/authStorage.ts`
+  (secure-store token helpers).
+- **Home** (`SPOT-34`, in progress): `app/home/index.tsx` is a thin route wrapper
+  around `src/screens/home/HomeScreen.tsx` — a "Football Dashboard" (Figma
+  node `8:2`) with a sport toggle (football/badminton), an image carousel,
+  a "Book Field" quick action (→ `/booking`), and a venue list built from
+  `src/components/home/VenueCard.tsx` and assets under `assets/home/`. Not
+  yet wired to a live venues API.
+- **Booking** (`app/booking/index.tsx`, `app/booking/map.tsx`): reached from
+  Home's "Book Field" quick action. `BookingScreen.tsx` is a venue list
+  (Figma node `79:1390`) with its own search/filter bar and a map-view
+  button (→ `/booking/map`); `BookingMapScreen.tsx` is a static map-image
+  mockup (Figma node `79:1286`) with tappable pins and a venue popup — no
+  real map SDK (`react-native-maps`) or `GOOGLE_MAPS_KEY` wiring exists
+  yet, so pan/zoom/location controls are `comingSoon()` placeholders.
+  Venue data for both is local mock arrays, not an API call.
+- The top app bar (logo + AI/notification/avatar) is shared between Home
+  and Booking via `src/components/layout/AppHeader.tsx`
+  (`variant="blurred"` on Home, `variant="plain"` on Booking);
+  `BookingMapScreen` has no header (full-bleed map). The
+  football/badminton segmented toggle is shared via
+  `src/components/venue/SportSegmentedToggle.tsx` (Home/Booking only —
+  the map screen's "All/Football/Badminton" filter-chip row is a
+  different shape and stays screen-local).
+- **Bottom navigation**: `src/components/navigation/BottomNav.tsx` (owns
+  the 5-tab array — Home/Booking/Matches/Schedule/Settings — and its
+  navigation wiring; the individual tab leaf is
+  `src/components/navigation/BottomNavItem.tsx`) renders on Home, Booking,
+  Booking Map, Schedule, Settings, and Profile. The Schedule/Settings tabs
+  intentionally still show a "coming soon" alert rather than navigating,
+  even though `/schedule` and `/settings` are real working routes — that's
+  a known, deliberate inconsistency (not yet reconciled), not a bug.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
-  `*.test.ts(x)` next to several schemas/components) but **cannot run
-  yet** — no jest config is committed, see Known Gotchas.
+  `*.test.ts(x)` next to several schemas/components) and a jest config
+  **is** committed (`"jest": {"preset": "jest-expo"}` in `package.json`) —
+  but `npm test` currently fails in this environment because
+  `node_modules/expo-modules-core` is missing (an install gap, not a
+  config gap); re-run `npm install` before assuming the suite is broken.
 
 `src/state/` and `app/tabs/` are still empty placeholders (`.gitignore`
 only) — check for actual files before assuming a store or tab route
@@ -107,32 +144,34 @@ exists beyond what's listed above.
   If `npm start`/`npm run web` looks like it's serving fine but the app
   itself won't render, check for another route file pair like this before
   assuming it's a dependency or config problem.
-- **`README.md` in this directory is stale** — it still says "empty
-  scaffold" and lists the old `@testing-library/react-native@12.9.0`
-  conflict. Don't trust it over this file or `package.json`; update it if
-  you're touching onboarding-adjacent docs.
 - **Version drift from the repo-root docs**: the root `CLAUDE.md` describes
   this app as "Expo 49 / React Native 0.72". `package.json` actually pins
   `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`). Trust
   `package.json` over that prose.
-- **No `jest` config exists yet** despite `jest` + `jest-expo` +
-  `@testing-library/react-native` being installed, and despite real test
-  files now existing (`__tests__/*.test.tsx` + several co-located
-  `*.test.ts(x)` under `src/`) — `npm test` fails immediately with "Jest
-  encountered an unexpected token" (can't parse TSX) until a
-  `"jest": {"preset": "jest-expo"}` block (in `package.json` or a
-  `jest.config.js`) is added.
-- **No ESLint/Prettier config is committed** — style is enforced by hand
-  (see `.claude/rules/code-style.md`), not tooling.
+- **Jest config exists** (`"jest": {"preset": "jest-expo"}` in
+  `package.json`) — a prior version of this note claimed no config was
+  committed; that's no longer true. What *is* still broken in this
+  environment: `npm test` fails with "Cannot find module
+  'expo-modules-core'" because that package is missing from
+  `node_modules` — an install gap (`npm install` incomplete/stale), not a
+  missing-config problem. Re-run `npm install` before debugging further.
+- **No ESLint/Prettier config is committed** — style is enforced by hand,
+  not tooling (see Code Style & Conventions below).
 - **`.env.example`'s vars aren't wired up yet.** It lists `API_URL`,
   `SOCKET_URL`, `GOOGLE_MAPS_KEY`, `ENV`, but nothing reads them into the
   app yet — `process.env` is not populated at runtime in Expo/RN without
   extra bundler config. `expo-constants` **is** already a dependency, so
   the intended path is `app.json`'s `expo.extra` + `Constants.expoConfig.extra`,
-  not a `.env` loader — see `.claude/rules/api-conventions.md`.
-- **`spot-backend` has no `package.json` and isn't runnable yet** — don't
-  block UI work on it being live; mock or clearly flag backend-dependent
-  behavior instead (same rule file).
+  not a `.env` loader.
+- **Two color-token files used to exist** (`src/constants/colors.ts` and
+  `src/theme/colors.ts`) with different values for the same semantic
+  colors (e.g. two different "primary blue"s). `src/theme/colors.ts` has
+  been merged into `src/constants/colors.ts` and deleted — every screen
+  now imports one `colors` object from `@/constants/colors`. If you see a
+  reference to `theme/colors` anywhere, it's stale.
+- **`spot-backend` is runnable** (tracked by the root repo) — see
+  `../spot-backend/CLAUDE.md` + `docs/API.md`. Mobile UI can call real APIs
+  when the backend is up; mock only when working offline.
 - A `Dockerfile` exists here but isn't wired into any root
   `docker-compose.yml` — Expo's dev workflow (device/simulator, Metro) runs
   via `npm start`/EAS, not Docker.
@@ -145,7 +184,7 @@ npm start            # expo start
 npm run android       # expo start --android
 npm run ios           # expo start --ios
 npm run web           # expo start --web
-npm test              # will error until a jest config is added, see above
+npm test              # jest config exists; currently fails on missing expo-modules-core, see Known Gotchas
 npm run test:watch
 ```
 
@@ -160,55 +199,61 @@ eas submit
 ## Architecture & Project Structure
 
 ```
-app/                       # expo-router routes (file-based)
+app/                       # expo-router routes (file-based) — every feature
+│                            # lives in its own folder, even single-route ones
 ├── _layout.tsx              # root Stack layout (wraps in UserProvider)
 ├── index.tsx                 # "/" — Splash screen, bootstraps + redirects
-├── onboarding.tsx            # "/onboarding" — single animated screen
+├── onboarding/index.tsx      # "/onboarding" — single animated screen
 ├── auth/                    # choose-role, register, login, otp, forgot/reset-password
 ├── owner/                   # register, welcome
 ├── profile/                 # index (view), edit
-├── settings.tsx
-├── pending.tsx               # shared post-registration waiting screen
-├── home.tsx                  # placeholder post-login destination
+├── settings/index.tsx
+├── schedule/index.tsx
+├── pending/index.tsx         # shared post-registration waiting screen
+├── home/index.tsx            # thin route → src/screens/home/HomeScreen.tsx (Football Dashboard, SPOT-34)
+├── booking/
+│   ├── index.tsx              # thin route → src/screens/booking/BookingScreen.tsx (venue list)
+│   └── map.tsx                 # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup)
+├── venue/[id].tsx            # "/venue/:id" → src/screens/venue/VenueDetailScreen.tsx (venue detail)
 └── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
-├── screens/{splash,onboarding,auth,owner,common}/   # presentational screen components
-├── components/{onboarding,common}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, ...)
-├── services/authService.ts   # axios + axios-mock-adapter, gated by USE_MOCK_API
+├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,profile,settings,schedule}/   # presentational screen components
+├── components/
+│   ├── navigation/{BottomNav,BottomNavItem}.tsx   # shared bottom nav (5-tab array + wiring)
+│   ├── layout/AppHeader.tsx                        # shared top app bar (Home + Booking)
+│   ├── venue/SportSegmentedToggle.tsx               # shared football/badminton toggle (Home + Booking)
+│   ├── {onboarding,common,home,booking}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, VenueCard, ...)
+├── services/authService.ts   # axios; the axios-mock-adapter block is dead code, USE_MOCK_API doesn't gate anything
 ├── schemas/                  # zod validation per form, each with a co-located *.test.ts
 ├── context/UserContext.tsx   # session state, wraps app in _layout.tsx
 ├── config/env.ts             # API_URL / USE_MOCK_API / etc. via expo-constants
-├── utils/{authStorage,onboardingStorage}.ts   # secure-store token + AsyncStorage onboarding flag
+├── utils/{authStorage,onboardingStorage,comingSoon}.ts   # secure-store token, AsyncStorage onboarding flag, shared "coming soon" alert
 ├── hooks/useFloatingAnimation.ts
-├── constants/ theme/          # design tokens
-└── state/ types/               # state/ still empty; types/ has auth.ts only
+├── constants/{colors,routes}.ts   # single color-token source (src/theme/colors.ts was merged in and deleted) + centralized route paths
+└── state/ types/               # state/ still empty; types/ has auth.ts + venue.ts (shared VenueBase type)
 ```
 
-Convention (see `.claude/rules/code-style.md` for the full version): each
-screen is a thin `app/<route>.tsx` (owns navigation, calls `useRouter()`)
-rendering a presentational `src/screens/<flow>/<Screen>.tsx` (owns UI, takes
-navigation as callback props like `onNext`/`onSkip`) — not consistently
-followed today, see the Auth bullet under Project Overview. Use the
-`expo-screen-scaffolder` skill to add a new screen following this pattern,
-`zustand-store-generator` for shared state, and `api-service-scaffolder` for
-backend calls.
+Convention: each screen is a thin `app/<route>.tsx` (owns navigation, calls
+`useRouter()`) rendering a presentational `src/screens/<flow>/<Screen>.tsx`
+(owns UI, takes navigation as callback props like `onNext`/`onSkip`) — this
+is followed consistently today across every flow.
 
 ## Code Style & Conventions
 
-2 spaces, single quotes, trailing commas (matches the polyrepo root
-convention; not enforced by tooling yet — no ESLint config here). Full
-detail in `.claude/rules/code-style.md`.
+2 spaces, single quotes, trailing commas (matches the repo-root
+convention; not enforced by tooling yet — no ESLint config here). Imports
+use the `@/*` → `src/*` alias, not deep relative paths (`../../`) — every
+file under `src/` and `app/` follows this today.
 
 ## Important Guidelines
 
-- Despite the root `CLAUDE.md`'s polyrepo description, this directory has
-  no `.git` of its own today — see Project Overview.
+- This directory has no `.git` of its own — it's part of the root monorepo,
+  see Project Overview.
 - Auth, owner-registration, profile, and settings flows are real (see
   Project Overview) — but `src/state/` and `app/tabs/` are still empty;
   verify a store or tab route exists before assuming it does.
 - Auth tokens and other sensitive values must go through `expo-secure-store`
-  once auth exists, never `AsyncStorage` — see
-  `.claude/rules/api-conventions.md` and the `security-auditor` subagent.
+  (see `src/utils/authStorage.ts`), never `AsyncStorage`.
 - Ticket refs in commits follow the existing `SPOT-NNN: ...` convention
   (e.g. `SPOT-33`).
 - Before starting a feature, check `.specify/memory/constitution.md` and

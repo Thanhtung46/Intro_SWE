@@ -1,14 +1,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import ChooseRoleScreen from '@/screens/auth/ChooseRoleScreen';
 import { selectRole } from '@/services/authService';
 import type { Role } from '@/types/auth';
+import { ROUTES } from '@/constants/routes';
 
 const DESTINATION: Record<Role, string> = {
-  player: '/home',
-  owner: '/owner/welcome',
-  referee: '/referee/register',
+  player: ROUTES.HOME,
+  owner: ROUTES.OWNER_WELCOME,
+  referee: ROUTES.REFEREE_REGISTER,
 };
 
 /**
@@ -25,24 +27,32 @@ export default function ChooseRoleRoute() {
   const router = useRouter();
   const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
   const email = typeof emailParam === 'string' ? emailParam : '';
+
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
   };
 
   const handleContinue = async () => {
-    if (!selectedRole) return;
+    if (!selectedRole || submitting) return;
 
-    if (!email) {
-      if (selectedRole === 'player') {
-        router.replace('/home');
-      } else {
-        router.push(DESTINATION[selectedRole]);
-      }
+    setError(null);
+    setSubmitting(true);
+    const result = await selectRole(email, selectedRole);
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.message || 'Something went wrong. Please try again.');
       return;
+    }
+
+    if (selectedRole === 'player') {
+      router.replace(ROUTES.HOME);
+    } else {
+      router.push(DESTINATION[selectedRole]);
     }
 
     setError('');

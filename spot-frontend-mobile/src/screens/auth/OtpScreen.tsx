@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { OtpInput } from '../../components/OtpInput';
-import { otpSchema } from '../../schemas/otpSchema';
-import { resendOtp, verifyOtp } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { OtpInput } from '@/components/OtpInput';
+import { otpSchema } from '@/schemas/otpSchema';
+import { resendOtp, verifyOtp } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -14,7 +14,30 @@ function formatCountdown(seconds: number) {
   return `${mm}:${ss}`;
 }
 
-export default function OtpScreen({ email, onVerified }: { email: string; onVerified: () => void }) {
+export default function OtpScreen({
+  email,
+  onVerified,
+  purpose = 'REGISTER',
+  mode = 'verify',
+}: {
+  email: string;
+  /** Receives the 6-digit code — callers that don't need it can ignore the
+   * argument. */
+  onVerified: (otp: string) => void;
+  /** OTP purpose sent to the backend (REGISTER, FORGOT_PASSWORD, ...). */
+  purpose?: string;
+  /**
+   * 'verify' (default): calls the real /auth/otp/verify endpoint — this is
+   * REGISTER-only server-side (it hard-codes markEmailVerified()), so only
+   * use it for the register flow.
+   * 'collect': no API call here — just format-checks the code and forwards
+   * it via onVerified. Used by flows (like forgot-password) whose backend
+   * endpoint verifies the OTP itself together with the next step, so a
+   * separate verify call here would consume the OTP and break that later
+   * call.
+   */
+  mode?: 'verify' | 'collect';
+}) {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +54,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
   }, [cooldown]);
 
   const runVerify = async (code: string) => {
-    if (verifiedRef.current || submitting) return;
+    if ((mode === 'verify' && verifiedRef.current) || submitting) return;
 
     const result = otpSchema.safeParse(code);
     if (!result.success) {
@@ -40,15 +63,20 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
     }
 
     setError(null);
+
+    if (mode === 'collect') {
+      verifiedRef.current = true;
+      onVerified(result.data);
+      return;
+    }
+
     setSubmitting(true);
-    const response = await verifyOtp(email, result.data);
+    const response = await verifyOtp(email, result.data, purpose);
     setSubmitting(false);
 
     if (response.success) {
       verifiedRef.current = true;
-      // Next step after OTP verification is outside SPOT-113's scope.
-      // TODO: navigate to the real post-verification route once that ticket exists.
-      onVerified();
+      onVerified(result.data);
       return;
     }
 
@@ -64,7 +92,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
 
     setResending(true);
     setError(null);
-    const response = await resendOtp(email);
+    const response = await resendOtp(email, purpose);
     setResending(false);
 
     if (response.success) {
@@ -79,7 +107,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
     <View style={styles.screen}>
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <Ionicons name="shield-checkmark" size={28} color={colors.primary} />
+          <Ionicons name="shield-checkmark" size={28} color={colors.primaryDark} />
         </View>
 
         <Text style={styles.title}>OTP Verification</Text>
@@ -88,7 +116,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
         <OtpInput
           value={otp}
           onChange={setOtp}
-          onComplete={runVerify}
+          onComplete={mode === 'verify' ? runVerify : undefined}
           error={!!error}
           containerStyle={styles.otpRow}
         />
@@ -116,7 +144,9 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
           onPress={() => runVerify(otp)}
           disabled={submitting}
         >
-          <Text style={styles.verifyButtonText}>{submitting ? 'Verifying...' : 'Verify'}</Text>
+          <Text style={styles.verifyButtonText}>
+            {submitting ? 'Verifying...' : mode === 'collect' ? 'Continue' : 'Verify'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -131,7 +161,7 @@ export default function OtpScreen({ email, onVerified }: { email: string; onVeri
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -175,7 +205,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorText: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 12,
@@ -189,12 +219,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   resendCountdown: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   resendLink: {
     fontSize: 14,
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -203,7 +233,7 @@ const styles = StyleSheet.create({
   },
   verifyButton: {
     width: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

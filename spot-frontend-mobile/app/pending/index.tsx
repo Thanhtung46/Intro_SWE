@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import PendingApprovalScreen from '@/screens/common/PendingApprovalScreen';
+import { ROUTES } from '@/constants/routes';
 
 /**
  * "/pending?role=owner|referee" — shared "thông báo chờ admin" screen,
@@ -12,7 +13,7 @@ export default function PendingRoute() {
   const resolvedRole = role === 'referee' ? 'referee' : 'owner';
 
   const handleDone = () => {
-    router.replace('/home');
+    router.replace(ROUTES.HOME);
   };
 
   return <PendingApprovalScreen role={resolvedRole} onDone={handleDone} />;

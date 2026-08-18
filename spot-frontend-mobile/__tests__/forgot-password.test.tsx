@@ -25,7 +25,7 @@ describe('ForgotPasswordScreen (mocked authService via USE_MOCK_API)', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('always succeeds with the generic message and navigates to reset-password with the email', async () => {
+  it('always succeeds with the generic message and navigates to the OTP screen with the email', async () => {
     const { getByPlaceholderText, getByTestId } = render(<ForgotPasswordScreen />);
 
     fireEvent.changeText(getByPlaceholderText('username@example.com'), 'someone@example.com');
@@ -34,7 +34,7 @@ describe('ForgotPasswordScreen (mocked authService via USE_MOCK_API)', () => {
     await waitFor(
       () =>
         expect(mockPush).toHaveBeenCalledWith({
-          pathname: '/auth/reset-password',
+          pathname: '/auth/forgot-password-otp',
           params: { email: 'someone@example.com' },
         }),
       { timeout: 3000 }

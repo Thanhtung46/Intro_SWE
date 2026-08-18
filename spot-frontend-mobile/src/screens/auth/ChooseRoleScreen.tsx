@@ -41,7 +41,7 @@ type Props = {
   onBack: () => void;
   onContinue: () => void;
   submitting?: boolean;
-  error?: string;
+  error?: string | null;
 };
 
 /**
@@ -56,7 +56,14 @@ type Props = {
 // blank while at the top, appears once content scrolls under the header).
 const TITLE_FADE_RANGE = 40;
 
-export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, onContinue, submitting, error }: Props) {
+export default function ChooseRoleScreen({
+  selectedRole,
+  onSelectRole,
+  onBack,
+  onContinue,
+  submitting,
+  error,
+}: Props) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [0, TITLE_FADE_RANGE],
@@ -94,7 +101,7 @@ export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, o
           useNativeDriver: true,
         })}
       >
-        <Image source={require('../../../assets/Logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
         <View style={styles.headingBlock}>
           <Text style={styles.heading}>Who are you?</Text>
@@ -117,7 +124,6 @@ export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, o
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <TouchableOpacity
-          testID="choose-role-continue"
           style={[styles.completeButton, (!selectedRole || submitting) && styles.completeButtonDisabled]}
           onPress={onContinue}
           disabled={!selectedRole || submitting}
@@ -125,7 +131,7 @@ export default function ChooseRoleScreen({ selectedRole, onSelectRole, onBack, o
           accessibilityRole="button"
           accessibilityLabel="Continue"
         >
-          <Text style={styles.completeButtonText}>{submitting ? 'Please wait...' : 'Continue'}</Text>
+          <Text style={styles.completeButtonText}>{submitting ? 'Saving...' : 'Continue'}</Text>
         </TouchableOpacity>
       </Animated.ScrollView>
     </SafeAreaView>
@@ -198,7 +204,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl + spacing.sm,
   },
   errorText: {
-    width: '100%',
     color: colors.error,
     fontSize: 13,
     textAlign: 'center',

@@ -527,22 +527,17 @@ const ROLE_TO_BACKEND: Record<Role, string> = {
   referee: 'REFEREE',
 };
 
-/**
- * REAL — POST /auth/role (Register step 2, spot-backend's documented
- * register→role→otp→login flow). Previously a no-op mock that nothing
- * called; wired for real once it became clear no screen was invoking
- * role selection at all, leaving every account stuck at SELECT_ROLE and
- * unable to log in — see app/auth/choose-role.tsx.
- */
 export async function selectRole(email: string, role: Role): Promise<SelectRoleResult> {
   try {
     await client.post(`${API_URL}/auth/role`, { email, role: ROLE_TO_BACKEND[role] });
     return { success: true };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
+
     if (!error.response) {
       return { success: false, message: 'Network error. Please check your connection and try again.' };
     }
+
     return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
   }
 }

@@ -17,6 +17,12 @@ SPOT Platform is containerized with Docker. All services can run together using 
 | **PostgreSQL** | 5432 | Database | postgres:15-alpine |
 | **Redis** | 6379 | Cache | redis:7-alpine |
 
+> **Note**: this guide references `./scripts/docker-dev.sh`,
+> `docker-health.sh`, `docker-prod.sh`, `docker-stop.sh` in several places
+> below — no `scripts/` directory exists at the repo root today. Use the
+> plain `docker compose`/`docker-compose` commands shown alongside each
+> script reference until those scripts are added.
+
 ## Development Setup
 
 ### Prerequisites
@@ -272,7 +278,6 @@ sudo docker-compose up
 sudo usermod -aG docker $USER
 ```
 
-## File Structure
 ## Best Practices
 
 - **Use .env files** for configuration (never commit credentials)

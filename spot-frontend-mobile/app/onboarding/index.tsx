@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 
 import OnboardingScreen from '@/screens/onboarding/OnboardingScreen';
 import { setOnboardingCompleted } from '@/utils/onboardingStorage';
+import { ROUTES } from '@/constants/routes';
 
 /**
  * "/onboarding" — single-screen onboarding (3 internal steps, see
@@ -12,12 +13,12 @@ export default function OnboardingRoute() {
 
   const handleSkip = async () => {
     await setOnboardingCompleted();
-    router.replace('/auth/choose-role');
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   const handleGetStarted = async () => {
     await setOnboardingCompleted();
-    router.replace('/auth/choose-role');
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   return <OnboardingScreen onSkip={handleSkip} onGetStarted={handleGetStarted} />;

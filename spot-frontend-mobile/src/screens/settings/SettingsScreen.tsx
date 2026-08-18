@@ -1,8 +1,61 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { ReactNode, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { useUser } from '../../context/UserContext';
-import { colors } from '../../theme/colors';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUser } from '@/context/UserContext';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
+import { clearToken } from '@/utils/authStorage';
+import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
+// Alert.alert's button-array form (React Native's only way to offer a
+// multi-choice picker without a custom component) is a no-op on web —
+// react-native-web ships `class Alert { static alert() {} }`, verified
+// directly in node_modules. web-testing convenience only; native behavior
+// (Alert.alert) is unchanged.
+function notifyError(message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message);
+    return;
+  }
+  Alert.alert('Error', message);
+}
+
+// Same overlay/sheet/option pattern as SelectField.tsx (used for Gender in
+// Register) — a real tappable list, works identically on web and native
+// (unlike Alert.alert's button array, which react-native-web doesn't
+// implement at all).
+function PickerModal<T extends string>({
+  visible,
+  options,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  options: { label: string; value: T }[];
+  onSelect: (value: T) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <View style={styles.sheet}>
+          {options.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={styles.option}
+              onPress={() => {
+                onSelect(option.value);
+                onClose();
+              }}
+            >
+              <Text style={styles.optionText}>{option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
 
 function SectionLabel({ label }: { label: string }) {
   return <Text style={styles.sectionLabel}>{label}</Text>;
@@ -31,17 +84,17 @@ function Row({
   onToggle?: (value: boolean) => void;
   danger?: boolean;
 }) {
-  const iconColor = danger ? colors.error : colors.primary;
+  const iconColor = danger ? colors.formError : colors.primaryDark;
   const content = (
     <View style={styles.row}>
       <Ionicons name={icon} size={20} color={iconColor} style={styles.rowIcon} />
-      <Text style={[styles.rowLabel, danger ? { color: colors.error, fontWeight: '600' } : null]}>{label}</Text>
+      <Text style={[styles.rowLabel, danger ? { color: colors.formError, fontWeight: '600' } : null]}>{label}</Text>
       {toggleValue !== undefined ? (
         <Switch
           testID={testID}
           value={toggleValue}
           onValueChange={onToggle}
-          trackColor={{ true: colors.primary, false: colors.border }}
+          trackColor={{ true: colors.primaryDark, false: colors.border }}
           thumbColor={colors.white}
         />
       ) : secondaryLabel ? (
@@ -67,39 +120,79 @@ function Row({
 }
 
 export default function SettingsScreen({
-  onBack,
   onEditProfile,
   onSignedOut,
 }: {
-  onBack: () => void;
   onEditProfile: () => void;
   onSignedOut: () => void;
 }) {
   const { clearUser } = useUser();
 
+  const [language, setLanguage] = useState<Language>('en');
+  const [appearance, setAppearance] = useState<Appearance>('light');
   const [pushNotifications, setPushNotifications] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
+  const [appearancePickerOpen, setAppearancePickerOpen] = useState(false);
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
+  useEffect(() => {
+    getPreferences().then((result) => {
+      if (result.success && result.preferences) {
+        setLanguage(result.preferences.language);
+        setAppearance(result.preferences.appearance);
+        setPushNotifications(result.preferences.pushNotificationsEnabled);
+        setLocationServices(result.preferences.locationServicesEnabled);
+      }
+    });
+  }, []);
+
+  const handleTogglePushNotifications = async (value: boolean) => {
+    setPushNotifications(value);
+    const result = await updatePreferences({ pushNotificationsEnabled: value });
+    if (!result.success) {
+      setPushNotifications(!value);
+      notifyError(result.message || 'Something went wrong. Please try again.');
+    }
   };
 
-  const handleSignOut = () => {
+  const handleToggleLocationServices = async (value: boolean) => {
+    setLocationServices(value);
+    const result = await updatePreferences({ locationServicesEnabled: value });
+    if (!result.success) {
+      setLocationServices(!value);
+      notifyError(result.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleSelectLanguage = async (value: Language) => {
+    const previous = language;
+    setLanguage(value);
+    const result = await updatePreferences({ language: value });
+    if (!result.success) {
+      setLanguage(previous);
+      notifyError(result.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleSelectAppearance = async (value: Appearance) => {
+    const previous = appearance;
+    setAppearance(value);
+    const result = await updatePreferences({ appearance: value });
+    if (!result.success) {
+      setAppearance(previous);
+      notifyError(result.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    await clearToken();
     clearUser();
     onSignedOut();
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          testID="settings-back-button"
-          style={styles.backButton}
-          onPress={onBack}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
       </View>
 
@@ -121,7 +214,7 @@ export default function SettingsScreen({
             icon="notifications-outline"
             label="Push Notifications"
             toggleValue={pushNotifications}
-            onToggle={setPushNotifications}
+            onToggle={handleTogglePushNotifications}
           />
           <View style={styles.rowDivider} />
           <Row
@@ -129,7 +222,7 @@ export default function SettingsScreen({
             icon="location-outline"
             label="Location Services"
             toggleValue={locationServices}
-            onToggle={setLocationServices}
+            onToggle={handleToggleLocationServices}
           />
         </Card>
 
@@ -139,16 +232,16 @@ export default function SettingsScreen({
             testID="settings-language"
             icon="globe-outline"
             label="Language"
-            secondaryLabel="English"
-            onPress={() => showComingSoon('Language')}
+            secondaryLabel={language === 'vi' ? 'Tiếng Việt' : 'English'}
+            onPress={() => setLanguagePickerOpen(true)}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-appearance"
             icon="color-palette-outline"
             label="Appearance"
-            secondaryLabel="Light"
-            onPress={() => showComingSoon('Appearance')}
+            secondaryLabel={appearance.charAt(0).toUpperCase() + appearance.slice(1)}
+            onPress={() => setAppearancePickerOpen(true)}
           />
         </Card>
 
@@ -158,28 +251,28 @@ export default function SettingsScreen({
             testID="settings-help-center"
             icon="help-circle-outline"
             label="Help Center"
-            onPress={() => showComingSoon('Help Center')}
+            onPress={() => comingSoon('Help Center')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-about-us"
             icon="information-circle-outline"
             label="About Us"
-            onPress={() => showComingSoon('About Us')}
+            onPress={() => comingSoon('About Us')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-contact-us"
             icon="mail-outline"
             label="Contact Us"
-            onPress={() => showComingSoon('Contact Us')}
+            onPress={() => comingSoon('Contact Us')}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-report-issue"
             icon="alert-circle-outline"
             label="Report an Issue"
-            onPress={() => showComingSoon('Report an Issue')}
+            onPress={() => comingSoon('Report an Issue')}
           />
         </Card>
 
@@ -189,24 +282,38 @@ export default function SettingsScreen({
 
         <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
-    </View>
+
+      <PickerModal
+        visible={languagePickerOpen}
+        options={[
+          { label: 'English', value: 'en' },
+          { label: 'Tiếng Việt', value: 'vi' },
+        ]}
+        onSelect={handleSelectLanguage}
+        onClose={() => setLanguagePickerOpen(false)}
+      />
+      <PickerModal
+        visible={appearancePickerOpen}
+        options={[
+          { label: 'Light', value: 'light' },
+          { label: 'Dark', value: 'dark' },
+          { label: 'System', value: 'system' },
+        ]}
+        onSelect={handleSelectAppearance}
+        onClose={() => setAppearancePickerOpen(false)}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 48,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    marginBottom: 12,
   },
   title: {
     fontSize: 32,
@@ -216,7 +323,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 128,
   },
   sectionLabel: {
     fontSize: 12,
@@ -270,5 +377,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: colors.placeholder,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingVertical: 8,
+    maxHeight: 240,
+  },
+  option: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  optionText: {
+    fontSize: 15,
+    color: colors.text,
   },
 });

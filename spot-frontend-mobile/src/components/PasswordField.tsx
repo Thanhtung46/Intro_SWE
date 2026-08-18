@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { StyleProp, StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry'> {
   label: string;
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   required: {
-    color: colors.required,
+    color: colors.formError,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   inputError: {
-    borderColor: colors.error,
+    borderColor: colors.formError,
   },
   errorText: {
     marginTop: 4,
     fontSize: 12,
-    color: colors.error,
+    color: colors.formError,
   },
 });

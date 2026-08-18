@@ -64,7 +64,7 @@ export default function SplashScreen({ status, onAnimationComplete, onRetry }: P
             <BlurView intensity={40} tint="light" style={styles.logoBlur}>
               <View style={styles.logoOverlay} />
               <Image
-                source={require('../../../assets/Logo.png')}
+                source={require('../../../assets/logo.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
