@@ -10,10 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FormField } from '../../components/FormField';
-import { ForgotPasswordFieldErrors, forgotPasswordSchema } from '../../schemas/forgotPasswordSchema';
-import { forgotPassword } from '../../services/authService';
-import { colors } from '../../theme/colors';
+import { FormField } from '@/components/FormField';
+import { ForgotPasswordFieldErrors, forgotPasswordSchema } from '@/schemas/forgotPasswordSchema';
+import { forgotPassword } from '@/services/authService';
+import { colors } from '@/constants/colors';
 
 export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (email: string) => void }) {
   const [email, setEmail] = useState('');
@@ -55,7 +55,7 @@ export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (emai
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Ionicons name="lock-closed" size={26} color={colors.primary} />
+            <Ionicons name="lock-closed" size={26} color={colors.primaryDark} />
           </View>
 
           <Text style={styles.title}>Forgot Password?</Text>
@@ -99,7 +99,7 @@ export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (emai
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   content: {
     flexGrow: 1,
@@ -145,13 +145,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   formError: {
-    color: colors.error,
+    color: colors.formError,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 12,
   },
   submitButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backLink: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '600',
   },

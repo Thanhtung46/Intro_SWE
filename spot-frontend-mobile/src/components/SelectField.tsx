@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { FlatList, Modal, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors } from '@/constants/colors';
 
 export interface SelectOption {
   label: string;
@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   required: {
-    color: colors.required,
+    color: colors.formError,
   },
   input: {
     flexDirection: 'row',
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   inputError: {
-    borderColor: colors.error,
+    borderColor: colors.formError,
   },
   valueText: {
     fontSize: 15,
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 4,
     fontSize: 12,
-    color: colors.error,
+    color: colors.formError,
   },
   overlay: {
     flex: 1,

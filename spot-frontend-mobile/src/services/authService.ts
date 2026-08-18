@@ -515,11 +515,30 @@ export function getErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export async function selectRole(role: Role): Promise<void> {
-  await delay(MOCK_DELAY_MS);
-  // No-op mock: role choice isn't persisted server-side yet, navigation
-  // alone drives the next screen.
-  void role;
+export interface SelectRoleResult {
+  success: boolean;
+  message?: string;
+}
+
+const ROLE_TO_BACKEND: Record<Role, string> = {
+  player: 'PLAYER',
+  owner: 'OWNER',
+  referee: 'REFEREE',
+};
+
+export async function selectRole(email: string, role: Role): Promise<SelectRoleResult> {
+  try {
+    await client.post(`${API_URL}/auth/role`, { email, role: ROLE_TO_BACKEND[role] });
+    return { success: true };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+
+    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
 }
 
 export async function registerOwner(payload: RegisterOwnerPayload): Promise<RegisterResponse> {

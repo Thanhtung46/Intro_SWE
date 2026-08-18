@@ -1,7 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { colors } from '../../theme/colors';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '@/constants/colors';
+import { comingSoon } from '@/utils/comingSoon';
+import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
+import { ReviewModal } from '@/components/ReviewModal';
 
 type ScheduleEvent = {
   id: string;
@@ -11,6 +15,7 @@ type ScheduleEvent = {
   location: string;
   host?: string;
   status: 'upcoming' | 'completed';
+  bookingId: number;
 };
 
 const MONTH_NAMES = [
@@ -40,62 +45,30 @@ function isYesterday(date: Date) {
   return isSameDay(date, yesterday);
 }
 
-function buildMockEvents(): ScheduleEvent[] {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayDay = today.getDate();
-  const clamp = (day: number) => Math.min(Math.max(day, 1), daysInMonth);
-  const dayInMonth = (offset: number) => new Date(year, month, clamp(todayDay + offset));
-
-  return [
-    {
-      id: '1',
-      date: dayInMonth(-5),
-      type: 'Badminton Doubles',
-      time: '19:00 - 20:00',
-      location: 'Skyline Indoor Courts',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      date: dayInMonth(-2),
-      type: 'Tennis Singles',
-      time: '07:00 - 08:00',
-      location: 'Riverside Tennis Club',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      date: dayInMonth(0),
-      type: 'Football 7v7',
-      time: '19:00 - 20:30',
-      location: 'SPOT Arena • Field 4',
-      host: 'Vonws Jr.',
-      status: 'upcoming',
-    },
-    {
-      id: '4',
-      date: dayInMonth(3),
-      type: 'Basketball 5v5',
-      time: '18:00 - 19:30',
-      location: 'Downtown Sports Hall',
-      host: 'Minh Anh',
-      status: 'upcoming',
-    },
-    {
-      id: '5',
-      date: dayInMonth(7),
-      type: 'Volleyball',
-      time: '16:00 - 17:30',
-      location: 'Beach Court 2',
-      status: 'upcoming',
-    },
-  ];
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-const MOCK_EVENTS = buildMockEvents();
+const timeFormatter = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+function formatTimeRange(startsAt: string, endsAt: string): string {
+  return `${timeFormatter.format(new Date(startsAt))} - ${timeFormatter.format(new Date(endsAt))}`;
+}
+
+function mapItemsToEvents(items: ScheduleItem[]): ScheduleEvent[] {
+  return items.map((item) => ({
+    id: `${item.type}-${item.bookingId}-${item.matchId ?? ''}`,
+    date: new Date(item.bookingDate),
+    type: item.sportType,
+    time: formatTimeRange(item.startsAt, item.endsAt),
+    location: `${item.venueName} • ${item.fieldName}`,
+    status: item.status === 'COMPLETED' ? 'completed' : 'upcoming',
+    bookingId: item.bookingId,
+  }));
+}
 
 function SportIcon({ type, color, size = 14 }: { type: string; color: string; size?: number }) {
   if (type.startsWith('Football')) {
@@ -153,10 +126,31 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
-export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
+export default function ScheduleScreen() {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reviewBookingId, setReviewBookingId] = useState<number | null>(null);
+  const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const from = toLocalDateString(new Date(year, month, 1));
+    const to = toLocalDateString(new Date(year, month + 1, 0));
+
+    getMySchedule({ from, to }).then((result) => {
+      if (result.success) {
+        setEvents(mapItemsToEvents(result.items ?? []));
+        setFetchError(null);
+      } else {
+        setEvents([]);
+        setFetchError(result.message ?? 'Something went wrong. Please try again.');
+      }
+    });
+  }, [currentMonth]);
 
   const calendarRows = useMemo(() => chunk(buildCalendarGrid(currentMonth), 7), [currentMonth]);
 
@@ -164,12 +158,8 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
     if (!selectedDate) {
       return [];
     }
-    return MOCK_EVENTS.filter((event) => isSameDay(event.date, selectedDate));
-  }, [selectedDate]);
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert('Coming soon', `${feature} is not available yet.`);
-  };
+    return events.filter((event) => isSameDay(event.date, selectedDate));
+  }, [events, selectedDate]);
 
   const goToMonth = (offset: number) => {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
@@ -177,17 +167,9 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity
-            testID="schedule-back-button"
-            style={styles.backButton}
-            onPress={onBack}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
           <Text style={styles.title}>My Schedule</Text>
           <Text style={styles.subtitle}>Review your upcoming matches and training.</Text>
         </View>
@@ -228,7 +210,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
           {calendarRows.map((row, rowIndex) => (
             <View key={rowIndex} style={styles.weekRow}>
               {row.map((cell) => {
-                const hasEvent = cell.date ? MOCK_EVENTS.some((event) => isSameDay(event.date, cell.date as Date)) : false;
+                const hasEvent = cell.date ? events.some((event) => isSameDay(event.date, cell.date as Date)) : false;
                 const isSelected = cell.date && selectedDate ? isSameDay(cell.date, selectedDate) : false;
 
                 return (
@@ -258,6 +240,8 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
           ))}
         </View>
 
+        {fetchError ? <Text style={styles.errorText}>{fetchError}</Text> : null}
+
         {selectedDate ? (
           <View style={styles.matchesSection}>
             <Text style={styles.matchesLabel}>
@@ -275,7 +259,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                   <View key={event.id} style={styles.upcomingCard}>
                     <Text style={styles.cardStatusLabel}>UPCOMING</Text>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primary} />
+                      <SportIcon type={event.type} color={colors.primaryDark} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <View style={styles.detailRow}>
@@ -295,7 +279,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                     <TouchableOpacity
                       testID={`schedule-match-details-${event.id}`}
                       style={styles.primaryButton}
-                      onPress={() => showComingSoon('Match Details')}
+                      onPress={() => comingSoon('Match Details')}
                     >
                       <Text style={styles.primaryButtonText}>Match Details</Text>
                     </TouchableOpacity>
@@ -307,7 +291,7 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                       <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                     </View>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primary} />
+                      <SportIcon type={event.type} color={colors.primaryDark} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <Text style={styles.completedDate}>
@@ -316,13 +300,17 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
                         : `${MONTH_ABBR[event.date.getMonth()]} ${event.date.getDate()}, ${event.time.split(' - ')[0]}`}
                     </Text>
                     <Text style={styles.detailText}>{event.location}</Text>
-                    <TouchableOpacity
-                      testID={`schedule-leave-review-${event.id}`}
-                      style={styles.outlineButton}
-                      onPress={() => showComingSoon('Leave Review')}
-                    >
-                      <Text style={styles.outlineButtonText}>Leave Review</Text>
-                    </TouchableOpacity>
+                    {reviewedBookingIds.has(event.bookingId) ? (
+                      <Text style={styles.reviewedText}>Reviewed</Text>
+                    ) : (
+                      <TouchableOpacity
+                        testID={`schedule-leave-review-${event.id}`}
+                        style={styles.outlineButton}
+                        onPress={() => setReviewBookingId(event.bookingId)}
+                      >
+                        <Text style={styles.outlineButtonText}>Leave Review</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )
               )
@@ -330,27 +318,31 @@ export default function ScheduleScreen({ onBack }: { onBack: () => void }) {
           </View>
         ) : null}
       </ScrollView>
-    </View>
+
+      <ReviewModal
+        visible={reviewBookingId !== null}
+        bookingId={reviewBookingId}
+        onClose={() => setReviewBookingId(null)}
+        onSubmitted={(bookingId) => {
+          setReviewedBookingIds((prev) => new Set(prev).add(bookingId));
+          setReviewBookingId(null);
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.formScreenBackground,
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 128,
   },
   header: {
     paddingTop: 48,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    marginBottom: 12,
   },
   title: {
     fontSize: 28,
@@ -416,7 +408,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayCircleSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
   },
   dayText: {
     fontSize: 14,
@@ -433,8 +425,13 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     marginTop: 2,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: colors.subtitle,
   },
   matchesSection: {
     marginTop: 24,
@@ -473,7 +470,7 @@ const styles = StyleSheet.create({
   sportBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryDark,
   },
   cardStatusLabel: {
     fontSize: 11,
@@ -485,7 +482,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
     padding: 16,
     marginBottom: 16,
   },
@@ -519,7 +516,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: 4,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -532,14 +529,21 @@ const styles = StyleSheet.create({
   outlineButton: {
     marginTop: 8,
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
   },
   outlineButtonText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontSize: 14,
     fontWeight: '700',
+  },
+  reviewedText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.subtitle,
+    textAlign: 'center',
   },
 });

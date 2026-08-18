@@ -25,9 +25,15 @@ export const GENDERS = Object.freeze([
   'prefer_not_to_say',
 ]);
 
+export const LANGUAGES = Object.freeze(['en', 'vi']);
+
+export const APPEARANCES = Object.freeze(['light', 'dark', 'system']);
+
 export const OTP_PURPOSES = Object.freeze({
   REGISTER: 'REGISTER',
   FORGOT_PASSWORD: 'FORGOT_PASSWORD',
+  CHANGE_EMAIL: 'CHANGE_EMAIL',
+  CHANGE_PHONE: 'CHANGE_PHONE',
 });
 
 export const OTP_TTL_SECONDS = Number(process.env.OTP_TTL_SECONDS) || 300;
