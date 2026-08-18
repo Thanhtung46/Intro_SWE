@@ -27,20 +27,27 @@ export function toPublicBooking(row) {
   };
 }
 
-/** 'HH:MM' or 'HH:MM:SS' -> integer hour, or null if unparseable. */
-function parseHour(value) {
+const SLOT_DURATION_MINUTES = 30;
+
+/** 'HH:MM' or 'HH:MM:SS' -> minutes since midnight, or null if unparseable. */
+function parseMinutes(value) {
   if (!value) return null;
-  const hour = Number(value.split(':')[0]);
-  return Number.isFinite(hour) ? hour : null;
+  const [h, m] = value.split(':');
+  const hour = Number(h);
+  const minute = Number(m ?? 0);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
 }
 
-function formatHour(hour) {
-  return `${String(hour).padStart(2, '0')}:00`;
+function formatMinutes(totalMinutes) {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 /**
- * Walks from openingHours to closingHours in 1-hour steps, marking a slot
- * unavailable when it overlaps any booked range — per data-model.md
+ * Walks from openingHours to closingHours in 30-minute steps, marking a
+ * slot unavailable when it overlaps any booked range — per data-model.md
  * AvailabilitySlot.
  *
  * @param {string} openingHours - venue's opening_hours ('HH:MM[:SS]')
@@ -54,22 +61,27 @@ export function buildAvailabilitySlots(
   closingHours,
   bookedRanges = [],
 ) {
-  const openHour = parseHour(openingHours);
-  const closeHour = parseHour(closingHours);
-  if (openHour == null || closeHour == null || closeHour <= openHour) {
+  const openMinutes = parseMinutes(openingHours);
+  const closeMinutes = parseMinutes(closingHours);
+  if (openMinutes == null || closeMinutes == null || closeMinutes <= openMinutes) {
     return [];
   }
 
   const slots = [];
-  for (let hour = openHour; hour < closeHour; hour += 1) {
+  for (
+    let start = openMinutes;
+    start + SLOT_DURATION_MINUTES <= closeMinutes;
+    start += SLOT_DURATION_MINUTES
+  ) {
+    const end = start + SLOT_DURATION_MINUTES;
     const available = !bookedRanges.some(
       (booked) =>
-        parseHour(booked.startTime) < hour + 1 &&
-        parseHour(booked.endTime) > hour,
+        parseMinutes(booked.startTime) < end &&
+        parseMinutes(booked.endTime) > start,
     );
     slots.push({
-      startTime: formatHour(hour),
-      endTime: formatHour(hour + 1),
+      startTime: formatMinutes(start),
+      endTime: formatMinutes(end),
       available,
     });
   }

@@ -9,11 +9,13 @@ const BACKEND_PORT = 3000;
  * phone (Expo Go / dev client, or the mobile browser over LAN) `localhost`
  * resolves to the phone itself, so every request silently fails — this
  * derives the dev machine's actual LAN IP instead, same trick Expo uses
- * to let the phone find the Metro bundler in the first place.
+ * to let the phone find the Metro bundler in the first place. Works for
+ * any network without editing `app.json` per developer/WiFi.
  */
 function resolveApiBaseUrl(): string {
-  // Native (Expo Go / dev client): hostUri is set by the bundler to
-  // "<lan-ip>:8081" — reuse that IP, just against the backend's port.
+  // Native (Expo Go / dev client, incl. Android emulator): hostUri is set
+  // by the bundler to "<lan-ip>:8081" — reuse that IP, just against the
+  // backend's port.
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
@@ -31,32 +33,15 @@ function resolveApiBaseUrl(): string {
     }
   }
 
+  // Fallback for an Android emulator that reports "localhost" as its
+  // hostUri: 10.0.2.2 is the emulator's alias for the host machine.
+  if (Platform.OS === 'android') {
+    return `http://10.0.2.2:${BACKEND_PORT}`;
+  }
+
   // Desktop web dev / iOS Simulator — same machine as the backend.
   return `http://localhost:${BACKEND_PORT}`;
 }
 
+/** Backend REST base (includes `/api`). */
 export const API_URL = `${resolveApiBaseUrl()}/api`;
-
-const DEFAULT_LOCAL = 'http://localhost:3000/api';
-const ANDROID_EMULATOR = 'http://10.0.2.2:3000/api';
-
-type ExpoExtra = {
-  apiUrl?: string;
-  apiUrlAndroid?: string;
-};
-
-function resolveApiUrl(): string {
-  const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
-
-  if (Platform.OS === 'android') {
-    return extra?.apiUrlAndroid ?? ANDROID_EMULATOR;
-  }
-
-  return extra?.apiUrl ?? DEFAULT_LOCAL;
-}
-
-/** Backend REST base (includes `/api`). Android emulator uses 10.0.2.2 to reach host localhost. */
-export const API_URL = resolveApiUrl();
-
-// Flip to false to point authService at the real API_URL; no UI code changes needed.
-export const USE_MOCK_API = false;

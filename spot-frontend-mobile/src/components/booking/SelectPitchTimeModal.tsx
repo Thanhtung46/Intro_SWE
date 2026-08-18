@@ -40,10 +40,16 @@ function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const SLOT_DURATION_MINUTES = 30;
+
 function buildTimeSlots(openHour: number, closeHour: number): string[] {
   const slots: string[] = [];
-  for (let h = openHour; h < closeHour; h++) {
-    slots.push(`${String(h).padStart(2, '0')}:00`);
+  const openMinutes = openHour * 60;
+  const closeMinutes = closeHour * 60;
+  for (let start = openMinutes; start + SLOT_DURATION_MINUTES <= closeMinutes; start += SLOT_DURATION_MINUTES) {
+    const h = Math.floor(start / 60);
+    const m = start % 60;
+    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
   }
   return slots;
 }

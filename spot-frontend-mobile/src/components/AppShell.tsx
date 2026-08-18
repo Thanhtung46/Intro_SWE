@@ -20,10 +20,10 @@ const comingSoon = (feature: string) => showAlert('Coming soon', `${feature} is 
 /**
  * Persistent top header + bottom tab bar shared across Home/Schedule/
  * Settings (Figma: Football Dashboard.png, Settings.png, View
- * Schedule.png all show the same shell). Booking/Matches have no screen
- * yet, stay as "Coming soon" tabs. Main Profile/Edit Profile and auth
- * screens intentionally do NOT use this shell (Figma's Main Profile.png
- * has its own back+Edit header, no bottom tabs).
+ * Schedule.png all show the same shell). Matches has no screen yet, stays
+ * a "Coming soon" tab. Main Profile/Edit Profile and auth screens
+ * intentionally do NOT use this shell (Figma's Main Profile.png has its
+ * own back+Edit header, no bottom tabs).
  */
 export function AppShell({ activeTab, children }: { activeTab: TabKey; children: ReactNode }) {
   const router = useRouter();
@@ -42,9 +42,9 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
     refreshUnreadCount();
   }, []);
 
-  const goToTab = (tab: TabKey, path: '/home' | '/schedule' | '/settings') => {
+  const goToTab = (tab: TabKey, path: '/home' | '/booking' | '/schedule' | '/settings') => {
     if (activeTab === tab) return;
-    router.replace(path);
+    router.push(path);
   };
 
   return (
@@ -87,7 +87,12 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
 
       <View style={styles.bottomNav}>
         <BottomNavItem icon="home" label="Home" active={activeTab === 'home'} onPress={() => goToTab('home', '/home')} />
-        <BottomNavItem icon="ticket-outline" label="Booking" active={activeTab === 'booking'} onPress={() => comingSoon('Booking')} />
+        <BottomNavItem
+          icon="ticket-outline"
+          label="Booking"
+          active={activeTab === 'booking'}
+          onPress={() => goToTab('booking', '/booking')}
+        />
         <BottomNavItem icon="trophy-outline" label="Matches" active={activeTab === 'matches'} onPress={() => comingSoon('Matches')} />
         <BottomNavItem
           icon="calendar-outline"

@@ -19,16 +19,11 @@ export interface VenueRatingResult {
   message?: string;
 }
 
-const client: AxiosInstance = axios.create();
-
 /** GET /reviews/venues/:venueId/rating — aggregate only, no individual review list. */
 export async function getVenueRating(venueId: number): Promise<VenueRatingResult> {
   try {
-    const token = await getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await client.get<{ avgRating: number; ratingCount: number }>(
-      `${API_URL}/reviews/venues/${venueId}/rating`,
-      { headers },
+    const res = await apiClient.get<{ avgRating: number; ratingCount: number }>(
+      `/reviews/venues/${venueId}/rating`,
     );
     return { success: true, avgRating: res.data.avgRating, ratingCount: res.data.ratingCount };
   } catch (err) {

@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
+import { showAlert } from '@/utils/showAlert';
+import { ROUTES } from '@/constants/routes';
 import SelectPitchTimeModal, { Pitch } from '@/components/booking/SelectPitchTimeModal';
 import { getVenueDetail, getVenueImages, PublicField, PublicVenueImage } from '@/services/venueService';
 import { getVenueRating } from '@/services/reviewService';
@@ -57,10 +60,14 @@ function formatVnd(amount: number): string {
   return amount.toLocaleString('en-US');
 }
 
-/** Parses "HH:MM - HH:MM" into [openHour, closeHour]; falls back to a sane default. */
-function parseHours(hours: string): [number, number] {
+/**
+ * Parses "HH:MM - HH:MM" into [openHour, closeHour]; `null` when the venue
+ * has no opening/closing hours set — booking must be disabled in that case,
+ * not silently shown as open (the backend will reject every slot anyway).
+ */
+function parseHours(hours: string): [number, number] | null {
   const match = hours.match(/(\d{1,2}):\d{2}\s*-\s*(\d{1,2}):\d{2}/);
-  if (!match) return [6, 23];
+  if (!match) return null;
   return [Number(match[1]), Number(match[2])];
 }
 
@@ -79,6 +86,7 @@ type Props = {
 
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
 export default function VenueDetailScreen({ venueId, onBack }: Props) {
+  const router = useRouter();
   const [venue, setVenue] = useState<VenueDetail>(EMPTY_VENUE_DETAIL);
   const [fields, setFields] = useState<PublicField[]>([]);
   const [reviewRating, setReviewRating] = useState<{ avgRating: number; ratingCount: number } | null>(null);
@@ -138,7 +146,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
     });
   }, [numericVenueId]);
 
-  const [openHour, closeHour] = parseHours(venue.hours);
+  const parsedHours = parseHours(venue.hours);
 
   const openInMaps = () => {
     const query = encodeURIComponent(`${venue.name}, ${venue.address}`);
@@ -283,7 +291,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           <View style={styles.section}>
             <View style={styles.scheduleHeader}>
               <Text style={styles.sectionTitleDark}>Schedule</Text>
-              <TouchableOpacity onPress={() => comingSoon('Calendar')} accessibilityRole="button">
+              <TouchableOpacity onPress={() => router.push(ROUTES.SCHEDULE)} accessibilityRole="button">
                 <Text style={styles.linkText}>View Calendar</Text>
               </TouchableOpacity>
             </View>
@@ -449,21 +457,33 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             <Text style={styles.priceUnit}>{venue.priceUnit}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.bookNowButton} onPress={() => setPitchTimeVisible(true)} accessibilityRole="button">
+        <TouchableOpacity
+          style={[styles.bookNowButton, !parsedHours && styles.bookNowButtonDisabled]}
+          onPress={() => {
+            if (!parsedHours) {
+              showAlert('Not available yet', "This venue hasn't set its opening hours yet.");
+              return;
+            }
+            setPitchTimeVisible(true);
+          }}
+          accessibilityRole="button"
+        >
           <Text style={styles.bookNowText}>Book Now</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.white} />
         </TouchableOpacity>
       </View>
 
+      {parsedHours && (
       <SelectPitchTimeModal
         visible={pitchTimeVisible}
         venueId={numericVenueId}
         pitches={venue.pitches}
-        openHour={openHour}
-        closeHour={closeHour}
+        openHour={parsedHours[0]}
+        closeHour={parsedHours[1]}
         onClose={() => setPitchTimeVisible(false)}
         onConfirm={() => setPitchTimeVisible(false)}
       />
+      )}
     </SafeAreaView>
   );
 }
@@ -912,6 +932,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 16,
     backgroundColor: '#2563EB',
+  },
+  bookNowButtonDisabled: {
+    opacity: 0.4,
   },
   bookNowText: {
     fontSize: 16,
