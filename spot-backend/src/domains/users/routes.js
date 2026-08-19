@@ -3,6 +3,7 @@ import * as usersController from './controller/users.controller.js';
 import { createOtpRateLimiter } from '../../shared/middleware/otpRateLimit.js';
 import { authenticate } from '../../shared/middleware/authenticate.js';
 import { runAvatarUpload } from '../../shared/middleware/avatarUpload.js';
+import { runVerificationUpload } from '../../shared/middleware/verificationUpload.js';
 import config from '../../shared/config/env.js';
 
 const router = Router();
@@ -19,6 +20,17 @@ router.post(
   authenticate,
   runAvatarUpload,
   usersController.uploadAvatar,
+);
+router.post(
+  '/me/verification-documents',
+  authenticate,
+  runVerificationUpload,
+  usersController.uploadVerificationDocument,
+);
+router.post(
+  '/me/verification-requests',
+  authenticate,
+  usersController.submitVerificationRequest,
 );
 router.get('/me/schedule', authenticate, usersController.getMySchedule);
 
