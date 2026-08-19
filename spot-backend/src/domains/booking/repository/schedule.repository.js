@@ -116,10 +116,16 @@ export async function getProfileStatsForUser(client, userId) {
           FROM schema_social.match_participants mp
          WHERE mp.player_id = $1
            AND mp.join_status = 'APPROVED')
-       + (SELECT COUNT(*)::int
+       +        (SELECT COUNT(*)::int
           FROM schema_matchmaking.match_join_requests r
          WHERE r.user_id = $1
            AND r.status = 'ACCEPTED') AS joined_matches,
+       (SELECT COUNT(*)::int
+          FROM schema_review.match_host_reviews hr
+         WHERE hr.host_user_id = $1) AS host_reviews_count,
+       (SELECT ROUND(AVG(hr.rating)::numeric, 1)
+          FROM schema_review.match_host_reviews hr
+         WHERE hr.host_user_id = $1) AS host_avg_rating,
        (SELECT COUNT(*)::int
           FROM schema_booking.bookings b
          WHERE b.player_id = $1
@@ -127,12 +133,16 @@ export async function getProfileStatsForUser(client, userId) {
     [userId],
   );
   const row = rows[0] || {};
+  const reviewsCount = Number(row.host_reviews_count ?? 0);
   return {
     hostedMatches: row.hosted_matches ?? 0,
     joinedMatches: row.joined_matches ?? 0,
     completedBookings: row.completed_bookings ?? 0,
-    reviewsCount: 0,
-    avgRating: null,
+    reviewsCount,
+    avgRating:
+      reviewsCount > 0 && row.host_avg_rating != null
+        ? Number(row.host_avg_rating)
+        : null,
   };
 }
 

@@ -12,6 +12,17 @@ Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **notifi
 
 **Khuyến nghị FE:** dùng prefix `/api/…`.
 
+### Changelog bảo trì (Aug 2026 — Manage Matches P0–P3)
+
+| Batch | API / hành vi | Migration / worker |
+| :--- | :--- | :--- |
+| **P0 Lifecycle** | Tab Completed chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage`; notify `MATCH_CANCELLED` / `MATCH_EXPIRED_UNDERFILLED`; browse/join chặn sau `endsAt` | `008`, `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
+| **P1 Manage Squad** | `GET /matches/:id/requests` + `participants[]`: `avatarUrl`, `skill`, `shareAmount`, `paymentStatus`, phones; `DELETE /matches/:id/join` | — |
+| **P2 Requests badge** | `GET /matches/my-join-requests`: `pendingCount`, `?status=PENDING\|REJECTED`, `match.hostAvatarUrl`; host `skill` trong squad | — |
+| **P3 Review host** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `joinedMatches` + live `rating`/`reviewCount` trên profile | `009_schema_match_host_reviews.sql` |
+
+Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì**. Figma map: Manage `101:98`, Active `746:2`, Squad `749:508`, Completed `751:740`, Requests `751:860`, Profile `432:1211`.
+
 ---
 
 ## Mục lục
@@ -137,8 +148,10 @@ Hai skill **độc lập** (một per sport). Unset = `null`. API lưu `code`. C
 | Match `status` | `OPEN` \| `FULL` \| `COMPLETED` \| `CANCELLED` |
 | Join request | `PENDING` \| `ACCEPTED` \| `REJECTED` \| `KICKED` |
 | `paymentStatus` | `SUCCESS` (stub) |
+| `outcome` (ended kèo) | `COMPLETED` \| `CANCELLED` + `outcomeMessage` |
 
 Host chiếm **1 slot** lúc tạo. Join: `filledCount += 1 + guests.length` (AUTO ngay; APPROVAL khi accept).  
+**`yourShare`**: preview runtime trên match (`ceil(priceMin / filledCount)`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
 Pitch global: cùng `venueName` + `venueAddress` + tên court + giờ chồng → `409`.
 
 ### Role (chọn ở Step 2)
@@ -248,6 +261,7 @@ GET  /users/:id          public host profile (no email/phone)
 
 ```
 POST /matches/:id/join
+DELETE /matches/:id/join                         joiner — hủy PENDING
 GET  /matches/:id/requests                          host
 POST /matches/:id/requests/:requestId/accept|reject host
 POST /matches/:id/participants/:userId/kick         host
@@ -260,6 +274,8 @@ GET    /matches/mine?tab=active|completed
 GET    /matches/my-join-requests
 PATCH  /matches/:id
 POST   /matches/:id/cancel
+POST   /matches/dev/process-expired                 dev only — expiry tick
+POST   /matches/:id/review                         participant — rate host
 POST|DELETE /matches/:id/favorite
 ```
 
@@ -794,7 +810,7 @@ curl -s -X POST http://localhost:3000/auth/reset-password \
 
 Profile **public** (Check Profile / host card). Bearer bắt buộc. **Không** trả `email`, `phoneNumber`, `role`, `status`, `gender`. SĐT host chỉ trên `GET /matches/:id` khi caller là host hoặc `yourRequest.status === ACCEPTED`.
 
-`rating` luôn `null`, `reviewCount` luôn `0`. `matchCount` = số kèo đã host trừ `CANCELLED`.
+`matchCount` = số kèo đã host trừ `CANCELLED`. `joinedMatches` = số join request `ACCEPTED` (pickup kèo). `rating` / `reviewCount` = aggregate từ `schema_review.match_host_reviews` — `null` / `0` nếu chưa có review.
 
 **Success `200`**
 
@@ -807,13 +823,17 @@ Profile **public** (Check Profile / host card). Bearer bắt buộc. **Không** 
     "createdAt": "...",
     "skills": { "badminton": null, "football": "PROFESSIONAL" },
     "matchCount": 10,
-    "rating": null,
-    "reviewCount": 0
+    "joinedMatches": 4,
+    "rating": 4.9,
+    "reviewCount": 12
   }
 }
 ```
 
-Hosted Matches trên Figma = `GET /matches?hostUserId=:id`.
+`matchCount` = kèo hosted trừ `CANCELLED`. `joinedMatches` = join request `ACCEPTED`.  
+`rating` / `reviewCount` = aggregate từ pickup kèo reviews (`schema_review.match_host_reviews`). `null` / `0` nếu chưa có review.
+
+Hosted Matches trên Figma = `GET /matches?hostUserId=:id`. Reviews section = `GET /reviews/hosts/:userId/reviews`.
 
 **Errors:** `400` Invalid user id · `401` · `404` User not found
 
@@ -822,8 +842,8 @@ Hosted Matches trên Figma = `GET /matches?hostUserId=:id`.
 ## 7. Matchmaking endpoints
 
 Base: `/matches` hoặc `/api/matches`. Mọi route cần Bearer.  
-`POST /matches` và `POST /matches/:id/join` thêm `requireRole('PLAYER')`.  
-Route tĩnh (`/mine`, `/my-join-requests`, `/venue-suggestions`, `/bulk`) **trước** `GET /:id`.
+`POST /matches`, `POST /matches/:id/join`, `DELETE /matches/:id/join` thêm `requireRole('PLAYER')`.  
+Route tĩnh (`/mine`, `/my-join-requests`, `/venue-suggestions`, `/bulk`, `/dev/process-expired`) **trước** `GET /:id`.
 
 Host = 1 slot lúc tạo. Payment là stub `SUCCESS`.
 
@@ -905,11 +925,18 @@ Browse: `OPEN`, còn slot, `endsAt > now`. `FULL` **ẩn** trên homepage; vẫn
 
 Chi tiết (kể cả đã qua giờ / cancelled).
 
-**Success `200`:** `{ match, canJoin, yourRequest, participants[] }`
+**Success `200`:** `{ match, canJoin, yourRequest, participants[], summary }`
 
-`hostPhoneNumber` **chỉ** khi caller là host hoặc `yourRequest.status === ACCEPTED`. `yourRequest` = `PENDING`/`ACCEPTED`/`KICKED` (hoặc `null` nếu chưa join / `REJECTED`). `canJoin` = không phải host, `OPEN`, còn slot, chưa request active, không bị kick.
+`summary` (View Summary / post-match review): `{ reviewable, canReview, yourReview, hostRating: { avgRating, reviewCount } }`.  
+`reviewable` = kèo đã hết giờ + đủ người + không cancel. `canReview` = participant `ACCEPTED` chưa review.  
+Đánh giá host: `POST /matches/:id/review` (xem 7.4c). `host.rating` / `host.reviewCount` trên card lấy từ aggregate review pickup kèo.
 
-**Errors:** `400` Invalid match id · `401` · `404`
+`hostPhoneNumber` **chỉ** khi caller là host hoặc `yourRequest.status === ACCEPTED`. `yourRequest` = `PENDING`/`ACCEPTED`/`KICKED` (hoặc `null` nếu chưa join / `REJECTED`); gồm `avatarUrl`, `skill` (sport của kèo).  
+`canJoin` = không phải host, `OPEN`, còn slot, chưa request active, **`endsAt > now`**, không bị kick.
+
+`participants[]`: HOST + joiners `ACCEPTED`. HOST và player gồm `skill` (sport kèo). Player thêm `shareAmount`, `paymentStatus`, `avatarUrl`, `phoneNumber` (host hoặc chính mình).
+
+**Errors:** `400` Invalid match id / Match has ended · `401` · `404`
 
 ### 7.4 `POST /matches/:id/join`
 
@@ -926,11 +953,29 @@ Skill ngoài range → vẫn join, `skillWarning: true`. Skill sai sport → `40
 
 **Success `201`:** `{ message, skillWarning, request, match }`
 
-**Errors:** `400` host join own / not enough spots · `403` kicked / not PLAYER · `409` đã PENDING/ACCEPTED
+**Errors:** `400` host join own / not enough spots / **Match has ended** · `403` kicked / not PLAYER · `409` đã PENDING/ACCEPTED
+
+### 7.4b `DELETE /matches/:id/join`
+
+Joiner hủy request **`PENDING`** (xóa row + guests). Host không được gọi.
+
+**Success `200`:** `{ message: "Join request cancelled", matchId, requestId }`
+
+**Errors:** `400` No pending join request / Host cannot withdraw · `404` match not found
+
+### 7.4c `POST /matches/:id/review`
+
+Participant đã **`ACCEPTED`** đánh giá **host** sau kèo reviewable (hết giờ + đủ người). Host không được tự review. 1 review / user / kèo.
+
+**Body:** `{ rating: 1..5, reviewText?: string }`
+
+**Success `201`:** `{ message, review, hostRating: { avgRating, reviewCount } }`
+
+**Errors:** `400` not reviewable / host self-review · `403` not participant · `409` already reviewed · `429` spam limit
 
 ### 7.5 `GET /matches/:id/requests`
 
-Host, **PENDING only**. Có `phoneNumber` requester + guests.
+Host, **PENDING only**. Mỗi request: `avatarUrl`, `skill` (sport kèo), `shareAmount`, `phoneNumber` requester + guests.
 
 **Success `200`:** `{ matchId, total, requests[] }` · `403` nếu không phải host
 
@@ -949,16 +994,22 @@ Manage Matches — tab **Active** / **Completed**. Query `tab` (default `active`
 
 | `tab` | Host | Participant |
 | :--- | :--- | :--- |
-| `active` | `OPEN`/`FULL`, chưa hết giờ | Join **`ACCEPTED`**, kèo chưa hết, chưa cancel |
-| `completed` | cancelled/completed hoặc đã qua `endsAt` | **`KICKED`**, hoặc ACCEPTED + kèo đã xong |
+| `active` | `OPEN`/`FULL`, `endsAt > now`, chưa cancel | Join **`ACCEPTED`**, kèo chưa hết, chưa cancel |
+| `completed` | **Chỉ** hết giờ + **đủ người** + không cancel | **`ACCEPTED`** + cùng điều kiện kèo |
 
-**Không** gồm `PENDING` — xem 7.9b. Thêm `myRole`, `myRequestStatus`, `pendingRequestCount` (host chip “N chờ duyệt”).
+**Không** vào Completed: host cancel, hết giờ thiếu người, kicked. Kèo đó vẫn xem qua `GET /matches/:id` (có `outcome`).  
+**Không** gồm `PENDING` — xem 7.9b. Thêm `myRole`, `myRequestStatus`, `pendingRequestCount`, `outcome`/`outcomeMessage` (completed).
 
 ### 7.9b `GET /matches/my-join-requests`
 
-Tab Join Requests (joiner). `PENDING` + `REJECTED`. `ACCEPTED` → `/mine?tab=active`; `KICKED` → completed.
+Tab Join Requests (joiner). Mặc định `PENDING` + `REJECTED`. `ACCEPTED` → `/mine?tab=active`; `KICKED` → completed.
 
-**Success `200`:** `{ total, limit, offset, requests: [ { requestId, status, heads, match: { matchId, title, startsAt, venueName, hostFullName } } ] }`
+**Query:** `limit`, `offset`, `status?` (`PENDING` \| `REJECTED` — bỏ trống = cả hai).
+
+**Success `200`:** `{ total, pendingCount, limit, offset, requests: [ ... ] }`
+
+`pendingCount` = số request `PENDING` của caller (dùng badge tab Requests, không phụ thuộc filter `status`).  
+Với badge chỉ cần số chờ duyệt: gọi `?status=PENDING&limit=1` hoặc đọc `pendingCount`.
 
 ### 7.10 `PATCH /matches/:id`
 
@@ -966,7 +1017,16 @@ Host, trước `startsAt`. Partial. Nếu `filledCount > 1` không đổi sport/
 
 ### 7.11 `POST /matches/:id/cancel`
 
-Host. PENDING → REJECTED. Status `CANCELLED` (hết chiếm sân).
+Host. PENDING → REJECTED. Status `CANCELLED` (hết chiếm sân). Notify joiners inbox `MATCH_CANCELLED` (`data.reason = HOST_CANCEL`). **Không** xuất hiện tab Completed.
+
+### 7.11b Match expiry (background)
+
+| Case | Worker action | Tab Completed |
+| :--- | :--- | :--- |
+| Hết giờ, **đủ người** | `status → COMPLETED`, nhả sân | Có |
+| Hết giờ, **thiếu người** | `status → CANCELLED`, reject PENDING, notify (`data.reason = EXPIRED_UNDERFILLED`) | Không |
+
+`GET /matches/mine` chạy expiry trước khi query. Prod: `npm run worker:match-expiry`. Dev: `POST /matches/dev/process-expired` (non-prod).
 
 ### 7.12 Favorite
 
@@ -1025,9 +1085,9 @@ Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ book
 | Field | Nguồn |
 | :--- | :--- |
 | `hostedMatches` | `COUNT` `schema_social.matches` where `host_id = me` |
-| `joinedMatches` | `match_participants` `APPROVED` (không tính host) |
+| `joinedMatches` | join requests `ACCEPTED` trên pickup kèo (không tính host) |
 | `completedBookings` | bookings `status = COMPLETED` |
-| `reviewsCount` / `avgRating` | stub `0` / `null` (chưa có host-review) |
+| `reviewsCount` / `avgRating` | pickup kèo `match_host_reviews` where user is host (+ venue reviews later) |
 | `joinedAt` | `users.created_at` |
 
 ### 8.2 `PATCH /users/me`   
@@ -1189,8 +1249,9 @@ Alias `/api/notifications/*`. Tất cả route cần Bearer access.
 | `POST` | `/notifications/dev/seed` | Dev only — tạo inbox (+ optional `dueReminderNow` / schedule) |
 | `POST` | `/notifications/dev/process-due` | Dev only — chạy một tick reminder worker |
 
-Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `SYSTEM`.  
-Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`.  
+Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `MATCH_CANCELLED` \| `MATCH_EXPIRED_UNDERFILLED` \| `SYSTEM`.  
+Match cancel/expiry: `MATCH_CANCELLED` với `data.reason` = `HOST_CANCEL` \| `EXPIRED_UNDERFILLED` (host cancel không notify chính host).
+Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`. Match expiry: `npm run worker:match-expiry`.  
 Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
 
 ```bash
@@ -1207,12 +1268,19 @@ Alias `/api/reviews/*`. Cần Bearer access.
 
 | Method | Path | Behavior |
 | :--- | :--- | :--- |
+| `GET` | `/reviews/hosts/:userId/reviews` | Pickup kèo — reviews host nhận từ participants (`limit`, `offset`) |
 | `POST` | `/reviews` | Player tạo review cho booking `COMPLETED` |
 | `POST` | `/reviews/:id/reply` | Venue owner trả lời (1 reply / review) |
 | `GET` | `/reviews/venues/:venueId/rating` | Aggregate rating (DB + Redis cache `venue:rating:{id}`) |
 | `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review |
 
-**Rules**
+**Pickup kèo host review** (Manage Matches Completed / Check Profile)
+
+- `POST /matches/:id/review` — participant `ACCEPTED`, kèo reviewable, 1 review / user / kèo
+- `GET /reviews/hosts/:userId/reviews` — list + `hostRating` aggregate
+- `host.rating` trên match cards + `GET /users/:id` lấy từ `match_host_reviews`
+
+**Booking venue review rules**
 
 - 1 review / `booking_id` (`UNIQUE`)
 - Chỉ `status = COMPLETED`
@@ -1335,7 +1403,7 @@ api.interceptors.request.use((config) => {
 | `createdAt` | string | |
 | `skills` | object | `{ badminton, football }` — code hoặc `null` |
 
-`GET /users/:id` dùng shape **host profile** (6.10): không `email`/`phoneNumber`/`role`/`status`/`gender`; có `matchCount`, `rating` (`null`), `reviewCount` (`0`).
+`GET /users/:id` dùng shape **host profile** (6.10): không `email`/`phoneNumber`/`role`/`status`/`gender`; có `matchCount`, `joinedMatches`, `rating`/`reviewCount` live từ pickup kèo reviews.
 
 ## 12. Checklist test
 
@@ -1373,16 +1441,17 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | :--- | :--- | :--- |
 | 1 | `POST /matches` football `SEVEN_A_SIDE` | `201`, `filledCount: 1` |
 | 2 | `GET /matches?sport=FOOTBALL` | chứa kèo vừa tạo (joiner; host không thấy kèo mình trên browse) |
-| 3 | `GET /users/:hostUserId` | `fullName`, `skills`, `matchCount`; **không** email/phone; `rating: null` |
-| 4 | `GET /matches/:id` | `canJoin`, `participants` |
+| 3 | `GET /users/:hostUserId` | `fullName`, `skills`, `matchCount`, `joinedMatches`; **không** email/phone; `rating`/`reviewCount` live |
+| 4 | `GET /matches/:id` | `canJoin`, `participants`, `summary` |
 | 5 | `POST /matches/:id/join` `{}` (AUTO) | `201` `ACCEPTED` |
 | 6 | `POST /matches/:id/join` guests (APPROVAL) | `201` `PENDING`, `heads` tăng, filled chưa tăng |
-| 7 | `GET /matches/:id/requests` (host) | PENDING |
+| 7 | `GET /matches/:id/requests` (host) | PENDING — `avatarUrl`, `skill`, `shareAmount` |
 | 8 | accept / reject / kick | đúng status + filledCount |
 | 9 | `GET /matches/mine?tab=active` | host + participant ACCEPTED |
-| 10 | `GET /matches/my-join-requests` | PENDING + REJECTED |
-| 11 | `PATCH /matches/:id` trước giờ | `200` |
-| 12 | `POST /matches/:id/cancel` | `CANCELLED` |
+| 10 | `GET /matches/my-join-requests` | `pendingCount`, PENDING + REJECTED; `DELETE /join` hủy PENDING |
+| 11 | Sau kèo reviewable | `POST /matches/:id/review` → `GET /reviews/hosts/:userId/reviews` |
+| 12 | `PATCH /matches/:id` trước giờ | `200` |
+| 13 | `POST /matches/:id/cancel` | `CANCELLED` + notify joiners |
 
 ### Negative / edge
 
@@ -1438,6 +1507,7 @@ npm run smoke:notifications  # inbox + mark read + due reminder
 npm run smoke:schedule       # seed schedule → GET /users/me/schedule
 npm run smoke:reviews        # seed COMPLETED booking → review → reply
 npm run worker:reminders     # background T-24h/T-2h processor
+npm run worker:match-expiry  # đủ người → COMPLETED; thiếu người → CANCELLED + notify
 node scripts/smoke-forgot-password.js
 node scripts/smoke-register.js
 ```
@@ -1463,6 +1533,9 @@ npm test
 | `GET /users/me/schedule` + venue/booking/social schema (`004`) | Done |
 | `POST /reviews` + reply + venue rating (`005`) | Done |
 | Matchmaking kèo (`006`) — host/list/join/approve/kick/mine | Done |
+| Match lifecycle + Completed tab rules + `outcome` (`008`) | Done |
+| Match host reviews + `summary` + profile `joinedMatches` (`009`) | Done |
+| `DELETE /matches/:id/join`, `pendingCount`, Manage Squad fields | Done |
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Chưa |
 | Logout | Chưa |
