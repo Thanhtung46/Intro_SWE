@@ -6,6 +6,7 @@ import { parseListMineQuery } from '../dto/list-mine.dto.js';
 import { parseMyJoinRequestsQuery } from '../dto/my-join-requests.dto.js';
 import { parseUpdateMatchDto } from '../dto/update-match.dto.js';
 import * as matchService from '../service/match.service.js';
+import * as matchHostReviewService from '../../review/service/match-host-review.service.js';
 
 export async function create(req, res, next) {
   try {
@@ -62,6 +63,31 @@ export async function detail(req, res, next) {
 export async function join(req, res, next) {
   try {
     const result = await matchService.joinMatch(
+      req.user.userId,
+      req.params.id,
+      req.body,
+    );
+    return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function withdrawJoin(req, res, next) {
+  try {
+    const result = await matchService.withdrawJoinRequest(
+      req.user.userId,
+      req.params.id,
+    );
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function review(req, res, next) {
+  try {
+    const result = await matchHostReviewService.createMatchHostReview(
       req.user.userId,
       req.params.id,
       req.body,
@@ -191,6 +217,18 @@ export async function unfavorite(req, res, next) {
       req.params.id,
     );
     return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function processExpired(req, res, next) {
+  try {
+    const full = await matchService.processExpiredFullMatches({ limit: 50 });
+    const underfilled = await matchService.processExpiredUnderfilledMatches({
+      limit: 50,
+    });
+    return res.status(200).json({ full, underfilled });
   } catch (err) {
     return next(err);
   }

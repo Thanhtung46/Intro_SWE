@@ -538,16 +538,16 @@ export async function updateFilledCount(client, matchId, filledCount, status) {
   return rows[0] || null;
 }
 
+/** Completed tab — kèo đã hết giờ và đủ maxPlayers (không gồm hủy / thiếu người). */
+const MINE_COMPLETED_MATCH_SQL = `
+  m.status <> '${MATCH_STATUSES.CANCELLED}'
+  AND m.ends_at <= NOW()
+  AND m.filled_count >= m.max_players
+`;
+
 function mineHostWhere(tab, params) {
   if (tab === MINE_TABS.COMPLETED) {
-    params.push([MATCH_STATUSES.CANCELLED, MATCH_STATUSES.COMPLETED]);
-    const doneSlot = `$${params.length}`;
-    params.push(PITCH_OCCUPIED_STATUSES);
-    const openSlot = `$${params.length}`;
-    return `(
-      m.status = ANY(${doneSlot}::text[])
-      OR (m.status = ANY(${openSlot}::text[]) AND m.ends_at <= NOW())
-    )`;
+    return MINE_COMPLETED_MATCH_SQL;
   }
   params.push(PITCH_OCCUPIED_STATUSES);
   return `m.status = ANY($${params.length}::text[]) AND m.ends_at > NOW()`;
@@ -555,24 +555,15 @@ function mineHostWhere(tab, params) {
 
 function mineParticipantWhere(tab, userSlot) {
   const accepted = JOIN_REQUEST_STATUSES.ACCEPTED;
-  const kicked = JOIN_REQUEST_STATUSES.KICKED;
   if (tab === MINE_TABS.COMPLETED) {
     return `EXISTS (
       SELECT 1
       FROM schema_matchmaking.match_join_requests r
       WHERE r.match_id = m.match_id
         AND r.user_id = ${userSlot}
-        AND (
-          r.status = '${kicked}'
-          OR (
-            r.status = '${accepted}'
-            AND (
-              m.status IN ('${MATCH_STATUSES.CANCELLED}', '${MATCH_STATUSES.COMPLETED}')
-              OR m.ends_at <= NOW()
-            )
-          )
-        )
-    )`;
+        AND r.status = '${accepted}'
+    )
+    AND ${MINE_COMPLETED_MATCH_SQL}`;
   }
   return `EXISTS (
     SELECT 1
@@ -668,6 +659,17 @@ export async function countHostedByUser(client, hostUserId) {
   return rows[0]?.total ?? 0;
 }
 
+export async function countJoinedByUser(client, userId) {
+  const { rows } = await client.query(
+    `SELECT COUNT(*)::int AS total
+     FROM schema_matchmaking.match_join_requests r
+     WHERE r.user_id = $1
+       AND r.status = $2`,
+    [userId, JOIN_REQUEST_STATUSES.ACCEPTED],
+  );
+  return rows[0]?.total ?? 0;
+}
+
 export async function updateMatch(client, matchId, input) {
   const { rows } = await client.query(
     `UPDATE schema_matchmaking.matches
@@ -748,6 +750,36 @@ export async function updateStatus(client, matchId, status) {
     [matchId, status],
   );
   return rows[0] || null;
+}
+
+/** Worker: OPEN/FULL kèo hết giờ mà chưa đủ maxPlayers. */
+export async function listExpiredUnderfilledIds(client, { limit = 50 } = {}) {
+  const { rows } = await client.query(
+    `SELECT m.match_id
+     FROM schema_matchmaking.matches m
+     WHERE m.status = ANY($1::text[])
+       AND m.ends_at <= NOW()
+       AND m.filled_count < m.max_players
+     ORDER BY m.ends_at ASC
+     LIMIT $2`,
+    [PITCH_OCCUPIED_STATUSES, limit],
+  );
+  return rows.map((row) => row.match_id);
+}
+
+/** Worker: OPEN/FULL kèo hết giờ đã đủ người — đóng COMPLETED, nhả sân. */
+export async function listExpiredFullIds(client, { limit = 50 } = {}) {
+  const { rows } = await client.query(
+    `SELECT m.match_id
+     FROM schema_matchmaking.matches m
+     WHERE m.status = ANY($1::text[])
+       AND m.ends_at <= NOW()
+       AND m.filled_count >= m.max_players
+     ORDER BY m.ends_at ASC
+     LIMIT $2`,
+    [PITCH_OCCUPIED_STATUSES, limit],
+  );
+  return rows.map((row) => row.match_id);
 }
 
 export async function listPreviewAvatars(client, matchIds, limitPerMatch = 3) {

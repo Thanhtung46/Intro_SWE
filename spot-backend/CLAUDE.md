@@ -23,7 +23,7 @@ Implemented so far:
 | `POST /auth/login` | Done — access + refresh JWT (`sub`, `role`); lockout 5 fails / 15 min |
 | `POST /auth/refresh` | Done — exchange refresh JWT for new access + refresh |
 | `GET /auth/me` | Done — protected; `user.skills` + `avatarUrl` |
-| `GET /users/:id` | Done — public host profile (no email/phone); `matchCount` live; `rating`/`reviewCount` stub |
+| `GET /users/:id` | Done — Check Profile; `matchCount`, `joinedMatches`, live `rating`/`reviewCount` (pickup kèo reviews) |
 | `PATCH /auth/me` | Done — skills and/or `avatarUrl` (URL only, no S3) |
 | `POST /auth/forgot-password` | Done — email OTP (`purpose = FORGOT_PASSWORD`); anti-enumeration (always same 200 message) |
 | `POST /auth/reset-password` | Done — `{ email, otp, newPassword, confirmPassword }` → update `password_hash`, clear lockout |
@@ -37,17 +37,21 @@ Implemented so far:
 | `GET /matches/venue-suggestions` | Done — Host form location picker (pool `status <> CANCELLED`) |
 | `GET /matches` | Done — see **List filters** + **Homepage browse exclusion** below |
 | `GET /geo/vn` | Done — static 63 tỉnh + 705 quận/huyện (pre-2025). **No** 3rd-party geo API |
-| `GET /matches/mine` | Done — host **+ participant**; `?tab=active\|completed`; `myRole`, `pendingRequestCount` (host chips); **route before** `GET /:id` |
-| `GET /matches/my-join-requests` | Done — joiner Join Requests tab (`PENDING` + `REJECTED`) |
-| `GET /matches/:id` | Done — squad, `spotsLeft`, `yourShare`, `canJoin`, `yourRequest`, `participants` |
+| `GET /matches/mine` | Done — host **+ participant**; `?tab=active\|completed`; `myRole`, `pendingRequestCount`, `outcome`/`outcomeMessage` (completed); **route before** `GET /:id` |
+| `GET /matches/my-join-requests` | Done — joiner Join Requests tab (`PENDING` + `REJECTED`; `?status=`); `pendingCount`; `match.hostAvatarUrl` |
+| `GET /matches/:id` | Done — squad, `yourShare`, `canJoin`, `summary` (View Summary/review), `participants[]`; `outcome` when ended |
+| `POST /matches/:id/review` | Done — participant rates host after reviewable kèo |
+| `GET /reviews/hosts/:userId/reviews` | Done — Check Profile Reviews section |
 | `POST` / `DELETE /matches/:id/favorite` | Done — heart; `isFavorited` on list/detail |
-| `GET /users/:id` | Done — Check Profile / host card (no email/phone) |
-| Host `rating` (Figma `4.9`) | **Deferred** — `host.rating` / profile `rating` always `null`; `reviewCount: 0`. `matchCount` is live. |
+| `GET /users/:id` | Done — Check Profile; `matchCount`, `joinedMatches`, live `rating`/`reviewCount` |
+| Host `rating` (Figma `4.9`) | Done — `POST /matches/:id/review` + aggregate on cards/profile |
 | `POST /matches/:id/join` | Done — guests (`name`, `skill`, `gender`, `phoneNumber`), skill **warning** (still joins), AUTO vs APPROVAL |
-| `GET /matches/:id/requests` | Done — host waiting list, **PENDING only** |
+| `DELETE /matches/:id/join` | Done — joiner hủy request **`PENDING`** (xóa row; có thể join lại) |
+| `GET /matches/:id/requests` | Done — host waiting list, **PENDING only**; `avatarUrl`, `skill`, `shareAmount`, `phoneNumber` |
 | Accept / reject / kick | Done — `UPDATE` same `requestId`; kick cannot rejoin **that** kèo |
 | `PATCH /matches/:id` | Done — host edit before `startsAt` |
-| `POST /matches/:id/cancel` | Done — pending → `REJECTED`; status `CANCELLED` (frees pitch) |
+| `POST /matches/:id/cancel` | Done — pending → `REJECTED`; status `CANCELLED`; notify joiners (`MATCH_CANCELLED`, `data.reason=HOST_CANCEL`) |
+| Match expiry worker | Done — `npm run worker:match-expiry`; dev `POST /matches/dev/process-expired` (non-prod). Đủ người → `COMPLETED`; thiếu người → `CANCELLED` + notify |
 
 **Infra / conventions**
 
@@ -65,13 +69,28 @@ Implemented so far:
 
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
-Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
+Contract: [`docs/API.md`](./docs/API.md) (bản đồng bộ với [`API.md`](./API.md) ở repo root). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
+
+## Changelog bảo trì (agent / dev sau này)
+
+Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `101:98` + lifecycle kèo + review host:
+
+| Batch | Nội dung | Migration / worker |
+| :--- | :--- | :--- |
+| **Lifecycle** | Browse ẩn kèo hết `endsAt`; join/`canJoin` chặn sau hết giờ; worker đủ người → `COMPLETED`, thiếu người → `CANCELLED` + notify; tab **Completed** chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage` | `008` (notification types), `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
+| **Manage Squad** | Pending: `avatarUrl`, `skill`, `phoneNumber`, `shareAmount`. Squad: `shareAmount`, `paymentStatus`, `skill` (HOST + player). Requests tab: `hostAvatarUrl`, `pendingCount`, `?status=PENDING\|REJECTED` | — |
+| **Joiner** | `DELETE /matches/:id/join` hủy PENDING | — |
+| **Review host (P3)** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `host.rating` live trên cards + profile; `joinedMatches` trên `GET /users/:id` | `009_schema_match_host_reviews.sql` |
+
+**Quy tắc tab Completed (đã chốt — đừng revert):** chỉ `ends_at <= now` + `filled_count >= max_players` + `status <> CANCELLED` + participant `ACCEPTED`. **Không** gồm: host cancel, thiếu người, kicked (xem lại qua `GET /matches/:id` + notify).
+
+**Files then touched:** `match.service.js`, `match.repository.js`, `join-request.repository.js`, `match-outcome.js`, `match-host-review.service.js`, `auth.service.js`, `notification.service.js`, tests under `tests/unit/matchmaking/` + `tests/unit/review/`.
 | Auth | register → role → OTP → login/refresh; forgot/reset password |
 | Profile | `GET/PATCH /users/me`, Main Profile stats, preferences, password change, avatar upload |
 | Contact change | OTP email/phone under `/users/me/email|phone/...` |
 | Schedule | `GET /users/me/schedule` + dev seed |
-| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
-| Reviews | create + owner reply; venue rating cache |
+| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`); match cancel/expiry (`MATCH_CANCELLED`) |
+| Reviews | venue booking reviews + **pickup kèo host reviews** (`POST /matches/:id/review`, `GET /reviews/hosts/:userId/reviews`) |
 
 **Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment.
 
@@ -99,6 +118,7 @@ npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already 
 node scripts/smoke-forgot-password.js  # register → role → verify → forgot → reset → login
 npm run smoke:schedule|notifications|reviews
 npm run worker:reminders
+npm run worker:match-expiry   # auto COMPLETED (full) / CANCELLED (underfilled) + notify
 npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
 ```
 
@@ -157,6 +177,8 @@ migrations/
 ├── 004_schema_venue_booking_social.sql  # venues, bookings, schema_social.matches
 ├── 005_schema_review.sql         # reviews + owner replies
 ├── 006_schema_matchmaking.sql    # pickup kèo + fold + province/city
+├── 008_notification_match_types.sql  # MATCH_CANCELLED + MATCH_EXPIRED_UNDERFILLED on inbox.type
+├── 009_schema_match_host_reviews.sql   # pickup kèo participant → host rating
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
@@ -305,8 +327,8 @@ Decisions from Figma + product review ([`101:98`](https://www.figma.com/design/Z
 | UI tab | Who | API | Pool |
 | :--- | :--- | :--- | :--- |
 | **Active** | Host + participant | `GET /matches/mine?tab=active` | Host: own `OPEN`/`FULL`, `endsAt > now`. Participant: request **`ACCEPTED`**, kèo not cancelled, not ended. **No `PENDING`.** |
-| **Completed** | Host + participant | `GET /matches/mine?tab=completed` | Host: `CANCELLED`/`COMPLETED` or past `endsAt`. Participant: **`KICKED`**, or **`ACCEPTED`** + ended/cancelled/completed. |
-| **Join Requests** | Joiner only | `GET /matches/my-join-requests` | Caller’s **`PENDING`** + **`REJECTED`**. Sort: PENDING first. **`ACCEPTED`** → Active tab; **`KICKED`** → Completed. |
+| **Completed** | Host + participant | `GET /matches/mine?tab=completed` | **Chỉ** kèo đã hết giờ (`endsAt <= now`), **đủ người** (`filledCount >= maxPlayers`), `status <> CANCELLED`, participant **`ACCEPTED`**. **Không** gồm: host cancel, hết giờ thiếu người, kicked. Card có `outcome` / `outcomeMessage`. |
+| **Join Requests** | Joiner only | `GET /matches/my-join-requests` | Caller’s **`PENDING`** + **`REJECTED`**. Sort: PENDING first. **`ACCEPTED`** → Active tab. **`KICKED`** **không** vào Completed — xem lại qua detail nếu cần. |
 
 **Host duyệt request — không có tab gộp**
 
@@ -314,8 +336,8 @@ Host **does not** use Join Requests tab. Flow:
 
 1. `GET /matches/mine?tab=active` → card with `myRole: HOST`
 2. Tap card → Match detail (`100:401` — **host variant**: waiting list + Edit/Cancel; Figma joiner frame exists, host frame TBD)
-3. `GET /matches/:id/requests` → PENDING only
-4. `POST .../accept` \| `POST .../reject`
+3. `GET /matches/:id/requests` → PENDING only (`avatarUrl`, `skill`, `shareAmount`, `phoneNumber`)
+4. `POST .../accept` \| `POST .../reject` \| joiner `DELETE .../join` (hủy PENDING)
 
 **List item shape (`GET /matches/mine`)**
 
@@ -324,7 +346,7 @@ Same public match card as Homepage **plus**:
 | Field | Notes |
 | :--- | :--- |
 | `myRole` | `HOST` \| `PARTICIPANT` |
-| `myRequestStatus` | Participant: usually `ACCEPTED` (active) or `KICKED` (completed). Host: `null` |
+| `myRequestStatus` | Participant: `ACCEPTED` (active) hoặc `KICKED` (không còn Active; **không** lên Completed tab). Host: `null` |
 | `pendingRequestCount` | Host only — count of **`PENDING`** join requests on that kèo |
 
 **FE chips on Active (host cards)**
@@ -340,7 +362,7 @@ Participant Active cards: badge **JOINED**; no `pendingRequestCount`.
 **Join Requests tab item (`GET /matches/my-join-requests`)**
 
 ```json
-{ "requestId", "status", "heads", "message", "match": { "matchId", "title", "startsAt", "venueName", "hostFullName", ... } }
+{ "total", "pendingCount", "requestId", "status", "heads", "message", "shareAmount", "paymentStatus", "match": { "matchId", "title", "startsAt", "venueName", "hostFullName", "hostAvatarUrl", ... } }
 ```
 
 Tap → `GET /matches/:id`. **`REJECTED`** rows stay here for tracking; same kèo **reappears on Homepage** browse (caller may join again).
@@ -361,7 +383,7 @@ Same rule when `favorited=true`. **`GET /matches/:id`** and Manage routes unchan
 
 **Empty state**
 
-Figma `101:98` ships empty Active only. Filled states = reuse Homepage card + chips above. Pro Tip card = static FE copy (`rating` still null on BE).
+Figma `101:98` ships empty Active only. Filled states = reuse Homepage card + chips above. Pro Tip card = static FE copy.
 
 **Homepage 1 (Figma `95:2675` / list `95:2417`) — BE complete**
 
@@ -381,10 +403,10 @@ Product review locked. Do **not** re-open unless FE finds a gap.
 | **Card location display** | FE | Show `{venueName}, {cityName}`; distance from user GPS = FE (Haversine or map). |
 | **Logo → Home / Avatar → Profile** | FE | Nav only — no BE endpoint. |
 | **Sparkles (AI search)** | **Out of scope** | Search is text SQL only. |
-| **Notification bell** | **Out of scope** | No notification domain. |
+| **Notification bell** | **Done (BE)** | `GET /notifications`, `/unread-count`, mark read; match cancel types `MATCH_CANCELLED` |
 | **Groups / Tournaments tabs** | **Out of scope** | Pickup kèo only. |
 | **Booking / Schedule** | **Out of scope** | Free listing, no `booking_id`. |
-| **Host rating on card** | **Deferred** | `host.rating` always `null`; `matchCount` live. |
+| **Host rating on card** | **Done** | `host.rating` + `host.reviewCount` from `match_host_reviews`; `null` until có review |
 | **FAB Host / Manage** | **Done (BE)** | Create = `POST /matches` / bulk. Manage = **Manage Matches 101:98** section. |
 
 **API map**
@@ -396,17 +418,20 @@ Product review locked. Do **not** re-open unless FE finds a gap.
 | `GET` | `/matches/venue-suggestions` | Host location picker (wide venue pool) |
 | `GET` | `/matches` | Browse: excludes FULL, hosted, joined/pending/kicked; **`REJECTED` visible**. `hostUserId` → also `FULL` |
 | `GET` | `/geo/vn` | Pre-2025 63 tỉnh + 705 quận/huyện (static JSON, Bearer) |
-| `GET` | `/matches/mine` | Manage Active/Completed — **host + participant**; `myRole`, `pendingRequestCount` |
-| `GET` | `/matches/my-join-requests` | Manage Join Requests tab — joiner **`PENDING` + `REJECTED`** |
-| `GET` | `/matches/:id` | Detail + join context |
+| `GET` | `/matches/mine` | Manage Active/Completed — `myRole`, `pendingRequestCount`, `outcome` |
+| `GET` | `/matches/my-join-requests` | Joiner tab — `pendingCount`, `?status=`, `match.hostAvatarUrl` |
+| `GET` | `/matches/:id` | Detail + `summary` (View Summary / review) + `participants[]` |
+| `DELETE` | `/matches/:id/join` | Joiner hủy PENDING |
+| `POST` | `/matches/:id/review` | Participant đánh giá host (kèo reviewable) |
 | `POST` / `DELETE` | `/matches/:id/favorite` | Heart |
 | `POST` | `/matches/:id/join` | PLAYER; `message?`, `phoneNumber?`, `guests?` |
-| `GET` | `/matches/:id/requests` | Host; PENDING only |
+| `GET` | `/matches/:id/requests` | Host; PENDING — `avatarUrl`, `skill`, `shareAmount`, phones |
 | `POST` | `/matches/:id/requests/:requestId/accept\|reject` | Host |
 | `POST` | `/matches/:id/participants/:userId/kick` | Host |
 | `PATCH` | `/matches/:id` | Host; before `startsAt` |
-| `POST` | `/matches/:id/cancel` | Host |
-| `GET` | `/users/:id` | Public host profile |
+| `POST` | `/matches/:id/cancel` | Host; notify joiners |
+| `GET` | `/reviews/hosts/:userId/reviews` | Check Profile — reviews host nhận |
+| `GET` | `/users/:id` | Public profile — `matchCount`, `joinedMatches`, `rating`, `reviewCount` |
 
 **List filters (`GET /matches`)**
 
@@ -518,7 +543,7 @@ Constants: `LISTABLE_MATCH_STATUSES` = browse; `PITCH_OCCUPIED_STATUSES` =
 
 **Public match card** (list + detail): `coverUrl`, `host: { userId, fullName,
 avatarUrl, matchCount, rating }`, `isFavorited`, `participantAvatars` (max 3),
-`province`, `provinceName`, `city`, `cityName`. `host.rating` always `null`.
+`province`, `provinceName`, `city`, `cityName`. `host.rating` / `host.reviewCount` live (pickup kèo reviews).
 `matchCount` = hosted kèo except `CANCELLED`. No `hostPhoneNumber` on list /
 mine / `GET /users/:id`.
 
@@ -545,6 +570,9 @@ mine / `GET /users/:id`.
 - Host counts as **1** at create (`filledCount: 1`).
 - Join adds `1 + guests.length` heads (AUTO immediately; APPROVAL on accept).
   FE “Send Request (2)” = that number.
+- **`yourShare`** (runtime on match card): `ceil(priceMin / filledCount)` preview for viewer.
+- **`shareAmount`** (on join request / accepted participant): locked at join/accept for joiner + guests; Figma “Paid: 50k”.
+- Join / accept / `POST` blocked when `endsAt <= now` (`assertJoinable`, `canJoin: false`).
 - Guests: `name`, `skill` (that sport’s ladder), `gender` `male`/`female`,
   **`phoneNumber` required**. Requester `phoneNumber` optional on join (else
   account phone). Host sees phones on waiting list and on `participants` after
@@ -565,8 +593,10 @@ join the join response includes it; APPROVAL pending does not.
 
 **Public host profile (`GET /users/:id`)**
 
-`fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`, `rating: null`,
-`reviewCount: 0`. No `email` / `phoneNumber` / `role` / `status` / `gender`.
+`fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`, `joinedMatches`,
+`rating`, `reviewCount` (live từ `match_host_reviews`; `null`/`0` nếu chưa có review).
+No `email` / `phoneNumber` / `role` / `status` / `gender`.
+Reviews section = `GET /reviews/hosts/:userId/reviews`.
 404 if missing, `LOCKED`, or not `ACTIVE`. Hosted Matches + View All =
 `GET /matches?hostUserId=` (profile: OPEN/FULL still in the future; browse hides FULL).
 
@@ -580,40 +610,47 @@ Unique index `idx_join_requests_match_user`. Host accept / reject / kick
 | `PENDING` / `ACCEPTED` | `409` |
 | `REJECTED` | Allowed — `UPDATE` same `requestId` (reset guests) |
 | `KICKED` | `403` — blocked **that match only**, not all kèo of the host |
+| Joiner cancel PENDING | `DELETE /matches/:id/join` — **DELETE** row (not `REJECTED`); may join again |
 
 `GET /matches/:id/requests` is the **waiting list**: `PENDING` only.
-Accepted people are on `participants` in match detail. `yourRequest` on detail
+Accepted people are on `participants` in match detail (`shareAmount`, `paymentStatus`, `skill` — cả HOST). `yourRequest` on detail
 is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
+
+**Match expiry / Completed lifecycle**
+
+- Browse (`GET /matches`): chỉ `OPEN`, còn slot, **`endsAt > now`**.
+- Hết giờ **đủ người**: worker `processExpiredFullMatches` → `status = COMPLETED` (nhả sân); vào tab Completed.
+- Hết giờ **thiếu người**: `processExpiredUnderfilledMatches` → `CANCELLED` (không COMPLETED); reject `PENDING`; notify host + joiners (`MATCH_CANCELLED`, `data.reason = EXPIRED_UNDERFILLED`).
+- Host cancel: `POST /matches/:id/cancel` → notify joiners (`data.reason = HOST_CANCEL`); **không** vào Completed.
+- `listMine` gọi expiry processors trước query. Dev: `POST /matches/dev/process-expired`. Prod: `npm run worker:match-expiry`.
+- `outcome` / `outcomeMessage` trên `GET /matches/:id` và completed cards (`COMPLETED` \| `CANCELLED`).
 
 **Host manage (PATCH / cancel — see also Manage Matches 101:98)**
 
 - `PATCH /matches/:id` only before kick-off. If `filledCount > 1`, cannot change sport /
   format / feeType / prices. `maxPlayers >= filledCount`. Occupancy check
   excludes this match.
-- `POST /matches/:id/cancel` — pending join requests → `REJECTED`; match `CANCELLED` (frees pitch).
-  ACCEPTED rows stay as history.
+- `POST /matches/:id/cancel` — pending join requests → `REJECTED`; match `CANCELLED` (frees pitch); inbox notify joiners.
+  ACCEPTED rows stay as history. Cancelled kèo **không** xuất hiện tab Completed.
 
 **Schema (`schema_matchmaking`)** — `006_schema_matchmaking.sql` is canonical:
 `matches` (incl. `province`/`city`, `matches_admin_pair`, `fold_search_text`,
 GIN + partial `idx_matches_province_city`), `match_courts`,
 `match_join_requests`, `match_guests`, `match_favorites`. Chain: `001` auth →
 `002` skills → `003` notification → `004` venue/booking/social → `005` review →
-`006` kèo. `migrate.js` skips filenames already in `schema_migrations`.
+`006` kèo → `007` venue images → `008` notification match types → `009` match host reviews. `migrate.js` skips filenames already in `schema_migrations`.
 Re-apply search/admin with `npm run apply:match-search` or
-`npm run apply:match-admin` (`scripts/sql/`). Do **not** add `007+` ALTER-only
-matchmaking files; use `apply-*.js`. Leftover old filenames in
-`schema_migrations` — do not delete.
+`npm run apply:match-admin` (`scripts/sql/`). Prefer numbered migrations for schema_notification CHECK updates.
+Leftover rows in `schema_migrations` — do not delete. Do not `INSERT` name/gender on `users`.
 `user_profiles.avatar_url` in `001`. Live homepage-card columns:
-`npm run apply:homepage-card`. Leftover `schema_migrations` rows — do not
-delete. Do not `INSERT` name/gender on `users`.
+`npm run apply:homepage-card`.
 
 **Out of scope (do not add in this domain):** waitlist, Zalo, real MoMo/VNPay,
 `booking_id`, Groups/Tournaments, join-by-code, cover **file upload**/S3
 (URL-only `coverUrl` / `avatarUrl` is in), user profile **hero/cover** image,
-verified-host badge, cron recurring (auto future weeks), AI chatbot, notifications (bell),
-Booking/Schedule tabs, **host rating/review** (keep `rating: null`), Geoapify
-**on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
-2025 34-tỉnh / xã-phường map.
+verified-host badge, cron recurring (auto future weeks), AI chatbot,
+Booking/Schedule tabs, Geoapify **on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
+2025 34-tỉnh / xã-phường map, football **position** field on squad.
 
 Reset kèo data:
 `npm run reset:matches` (or `docker compose run --rm backend npm run reset:matches`).
@@ -673,9 +710,9 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
   caller's hosted kèo, and kèo with join request `PENDING`/`ACCEPTED`/`KICKED`
   (`REJECTED` reappears for re-join).
   Search = DB on `title`/`venueName`/`venueAddress` + `suggestions[]` (see
-  **Homepage search**). Admin dropdown = `GET /geo/vn` (pre-2025). Prices VND.
-  Do not add waitlist / Zalo / real payment / `booking_id` / Groups / rating /
-  Geoapify-on-backend / 2025 ward map / NLP search.
+  **Homepage search**).   Admin dropdown = `GET /geo/vn` (pre-2025). Prices VND.
+  Do not add waitlist / Zalo / real payment / `booking_id` / Groups / Geoapify-on-backend /
+  2025 ward map / NLP search / football position on squad.
 - UI “Venue Owner” maps to DB/API role `OWNER`.
 - FE role-based navigation reads `role` from login JWT / `user`. Protect later
   APIs with `authenticate` / `requireRole` from `shared/middleware/authenticate.js`.

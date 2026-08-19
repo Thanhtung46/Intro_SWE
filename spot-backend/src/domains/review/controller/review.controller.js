@@ -4,6 +4,7 @@ import {
   parseReviewIdParam,
 } from '../dto/create-review.dto.js';
 import * as reviewService from '../service/review.service.js';
+import * as matchHostReviewService from '../service/match-host-review.service.js';
 
 export async function create(req, res, next) {
   try {
@@ -47,6 +48,18 @@ export async function seed(req, res, next) {
       { daysFromNow },
     );
     return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function listHostMatchReviews(req, res, next) {
+  try {
+    const result = await matchHostReviewService.listHostMatchReviews(
+      req.params.userId,
+      req.query,
+    );
+    return res.status(200).json(result);
   } catch (err) {
     return next(err);
   }

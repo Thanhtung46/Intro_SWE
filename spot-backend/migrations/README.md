@@ -13,6 +13,8 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `005_schema_review.sql` | `reviews`, `review_replies` | 001, 004 |
 | `006_schema_matchmaking.sql` | pickup kèo: matches, courts, joins, guests, favorites, search fold + GIN, `province`/`city` | 001 |
 | `007_schema_venue_images.sql` | `venue_images` — venue photo gallery (URL-only, FE uploads to storage) | 001, 004 |
+| `008_notification_match_types.sql` | extend `notifications.type` — `MATCH_CANCELLED`, `MATCH_EXPIRED_UNDERFILLED` | 003 |
+| `009_schema_match_host_reviews.sql` | pickup kèo host reviews (`schema_review.match_host_reviews`) | 001, 006 |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

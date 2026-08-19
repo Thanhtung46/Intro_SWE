@@ -24,11 +24,24 @@ router.get('/', authenticate, matchController.list);
 router.get('/mine', authenticate, matchController.mine);
 router.get('/my-join-requests', authenticate, matchController.myJoinRequests);
 router.get('/venue-suggestions', authenticate, matchController.venueSuggestions);
+if (process.env.NODE_ENV !== 'production') {
+  router.post(
+    '/dev/process-expired',
+    authenticate,
+    matchController.processExpired,
+  );
+}
 router.post(
   '/:id/join',
   authenticate,
   requireRole(USER_ROLES.PLAYER),
   matchController.join,
+);
+router.delete(
+  '/:id/join',
+  authenticate,
+  requireRole(USER_ROLES.PLAYER),
+  matchController.withdrawJoin,
 );
 router.get('/:id/requests', authenticate, matchController.listRequests);
 router.post(
@@ -47,6 +60,12 @@ router.post(
   matchController.kick,
 );
 router.post('/:id/cancel', authenticate, matchController.cancel);
+router.post(
+  '/:id/review',
+  authenticate,
+  requireRole(USER_ROLES.PLAYER),
+  matchController.review,
+);
 router.post('/:id/favorite', authenticate, matchController.favorite);
 router.delete('/:id/favorite', authenticate, matchController.unfavorite);
 router.patch('/:id', authenticate, matchController.update);

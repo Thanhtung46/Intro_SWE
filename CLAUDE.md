@@ -117,9 +117,9 @@ Implemented under `spot-backend/` (do not re-document full API here):
 - **Auth:** register → role → OTP → login/refresh; forgot/reset password
 - **Profile Hub:** `user_profiles` (display + prefs); `GET/PATCH /users/me`; Main Profile `GET /users/me/profile`; Settings `GET/PATCH /users/me/preferences`; password change; local avatar upload
 - **Contact change:** OTP-gated email/phone (FR-1.4) — not via plain PATCH
-- **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders; venue reviews + reply
-- **Matchmaking (kèo):** Phases 1–5 — `POST/GET /matches`, join AUTO/APPROVAL, mine, my-join-requests, host profile `GET /users/:id`
-- **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
+- **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders + match cancel types; venue reviews + reply; **pickup kèo host reviews** (`POST /matches/:id/review`)
+- **Matchmaking (kèo):** browse/list/detail/join/mine/my-join-requests; lifecycle expiry worker; Manage Squad fields; post-match review + `summary`; host `rating` live on cards/profile
+- **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo → `007` venue images → `008` notification match types → `009` match host reviews. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
 - **Not yet:** JWT refresh rotate/blacklist; admin approve OWNER/REFEREE; booking CRUD UI / payment / S3 CDN
 
 ## Common Commands
@@ -162,6 +162,7 @@ npm test
 npm run smoke:login      # OTP_DEBUG=true
 npm run smoke:profile
 npm run smoke:matches    # host / join / approve / kick / mine / cancel
+npm run worker:match-expiry   # prod/cron — process ended kèo
 ```
 Compose (from this repo root `Intro_SWE/`):
 ```bash
@@ -264,15 +265,17 @@ Product locks: [`spot-backend/docs/MATCHMAKING_PLAN.md`](./spot-backend/docs/MAT
 | Requests | One row per `(match_id, user_id)`. Kick = cannot rejoin **that kèo**. Reject = may rejoin. Waiting list = `PENDING` only. |
 | **Manage Matches** | [`101:98`](https://www.figma.com/design/ZTpFWfkdcEpHH4xJaKaBxT/Spot?node-id=101-98) — **`GET /mine`** + **`GET /my-join-requests`**; host approve on detail; chips on Active — see section below |
 | Host edit / cancel | `PATCH /matches/:id` before start; `POST /matches/:id/cancel` |
-| Host profile | `GET /users/:id` (`fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`; no email/phone). Hosted kèo = `GET /matches?hostUserId=`. `rating`/`reviewCount` stub. |
+| Host profile | `GET /users/:id` (`fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`, `joinedMatches`; no email/phone). Hosted kèo = `GET /matches?hostUserId=`. `rating`/`reviewCount` live from pickup reviews. |
 | Host phone | Only `GET /matches/:id` when caller is host or `yourRequest.status === ACCEPTED`. Never on list / mine / `/users/:id`. |
-| Rating | `host.rating` always `null` until review domain exists. `matchCount` is live. |
+| Rating | `host.rating` + `host.reviewCount` on cards from `match_host_reviews`; `null`/`0` until first review. Post-match: `POST /matches/:id/review`, `GET /matches/:id` → `summary`. |
 | Search / map | Homepage **`location=`** = SQL on **`title` + `venueName` + `venueAddress`** (unaccent, fuzzy ≥3 chars, multi-word AND). Same request returns **`suggestions[]`** (max 5, kinds `title` \| `venueName` \| `venueAddress`) while user types — Postgres only, **not** Geoapify/NLP. **Does not** search province/city names or GPS — use `province`/`city` or Distance filters. Filter tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025**). Map / directions = **FE Geoapify**; no key on backend. |
-| Out of scope | Waitlist, Zalo, MoMo/VNPay, Groups, Tournaments, join-by-code, verified-host, user hero cover, AI chatbot, notifications, Booking/Schedule |
+| Out of scope | Waitlist, Zalo, MoMo/VNPay, Groups, Tournaments, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad |
 
 `GET /matches/mine` must stay **before** `GET /matches/:id` in routes.
 `full_name` / `gender` / `avatar_url` are on `schema_auth.user_profiles`, not `users`.
-Migrations: `001`–`006` (`spot-backend/migrations/README.md`). Kèo is `006`. Re-apply search/admin via `apply-match-search.js` / `apply-match-admin.js`. Do not delete leftover `schema_migrations` rows from the old duplicate-number files.
+Migrations: `001`–`009` (`spot-backend/migrations/README.md`). Kèo = `006`; host reviews = `009`. Re-apply search/admin via `apply-match-search.js` / `apply-match-admin.js`. Do not delete leftover `schema_migrations` rows from the old duplicate-number files.
+
+**Aug 2026 (P0–P3):** expiry worker, Completed tab = full+ended only, Manage Squad payment fields, `pendingCount`, host review — see [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) **Changelog bảo trì** and [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) changelog block.
 
 **Figma Homepage 1 (`95:2675` / list `95:2417`) — BE done**
 
@@ -284,9 +287,9 @@ section **Homepage 1** and **Homepage search**.
 | Text search + suggestions (`location=`) | Logo → Home, Avatar → Profile (nav) |
 | Browse hides `FULL`; profile `hostUserId` shows FULL | Card distance from user GPS |
 | Filter sheet: sport, date, time, skill, price **VND**, tỉnh/quận | Sparkles / AI search icon |
-| `GET /geo/vn`, favorites, distance XOR location | Notification bell |
-| List card fields (`coverUrl`, host, hearts, avatars, admin names) | Groups / Tournaments tabs |
-| | Booking / Schedule, host `rating` (null until reviews) |
+| `GET /geo/vn`, favorites, distance XOR location | Notification bell (BE: inbox + match cancel) |
+| List card fields (`coverUrl`, host + rating, hearts, avatars, admin names) | Groups / Tournaments tabs |
+| | Booking / Schedule |
 
 Other Matches screens (detail `100:401`, Join `100:551`, host profile `432:1211`,
 filter `87:1903`) — BE endpoints exist; see spot-backend CLAUDE **Figma** table.
@@ -300,9 +303,9 @@ Full detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Mana
 | 1 | **Entry** | — | Homepage FAB → “Manage Matches”; bottom nav **Matches** = Homepage browse (`95:2675`), **not** this screen unless product changes IA |
 | 2 | **Tabs** | `active` \| `completed` on **`GET /matches/mine`**; joiner tracking on **`GET /matches/my-join-requests`** | 3 segmented tabs: **Active**, **Completed**, **Join Requests** |
 | 3 | **Active** | Host: own kèo `OPEN`/`FULL` future. Participant: join **`ACCEPTED`** only — **`PENDING` never here** | Reuse Homepage card (`95:2417`); badge `HOST` / `JOINED` from `myRole` |
-| 4 | **Completed** | Host: cancelled/ended. Participant: **`KICKED`** or **ACCEPTED** + kèo ended/cancelled | Same card reuse |
-| 5 | **Join Requests tab** | **`GET /matches/my-join-requests`** — caller’s **`PENDING`** + **`REJECTED`** only | Joiner **theo dõi** đơn; tap → `GET /matches/:id`. **Not for host approve** |
-| 6 | **Host approve** | Per kèo: **`GET /matches/:id/requests`** → accept/reject on **Match detail** (`100:401` host view — **no dedicated Figma frame yet**) | Active → tap host card → detail → waiting list |
+| 4 | **Completed** | Chỉ kèo **đủ người** + **hết giờ** + không cancel + participant `ACCEPTED`. **Không** gồm host cancel, thiếu người, kicked — xem lại qua detail + notify. `summary` + `POST /matches/:id/review` khi reviewable | Same card reuse + View Summary |
+| 5 | **Join Requests tab** | **`GET /matches/my-join-requests`** — `pendingCount`, `?status=`, caller’s **`PENDING`** + **`REJECTED`**; `DELETE /matches/:id/join` hủy PENDING | Joiner **theo dõi** đơn; tap → `GET /matches/:id`. **Not for host approve** |
+| 6 | **Host approve** | Per kèo: **`GET /matches/:id/requests`** (avatar, skill, shareAmount, phones) → accept/reject on **Match detail** | Active → tap host card → detail → Manage Squad |
 | 7 | **Host chips (Active)** | `pendingRequestCount` (PENDING waiting), `status=FULL` | Chip **“N chờ duyệt”** when `myRole=HOST` + `pendingRequestCount>0` + `joinMode=APPROVAL`; chip **“Đủ người”** when `FULL` |
 | 8 | **Homepage dedupe** | **`GET /matches`** hides kèo caller hosts + `PENDING`/`ACCEPTED`/`KICKED` requests; **`REJECTED` shows again** (re-join) | Avoid same kèo on feed + Manage; detail still via Manage / deep link |
 | 9 | **Empty state** | — | Figma `101:98` only empty Active; filled list = reuse cards + chips (no separate frame) |

@@ -14,4 +14,17 @@ describe('myJoinRequestsQuerySchema', () => {
     assert.equal(parsed.limit, 10);
     assert.equal(parsed.offset, 5);
   });
+
+  it('accepts status filter', () => {
+    const pending = myJoinRequestsQuerySchema.parse({ status: 'PENDING' });
+    assert.equal(pending.status, 'PENDING');
+    const rejected = myJoinRequestsQuerySchema.parse({ status: 'REJECTED' });
+    assert.equal(rejected.status, 'REJECTED');
+  });
+
+  it('rejects invalid status', () => {
+    assert.throws(() =>
+      myJoinRequestsQuerySchema.parse({ status: 'ACCEPTED' }),
+    );
+  });
 });
