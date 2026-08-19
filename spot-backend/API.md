@@ -1,18 +1,18 @@
 # SPOT Backend — API Reference
 
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **notifications**, **reviews**, **schedule read**. Booking CRUD / payment chưa có API đầy đủ.
+Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups (G0–G5)**, **notifications**, **reviews**, **schedule read**. Booking CRUD / payment chưa có API đầy đủ.
 
 | | |
 | :--- | :--- |
 | Base URL (local) | `http://localhost:3000` |
 | Content-Type | `application/json` |
 | Auth hiện tại | Access JWT trên protected routes (`Authorization: Bearer …`); refresh qua `POST /auth/refresh` |
-| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/matches`↔`/api/matches`, `/geo`↔`/api/geo`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
+| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/matches`↔`/api/matches`, `/groups`↔`/api/groups`, `/geo`↔`/api/geo`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
 
 **Khuyến nghị FE:** dùng prefix `/api/…`.
 
-### Changelog bảo trì (Aug 2026 — Manage Matches P0–P3)
+### Changelog bảo trì (Aug 2026 — Manage Matches P0–P3 + Groups G0–G5)
 
 | Batch | API / hành vi | Migration / worker |
 | :--- | :--- | :--- |
@@ -20,8 +20,12 @@ Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **notifi
 | **P1 Manage Squad** | `GET /matches/:id/requests` + `participants[]`: `avatarUrl`, `skill`, `shareAmount`, `paymentStatus`, phones; `DELETE /matches/:id/join` | — |
 | **P2 Requests badge** | `GET /matches/my-join-requests`: `pendingCount`, `?status=PENDING\|REJECTED`, `match.hostAvatarUrl`; host `skill` trong squad | — |
 | **P3 Review host** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `joinedMatches` + live `rating`/`reviewCount` trên profile | `009_schema_match_host_reviews.sql` |
+| **Groups G0–G1** | `POST/GET /groups`, detail, join/cancel, mine/favorites, kick/transfer/leave/delete | `010_schema_groups.sql` |
+| **Groups G2–G3** | `PATCH /groups/:id` (+ courts replace, `joinMode`→`AUTO` flush); members, schedule matrix, gallery CRUD | — |
+| **Groups G4** | Docs + `npm run smoke:groups` | — |
+| **Groups G5** | Inbox: `GROUP_JOIN_REQUEST`, `GROUP_APPROVED`, `GROUP_REJECTED`, `GROUP_KICKED`, `GROUP_ADMIN_TRANSFERRED` | `011_notification_group_types.sql` |
 
-Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì**. Figma map: Manage `101:98`, Active `746:2`, Squad `749:508`, Completed `751:740`, Requests `751:860`, Profile `432:1211`.
+Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì** + **Groups (hội)**. Figma kèo: Manage `101:98`. Figma groups: Manage `101:2`, detail `810:*`.
 
 ---
 
@@ -34,13 +38,14 @@ Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì**. Fig
 5. [System endpoints](#5-system-endpoints)
 6. [Auth endpoints](#6-auth-endpoints)
 7. [Matchmaking endpoints](#7-matchmaking-endpoints)
-8. [Users / Profile endpoints](#8-users--profile-endpoints)
-9. [Notifications endpoints](#9-notifications-endpoints)
-10. [Reviews endpoints](#10-reviews-endpoints)
-11. [JWT & FE integration](#11-jwt--fe-integration)
-12. [Checklist test](#12-checklist-test)
-13. [Smoke scripts](#13-smoke-scripts)
-14. [Chưa có / sắp làm](#14-chưa-có--sắp-làm)
+8. [Groups endpoints](#8-groups-endpoints)
+9. [Users / Profile endpoints](#9-users--profile-endpoints)
+10. [Notifications endpoints](#10-notifications-endpoints)
+11. [Reviews endpoints](#11-reviews-endpoints)
+12. [JWT & FE integration](#12-jwt--fe-integration)
+13. [Checklist test](#13-checklist-test)
+14. [Smoke scripts](#14-smoke-scripts)
+15. [Chưa có / sắp làm](#15-chưa-có--sắp-làm)
 
 ---
 
@@ -278,6 +283,31 @@ POST   /matches/dev/process-expired                 dev only — expiry tick
 POST   /matches/:id/review                         participant — rate host
 POST|DELETE /matches/:id/favorite
 ```
+
+### G. Groups (hội) — G0–G5
+
+```
+POST /groups              Bearer PLAYER — courts + recurringSlots + joinMode
+GET  /groups              browse (search, province/city, distance, suggestions[])
+GET  /groups/:id          detail — recurringSlots, myRole, memberCount
+POST /groups/:id/join     AUTO → member ngay (+memberCount); APPROVAL → PENDING (memberCount không đổi)
+DELETE /groups/:id/join   hủy PENDING
+GET  /groups/:id/requests admin — PENDING only
+POST /groups/:id/requests/:requestId/accept|reject
+POST /groups/:id/members/:userId/kick|transfer-admin
+POST /groups/:id/leave
+DELETE /groups/:id        admin delete
+GET  /groups/mine?tab=...
+GET  /groups/my-join-requests
+PATCH /groups/:id         admin — joinMode→AUTO flush pending (+memberCount từng người)
+GET  /groups/:id/members?search=
+GET  /groups/:id/schedule?date=YYYY-MM-DD
+GET|POST|DELETE /groups/:id/gallery
+POST|DELETE /groups/:id/favorite
+GET  /notifications       verify GROUP_* types sau join/approve/reject/kick/transfer
+```
+
+**`memberCount` (đã chốt):** admin + **accepted** members; **PENDING không tính**. Tạo group = `1`. Kick/leave = `-1`. Reject/hủy PENDING = không đổi. Skill join **ngoài range → `400`** (hard gate, khác kèo).
 
 ---
 
@@ -1034,7 +1064,258 @@ Host. PENDING → REJECTED. Status `CANCELLED` (hết chiếm sân). Notify join
 
 ---
 
-## 8. Users / Profile endpoints
+## 8. Groups endpoints
+
+Base: `/groups` hoặc `/api/groups`. Mọi route cần Bearer.  
+`POST /groups`, `POST /groups/:id/join`, `DELETE /groups/:id/join`, `POST /groups/:id/leave`, `DELETE /groups/:id` thêm `requireRole('PLAYER')`.  
+Route tĩnh (`/mine`, `/my-join-requests`) **trước** `GET /:id`.
+
+Product lock: [`docs/GROUP_PLAN.md`](./GROUP_PLAN.md). Schema: `010_schema_groups.sql` (`schema_groups`).
+
+**API map**
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `POST` | `/groups` | Create (caller = admin); `?sport=` |
+| `GET` | `/groups` | Browse + search/filters |
+| `GET` | `/groups/mine` | `?tab=managed\|joined` + section |
+| `GET` | `/groups/my-join-requests` | Joiner outbound; `?status=` |
+| `GET` | `/groups/:id` | Detail About |
+| `PATCH` | `/groups/:id` | Admin edit; joinMode→AUTO flush pending |
+| `DELETE` | `/groups/:id` | Admin disband |
+| `POST` | `/groups/:id/join` | Joiner (`PLAYER`) |
+| `DELETE` | `/groups/:id/join` | Cancel PENDING |
+| `POST` | `/groups/:id/leave` | Member leave |
+| `GET` | `/groups/:id/requests` | Admin pending |
+| `POST` | `/groups/:id/requests/:requestId/accept` | Admin |
+| `POST` | `/groups/:id/requests/:requestId/reject` | Admin |
+| `POST` | `/groups/:id/members/:userId/kick` | Admin |
+| `POST` | `/groups/:id/members/:userId/transfer-admin` | Admin transfer |
+| `POST` / `DELETE` | `/groups/:id/favorite` | Heart |
+| `GET` | `/groups/:id/members` | Members tab + `?search=` |
+| `GET` | `/groups/:id/schedule` | `?date=YYYY-MM-DD` matrix |
+| `GET` | `/groups/:id/gallery` | Paginated list |
+| `POST` | `/groups/:id/gallery` | Admin add URL |
+| `DELETE` | `/groups/:id/gallery/:imageId` | Admin delete |
+
+---
+
+### 8.1 `POST /groups`
+
+Tạo hội/club. Caller = admin. `sport` từ Homepage tab (query `?sport=` hoặc body).
+
+**Query (optional):** `sport=FOOTBALL|BADMINTON`
+
+**Body**
+
+| Field | Type | Required | Notes |
+| :--- | :--- | :--- | :--- |
+| `name` | string | ✓ | GROUP NAME, ≤ 150 |
+| `title` | string | ✓ | Tagline, ≤ 150 |
+| `description` | string | | ≤ 5000 |
+| `joinMode` | string | ✓ | `AUTO` \| `APPROVAL` |
+| `allLevels` | boolean | | default `false` |
+| `skillMin` / `skillMax` | string | nếu không `allLevels` | Cùng sport |
+| `venueName`, `venueAddress` | string | ✓ | |
+| `province`, `city` | string | ✓ | Pre-2025; `GET /geo/vn` |
+| `latitude` / `longitude` | number | | Optional, gửi cặp |
+| `logoUrl`, `coverUrl`, `zaloUrl` | string | | http(s) URL |
+| `courts` | `{ name }[]` | ✓ | ≥ 1, tên không trùng |
+| `recurringSlots` | object[] | ✓ | `dayOfWeek` 1=Mon…7=Sun; `startsAt` HH:mm (step 30 phút); `durationMinutes`; `courtName` |
+
+**Success `201`:** `{ "message": "Group created", "group": { …, myRole: "ADMIN", memberCount: 1, courts[], recurringSlots[] } }`
+
+### 8.2 `GET /groups`
+
+Browse + search. Ẩn group caller đã là member hoặc join request `PENDING`/`KICKED`. **`REJECTED` hiện lại**.
+
+**Query:** `sport`, `skill` (cần `sport`), `location` (fuzzy `name`/venue/address + `suggestions[]` max 5), `province`/`city`, `latitude`+`longitude`+`radiusKm` (1–20, XOR `location`), `favorited=true`, `limit` (default 20), `offset`.
+
+**Success `200`:** `{ total, limit, offset, groups[], suggestions[] }`. Suggestion `kind`: `name` \| `venueName` \| `venueAddress`.
+
+### 8.3 `GET /groups/:id`
+
+Detail tab About (+ config schedule).
+
+**Success `200`:** `{ group }` — `recurringSlots[]`, `zaloUrl`, `myRole`, `isFavorited`, `admin`, `memberAvatars`, `memberCount`.
+
+**Errors:** `400` Invalid group id · `401` · `404`
+
+### 8.4 `POST /groups/:id/join`
+
+PLAYER. Body có thể `{}`.
+
+| Field | Notes |
+| :--- | :--- |
+| `message` | ≤ 500 |
+
+Skill **ngoài range → `400`** (hard gate, khác kèo). Không tạo request nếu fail skill.
+
+**`memberCount` — khi nào thay đổi:**
+
+| Sự kiện | `memberCount` |
+| :--- | :--- |
+| `POST /groups` (tạo) | `1` (admin) |
+| Join `AUTO` thành công | `+1` ngay |
+| Join `APPROVAL` (PENDING) | **không đổi** |
+| Accept request | `+1` |
+| Reject / hủy PENDING | không đổi |
+| `PATCH joinMode`→`AUTO` flush | `+N` (mỗi pending chưa là member) |
+| Kick / member leave | `-1` |
+| Transfer admin | không đổi |
+
+`AUTO`: thêm `group_members`, `memberCount++`. `APPROVAL`: `PENDING`, chưa tăng member.
+
+**Success `201`:** `{ message, request, group }`
+
+**Errors:** `400` skill mismatch / already member (via membership) · `403` kicked / not PLAYER · `409` đã PENDING / đã member
+
+### 8.4b `DELETE /groups/:id/join`
+
+Joiner hủy request **`PENDING`** (xóa row).
+
+**Success `200`:** `{ message: "Join request cancelled", groupId, requestId }`
+
+**Errors:** `400` No pending join request · `404` group not found
+
+### 8.5 `GET /groups/:id/requests`
+
+Admin, **PENDING only**. Mỗi request: `avatarUrl`, `skill` (sport group).
+
+**Success `200`:** `{ groupId, total, requests[] }` · `403` nếu không phải admin
+
+### 8.6 / 8.7 Accept · reject
+
+`POST /groups/:id/requests/:requestId/accept` — chỉ `PENDING`; skill joiner phải trong range; thêm `group_members`, `memberCount++`.  
+`POST /groups/:id/requests/:requestId/reject` — `PENDING` → `REJECTED`; có thể join lại.
+
+### 8.8 `POST /groups/:id/members/:userId/kick`
+
+Admin kick member. Xóa `group_members`, `memberCount--`, join request → `KICKED`. **Bị kick không join lại group đó** (`403`).
+
+**Errors:** `400` Admin cannot be kicked · `403` not admin · `404` member not found
+
+### 8.8b `POST /groups/:id/members/:userId/transfer-admin`
+
+Admin chuyển quyền. Target phải là `MEMBER`. Admin cũ → `MEMBER`; cập nhật `groups.admin_user_id`.
+
+**Success `200`:** `{ message, groupId, adminUserId, group }`
+
+### 8.9 `POST /groups/:id/leave`
+
+Member rời group. **Admin không được leave** — phải transfer hoặc `DELETE /groups/:id`.
+
+**Success `200`:** `{ message: "Left group", groupId }`
+
+### 8.9b `DELETE /groups/:id`
+
+Admin disband group (cascade members, requests, gallery, schedule).
+
+**Success `200`:** `{ message: "Group deleted", groupId }`
+
+### 8.10 `GET /groups/mine`
+
+Manage Groups (Figma `101:2`). Query `tab`, `section`, `limit`, `offset`.
+
+| `tab` | `section` | Response |
+| :--- | :--- | :--- |
+| `managed` (default) | `groups` (default) | `groups[]` admin tạo + `pendingRequestCount` |
+| `managed` | `pending-requests` | `requests[]` inbound (all admin groups) |
+| `joined` | `groups` | `groups[]` where `myRole=MEMBER` |
+| `joined` | `join-requests` | Cùng shape `my-join-requests` |
+
+**Success `200`:** `{ tab, section, total, limit, offset, groups[] \| requests[] }`
+
+### 8.10b `GET /groups/my-join-requests`
+
+Tab Join Requests (joiner). Mặc định `PENDING` + `REJECTED`.
+
+**Query:** `limit`, `offset`, `status?` (`PENDING` \| `REJECTED`).
+
+**Success `200`:** `{ total, pendingCount, limit, offset, requests[] }` — mỗi item có nested `group` (name, title, sport, admin avatar…).
+
+### 8.11 Favorite
+
+`POST /groups/:id/favorite` · `DELETE /groups/:id/favorite`. List/detail có `isFavorited`.
+
+### 8.12 `PATCH /groups/:id`
+
+Admin chỉnh sửa mọi field (partial). `requireRole('PLAYER')`.
+
+**Body (≥1 field):** cùng shape với create (trừ `sport` optional); `courts` replace toàn bộ — xóa slots cũ; nếu không gửi `recurringSlots` thì schedule trống. Gửi `recurringSlots` bắt buộc kèm `courts`.
+
+**joinMode → `AUTO`:** nếu còn request `PENDING` → auto-accept tất cả (thêm member, `memberCount++`).
+
+**Success `200`:** `{ message: "Group updated", group }`
+
+**Errors:** `400` validation · `403` not admin · `404`
+
+### 8.13 `GET /groups/:id/members`
+
+Members tab. Paginated + optional `search` (full name fuzzy).
+
+**Query:** `search?`, `limit` (default 20, max 50), `offset`
+
+**Success `200`:** `{ groupId, total, limit, offset, members[] }` — mỗi member: `userId`, `fullName`, `avatarUrl`, `role`, `isAdmin`, `skill`, `joinedAt`
+
+### 8.14 `GET /groups/:id/schedule`
+
+Schedule tab matrix. **Query bắt buộc:** `date=YYYY-MM-DD`
+
+**Success `200`:** `{ groupId, date, dayOfWeek, courts[] }` — mỗi court có `slots[]` 30 phút (00:00–23:30), `status`: `BOOKED` \| `AVAILABLE`
+
+### 8.15 Gallery
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/groups/:id/gallery` | `limit`, `offset` — paginated |
+| `POST` | `/groups/:id/gallery` | Admin; body `{ imageUrl }` — max **50**/group |
+| `DELETE` | `/groups/:id/gallery/:imageId` | Admin |
+
+**POST Success `201`:** `{ message, image }` · **GET `200`:** `{ groupId, total, limit, offset, images[] }`
+
+**Errors:** `400` gallery full · `403` not admin · `404`
+
+**Example schedule fragment (`GET /groups/:id/schedule?date=2026-08-23`):**
+
+```json
+{
+  "groupId": 1,
+  "date": "2026-08-23",
+  "dayOfWeek": 7,
+  "courts": [
+    {
+      "courtId": 1,
+      "name": "Court A",
+      "slots": [
+        { "startsAt": "17:00", "durationMinutes": 30, "status": "AVAILABLE" },
+        { "startsAt": "17:30", "durationMinutes": 30, "status": "BOOKED" },
+        { "startsAt": "18:00", "durationMinutes": 30, "status": "BOOKED" }
+      ]
+    }
+  ]
+}
+```
+
+### 8.16 Group notifications (inbox)
+
+Không có endpoint riêng — BE ghi vào `GET /notifications` khi các action group thành công (sau commit). Email **không** gửi (`sendEmail: false`).
+
+| Event | Recipient | `type` | `data` (fragment) |
+| :--- | :--- | :--- | :--- |
+| Join `APPROVAL` | Admin | `GROUP_JOIN_REQUEST` | `{ groupId, groupName, requestId, userId }` |
+| Join `AUTO` | Joiner | `GROUP_APPROVED` | `{ groupId, groupName, sport }` |
+| Accept request | Joiner | `GROUP_APPROVED` | `{ groupId, groupName, sport }` |
+| Reject request | Joiner | `GROUP_REJECTED` | `{ groupId, groupName, sport }` |
+| Kick member | Kicked user | `GROUP_KICKED` | `{ groupId, groupName, sport }` |
+| Transfer admin | New admin | `GROUP_ADMIN_TRANSFERRED` | `{ groupId, groupName, previousAdminUserId }` |
+| `PATCH joinMode`→`AUTO` flush pending | Each flushed joiner | `GROUP_APPROVED` | `{ groupId, groupName, sport }` |
+
+Migration: `011_notification_group_types.sql`. Chi tiết: [`GROUP_PLAN.md`](./GROUP_PLAN.md) §2.
+
+---
+
+## 9. Users / Profile endpoints
 
 Profile Hub: identity trên `schema_auth.users`, display/prefs trên
 `schema_auth.user_profiles` (JOIN). JSON `user` giữ nguyên cho FE.  
@@ -1058,11 +1339,11 @@ Mọi route dưới đây cũng có alias `/api/users/*`. Cần `Authorization: 
 
 **PATCH** cho phép `fullName`, `gender`, `avatarUrl`, `language`, `appearance`, `pushNotificationsEnabled`, `locationServicesEnabled`. Gửi `email` / `phone` → `400` (strict Zod). Đổi email/phone bắt buộc qua request → confirm OTP (FR-1.4).
 
-### 8.1 `GET /users/me`
+### 9.1 `GET /users/me`
 
 Giống `GET /auth/me`. `user` gồm prefs defaults: `language: "en"`, `appearance: "light"`, toggles `true`, `avatarUrl: null`.
 
-### 8.1b `GET /users/me/profile` (Main Profile)
+### 9.1b `GET /users/me/profile` (Main Profile)
 
 Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ bookings/matches (không denormalize, không Redis trong MVP).
 
@@ -1090,7 +1371,7 @@ Header Main Profile: cùng `user` như `/users/me` + `stats` aggregate từ book
 | `reviewsCount` / `avgRating` | pickup kèo `match_host_reviews` where user is host (+ venue reviews later) |
 | `joinedAt` | `users.created_at` |
 
-### 8.2 `PATCH /users/me`   
+### 9.2 `PATCH /users/me`   
 
 **Body** (ít nhất một field)
 
@@ -1122,13 +1403,13 @@ curl -s -X PATCH http://localhost:3000/users/me \
   -d '{"fullName":"Nguyen Van B","gender":"female","language":"vi","appearance":"dark"}'
 ```
 
-### 8.2b `POST /users/me/password` (Change Password)
+### 9.2b `POST /users/me/password` (Change Password)
 
 **Body:** `currentPassword`, `newPassword`, `confirmPassword` (rule giống register).
 
 **Success `200`:** `{ "message": "Password updated successfully" }`
 
-### 8.2c `POST /users/me/avatar`
+### 9.2c `POST /users/me/avatar`
 
 Multipart field **`avatar`** (jpeg/png/webp/gif, ≤2MB). Lưu `uploads/avatars/`, URL qua `/uploads/avatars/*`. Set `PUBLIC_BASE_URL` cho device LAN.
 
@@ -1138,7 +1419,7 @@ curl -s -X POST http://localhost:3000/users/me/avatar \
   -F "avatar=@./photo.jpg"
 ```
 
-### 8.2d `GET/PATCH /users/me/preferences` (Settings)
+### 9.2d `GET/PATCH /users/me/preferences` (Settings)
 
 Preference + Layout (Figma Settings). Data trên `user_profiles`; view `schema_auth.user_prefs`. Sync đa thiết bị = cùng row DB.
 
@@ -1148,21 +1429,21 @@ Preference + Layout (Figma Settings). Data trên `user_profiles`; view `schema_a
 
 **PATCH `200`:** `{ "message": "Preferences updated successfully", "preferences": { ... } }`
 
-### 8.3 Đổi email (OTP)
+### 9.3 Đổi email (OTP)
 
 1. `POST /users/me/email/request` `{ "newEmail": "new@example.com" }`
 2. `POST /users/me/email/confirm` `{ "newEmail": "new@example.com", "otp": "123456" }`
 
 OTP gửi tới **email mới**. OTP row dùng `purpose = CHANGE_EMAIL:{sha256(newEmail)[:32]}` để gắn đúng địa chỉ. Trùng email khác user → `409`. Email giống hiện tại → `400`. OTP sai / hết hạn giống auth (`400` / `429`).
 
-### 8.4 Đổi phone (OTP)
+### 9.4 Đổi phone (OTP)
 
 1. `POST /users/me/phone/request` `{ "newPhone": "0901234567" }`
 2. `POST /users/me/phone/confirm` `{ "newPhone": "0901234567", "otp": "123456" }`
 
 OTP gửi tới **email hiện tại** (chưa có SMS). Purpose: `CHANGE_PHONE:{newPhone}`. Phone VN 10 số (cùng rule register).
 
-### 8.5 `GET /users/me/schedule` (View Schedule)
+### 9.5 `GET /users/me/schedule` (View Schedule)
 
 Lịch cá nhân: booking của player + social match (host hoặc participant `APPROVED`).  
 Join `schema_booking` + `schema_social` + `schema_venue`. Timezone lịch: **`Asia/Bangkok`**.
@@ -1222,7 +1503,7 @@ curl -s "http://localhost:3000/users/me/schedule?type=all" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-### 8.6 `POST /users/me/schedule/dev/seed` (dev only)
+### 9.6 `POST /users/me/schedule/dev/seed` (dev only)
 
 Tạo venue + field + booking (+ match nếu `includeMatch`, default `true`) gắn user hiện tại. Không có trong production.
 
@@ -1235,7 +1516,7 @@ curl -s -X POST http://localhost:3000/users/me/schedule/dev/seed \
 
 ---
 
-## 9. Notifications endpoints
+## 10. Notifications endpoints
 
 Inbox in-app + badge unread + mark read (SPOT-153/154). Schema: `schema_notification`.  
 Alias `/api/notifications/*`. Tất cả route cần Bearer access.
@@ -1249,8 +1530,9 @@ Alias `/api/notifications/*`. Tất cả route cần Bearer access.
 | `POST` | `/notifications/dev/seed` | Dev only — tạo inbox (+ optional `dueReminderNow` / schedule) |
 | `POST` | `/notifications/dev/process-due` | Dev only — chạy một tick reminder worker |
 
-Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `MATCH_CANCELLED` \| `MATCH_EXPIRED_UNDERFILLED` \| `SYSTEM`.  
-Match cancel/expiry: `MATCH_CANCELLED` với `data.reason` = `HOST_CANCEL` \| `EXPIRED_UNDERFILLED` (host cancel không notify chính host).
+Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `MATCH_CANCELLED` \| `MATCH_EXPIRED_UNDERFILLED` \| `GROUP_JOIN_REQUEST` \| `GROUP_APPROVED` \| `GROUP_REJECTED` \| `GROUP_KICKED` \| `GROUP_ADMIN_TRANSFERRED` \| `SYSTEM`.  
+Match cancel/expiry: `MATCH_CANCELLED` với `data.reason` = `HOST_CANCEL` \| `EXPIRED_UNDERFILLED` (host cancel không notify chính host).  
+Group join/manage: xem [§8.16 Group notifications](#816-group-notifications-inbox).
 Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`. Match expiry: `npm run worker:match-expiry`.  
 Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
 
@@ -1261,7 +1543,7 @@ curl -s http://localhost:3000/notifications/unread-count \
 
 ---
 
-## 10. Reviews endpoints
+## 11. Reviews endpoints
 
 Đánh giá sân sau booking (SPOT-165/166). Schema: `schema_review` + cột `avg_rating` / `rating_count` trên `schema_venue.venues`.  
 Alias `/api/reviews/*`. Cần Bearer access.
@@ -1289,7 +1571,7 @@ Alias `/api/reviews/*`. Cần Bearer access.
 - Reply: chỉ `venues.owner_id ===` user hiện tại; 1 reply / review
 - Sau create: cập nhật `venues.avg_rating` / `rating_count`, invalidate Redis cache
 
-### 10.1 `POST /reviews`
+### 11.1 `POST /reviews`
 
 **Body**
 
@@ -1325,7 +1607,7 @@ Alias `/api/reviews/*`. Cần Bearer access.
 
 **Errors:** `400` (chưa COMPLETED / validation), `401`, `404` booking, `409` đã review, `429` spam rate.
 
-### 10.2 `POST /reviews/:id/reply`
+### 11.2 `POST /reviews/:id/reply`
 
 ```json
 { "replyText": "Thanks for your feedback!" }
@@ -1334,7 +1616,7 @@ Alias `/api/reviews/*`. Cần Bearer access.
 **Success `201`** → `{ review, reply }`.  
 **Errors:** `403` không phải owner, `404`, `409` đã reply.
 
-### 10.3 `GET /reviews/venues/:venueId/rating`
+### 11.3 `GET /reviews/venues/:venueId/rating`
 
 ```json
 { "venueId": 1, "avgRating": 5, "ratingCount": 1, "source": "db" }
@@ -1351,7 +1633,7 @@ curl -s -X POST http://localhost:3000/reviews \
 
 ---
 
-## 11. JWT & FE integration
+## 12. JWT & FE integration
 
 ### Claims
 
@@ -1405,9 +1687,9 @@ api.interceptors.request.use((config) => {
 
 `GET /users/:id` dùng shape **host profile** (6.10): không `email`/`phoneNumber`/`role`/`status`/`gender`; có `matchCount`, `joinedMatches`, `rating`/`reviewCount` live từ pickup kèo reviews.
 
-## 12. Checklist test
+## 13. Checklist test
 
-Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth** / **Matches** / **Users** / **Notifications** / **Reviews**.
+Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Auth** / **Matches** / **Groups** / **Users** / **Notifications** / **Reviews**.
 
 ### Happy path — PLAYER
 
@@ -1453,6 +1735,26 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | 12 | `PATCH /matches/:id` trước giờ | `200` |
 | 13 | `POST /matches/:id/cancel` | `CANCELLED` + notify joiners |
 
+### Happy path — Groups (hội)
+
+Cần ≥ 3 PLAYER (admin + 2 joiner). Chạy `npm run migrate` (010 + 011) trước.
+
+| # | Request | Expect |
+| :--- | :--- | :--- |
+| 1 | `POST /groups` `joinMode: APPROVAL` | `201`, `memberCount: 1`, `myRole: ADMIN` |
+| 2 | `GET /groups` (joiner) | thấy group; sau join PENDING — **ẩn** khỏi browse |
+| 3 | `POST /groups/:id/join` (joiner) | `201` PENDING; **`memberCount` detail vẫn 1** |
+| 4 | `GET /groups/:id/requests` (admin) | PENDING + avatar/skill |
+| 5 | accept | `memberCount: 2`; joiner `myRole: MEMBER` |
+| 6 | Tạo group `joinMode: AUTO` | joiner join → `memberCount` +1 **ngay** |
+| 7 | `PATCH /groups/:id` `joinMode: AUTO` (còn pending) | flush → pending thành member, count tăng |
+| 8 | `GET /groups/:id/members?search=` | paginated members |
+| 9 | `GET /groups/:id/schedule?date=` | matrix 30 phút BOOKED/AVAILABLE |
+| 10 | `POST /groups/:id/gallery` + `GET` + `DELETE` | max 50 |
+| 11 | `GET /groups/mine` / `my-join-requests` | tab/section đúng |
+| 12 | kick / transfer-admin / leave / delete | status + `memberCount` đúng |
+| 13 | `GET /notifications` | types `GROUP_*` sau join/approve/reject/kick/transfer |
+
 ### Negative / edge
 
 | Case | Expect |
@@ -1482,6 +1784,11 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 | Join lại khi PENDING/ACCEPTED | `409` |
 | Host join kèo mình | `400` |
 | `GET /matches` + `location` cùng distance | `400` |
+| Join group skill ngoài range | `400` (hard gate) |
+| Join group sau kick | `403` |
+| Join group khi đã PENDING/member | `409` |
+| Gallery > 50 ảnh | `400` |
+| Non-admin PATCH / kick / delete group | `403` |
 
 ### Forgot password path
 
@@ -1494,7 +1801,7 @@ Dùng Postman / Thunder Client / Insomnia. Collection gợi ý theo folder **Aut
 
 ---
 
-## 13. Smoke scripts
+## 14. Smoke scripts
 
 Chạy khi server đang `npm run dev` và (nên) `OTP_DEBUG=true`:
 
@@ -1503,6 +1810,7 @@ npm run smoke:otp      # register → verify
 npm run smoke:login    # register → role → verify → login → me → refresh
 npm run smoke:profile  # login → GET/PATCH me → email/phone OTP change
 npm run smoke:matches  # host / join AUTO+APPROVAL / approve / kick / mine / cancel
+npm run smoke:groups   # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
 npm run smoke:notifications  # inbox + mark read + due reminder
 npm run smoke:schedule       # seed schedule → GET /users/me/schedule
 npm run smoke:reviews        # seed COMPLETED booking → review → reply
@@ -1520,7 +1828,7 @@ npm test
 
 ---
 
-## 14. Chưa có / sắp làm
+## 15. Chưa có / sắp làm
 
 | Hạng mục | Status |
 | :--- | :--- |
@@ -1542,6 +1850,7 @@ npm test
 | Avatar file upload (S3) | Chưa (URL + local `POST /users/me/avatar` đã có) |
 | FCM / device tokens | Chưa |
 | Booking create/pay/cancel, payment gateway | Chưa (schedule read + reviews only) |
+| **Groups G0–G5** — full groups + inbox notifications | Done (`010`, `011`) — [`GROUP_PLAN.md`](./GROUP_PLAN.md) |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 

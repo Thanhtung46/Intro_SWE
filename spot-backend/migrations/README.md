@@ -15,6 +15,7 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `007_schema_venue_images.sql` | `venue_images` — venue photo gallery (URL-only, FE uploads to storage) | 001, 004 |
 | `008_notification_match_types.sql` | extend `notifications.type` — `MATCH_CANCELLED`, `MATCH_EXPIRED_UNDERFILLED` | 003 |
 | `009_schema_match_host_reviews.sql` | pickup kèo host reviews (`schema_review.match_host_reviews`) | 001, 006 |
+| `010_schema_groups.sql` | sport groups/clubs (`schema_groups`) | 001, 002, 006 (search fold) |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

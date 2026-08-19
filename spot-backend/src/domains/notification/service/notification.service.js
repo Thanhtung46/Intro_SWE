@@ -103,6 +103,11 @@ export async function createNotification({
         type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
         type === NOTIFICATION_TYPES.MATCH_EXPIRED_UNDERFILLED ||
         type === NOTIFICATION_TYPES.MATCH_CANCELLED ||
+        type === NOTIFICATION_TYPES.GROUP_JOIN_REQUEST ||
+        type === NOTIFICATION_TYPES.GROUP_APPROVED ||
+        type === NOTIFICATION_TYPES.GROUP_REJECTED ||
+        type === NOTIFICATION_TYPES.GROUP_KICKED ||
+        type === NOTIFICATION_TYPES.GROUP_ADMIN_TRANSFERRED ||
         type === NOTIFICATION_TYPES.SYSTEM) &&
       (!isReminder || (await shouldSendReminderEmail(user)));
 
