@@ -1,15 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ChangeContactModal } from '@/components/ChangeContactModal';
 import { FormField } from '@/components/FormField';
 import { SelectField } from '@/components/SelectField';
 import { genderOptions } from '@/schemas/registerSchema';
@@ -17,15 +9,28 @@ import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
-import { getProfile, updateProfile } from '@/services/profileService';
+import { getProfile, updateProfile, updateSkills, SkillsUpdatePayload } from '@/services/profileService';
 
-// Not part of user_profiles per any BE spec/AC — placeholder options for the
-// Figma-required UI only, confirm real values with team/PO later.
-const skillLevelOptions = [
-  { label: 'Beginner', value: 'beginner' },
-  { label: 'Intermediate', value: 'intermediate' },
-  { label: 'Advanced', value: 'advanced' },
-  { label: 'Pro', value: 'pro' },
+const badmintonSkillOptions = [
+  { label: 'Beginner-', value: 'BEGINNER_MINUS' },
+  { label: 'Beginner', value: 'BEGINNER' },
+  { label: 'Beginner+', value: 'BEGINNER_PLUS' },
+  { label: 'Low avg', value: 'LOW_AVERAGE' },
+  { label: 'Avg-', value: 'AVERAGE_MINUS' },
+  { label: 'Avg', value: 'AVERAGE' },
+  { label: 'Avg+', value: 'AVERAGE_PLUS' },
+  { label: 'Fair', value: 'FAIR' },
+  { label: 'Semi-pro', value: 'SEMI_PRO' },
+  { label: 'Pro', value: 'PROFESSIONAL' },
+];
+
+const footballSkillOptions = [
+  { label: 'Learning', value: 'LEARNING' },
+  { label: 'Rec basic', value: 'REC_BASIC' },
+  { label: 'Rec advanced', value: 'REC_ADVANCED' },
+  { label: 'Semi-pro', value: 'SEMI_PRO' },
+  { label: 'Pro', value: 'PROFESSIONAL' },
+  { label: 'Elite', value: 'ELITE' },
 ];
 
 export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
@@ -34,14 +39,27 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const [name, setName] = useState(user?.fullName || '');
   const [nameError, setNameError] = useState<string | undefined>();
   const [gender, setGender] = useState('');
-  const [skillLevel, setSkillLevel] = useState('');
-  const [skillDescription, setSkillDescription] = useState('');
+  const [badmintonSkill, setBadmintonSkill] = useState('');
+  const [footballSkill, setFootballSkill] = useState('');
   const [saving, setSaving] = useState(false);
+  const [changeEmailModalVisible, setChangeEmailModalVisible] = useState(false);
+  const [changePhoneModalVisible, setChangePhoneModalVisible] = useState(false);
+
+  const initialBadmintonSkill = useRef('');
+  const initialFootballSkill = useRef('');
 
   useEffect(() => {
     getProfile().then((result) => {
       if (result.success && result.user?.gender) {
         setGender(result.user.gender);
+      }
+      if (result.success && result.user?.skills?.badminton) {
+        setBadmintonSkill(result.user.skills.badminton);
+        initialBadmintonSkill.current = result.user.skills.badminton;
+      }
+      if (result.success && result.user?.skills?.football) {
+        setFootballSkill(result.user.skills.football);
+        initialFootballSkill.current = result.user.skills.football;
       }
     });
   }, []);
@@ -66,6 +84,18 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
     if (!result.success) {
       showAlert('Error', result.message || 'Something went wrong. Please try again.');
       return;
+    }
+
+    const skillsPayload: SkillsUpdatePayload = {};
+    if (badmintonSkill !== initialBadmintonSkill.current) skillsPayload.badminton = badmintonSkill || null;
+    if (footballSkill !== initialFootballSkill.current) skillsPayload.football = footballSkill || null;
+
+    if (Object.keys(skillsPayload).length > 0) {
+      const skillsResult = await updateSkills(skillsPayload);
+      if (!skillsResult.success) {
+        showAlert('Error', skillsResult.message || 'Failed to update skills. Please try again.');
+        return;
+      }
     }
 
     setUser({ ...user, fullName: result.user?.fullName ?? trimmed });
@@ -131,6 +161,13 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           value={user?.email || ''}
           editable={false}
         />
+        <TouchableOpacity
+          testID="edit-profile-change-email-button"
+          style={styles.changeContactButton}
+          onPress={() => setChangeEmailModalVisible(true)}
+        >
+          <Text style={styles.changeContactText}>Change</Text>
+        </TouchableOpacity>
 
         <FormField
           testID="edit-profile-phone-input"
@@ -139,10 +176,13 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           placeholder="Not set"
           editable={false}
         />
-
-        <Text style={styles.lockedCaption}>
-          Changing email or phone requires OTP verification — coming soon.
-        </Text>
+        <TouchableOpacity
+          testID="edit-profile-change-phone-button"
+          style={styles.changeContactButton}
+          onPress={() => setChangePhoneModalVisible(true)}
+        >
+          <Text style={styles.changeContactText}>Change</Text>
+        </TouchableOpacity>
 
         <SelectField
           label="Gender"
@@ -153,27 +193,20 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
         />
 
         <SelectField
-          label="Skill Level"
+          label="Badminton Skill"
           placeholder="Select skill level"
-          value={skillLevel}
-          onChange={setSkillLevel}
-          options={skillLevelOptions}
+          value={badmintonSkill}
+          onChange={setBadmintonSkill}
+          options={badmintonSkillOptions}
         />
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Skill Description</Text>
-          <TextInput
-            testID="edit-profile-skill-description-input"
-            style={styles.textarea}
-            placeholder="Describe your skill level"
-            placeholderTextColor={colors.placeholder}
-            value={skillDescription}
-            onChangeText={setSkillDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
+        <SelectField
+          label="Football Skill"
+          placeholder="Select skill level"
+          value={footballSkill}
+          onChange={setFootballSkill}
+          options={footballSkillOptions}
+        />
 
         <TouchableOpacity
           testID="edit-profile-change-password"
@@ -184,6 +217,29 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           <Text style={styles.changePasswordText}>Change Password</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <ChangeContactModal
+        visible={changeEmailModalVisible}
+        onClose={() => setChangeEmailModalVisible(false)}
+        type="email"
+        currentValue={user?.email || ''}
+        onSuccess={(updatedUser) => {
+          setUser({ ...user, email: updatedUser.email });
+          setChangeEmailModalVisible(false);
+          showAlert('Success', 'Email updated');
+        }}
+      />
+      <ChangeContactModal
+        visible={changePhoneModalVisible}
+        onClose={() => setChangePhoneModalVisible(false)}
+        type="phone"
+        currentValue={user?.phoneNumber || ''}
+        onSuccess={(updatedUser) => {
+          setUser({ ...user, phoneNumber: updatedUser.phoneNumber });
+          setChangePhoneModalVisible(false);
+          showAlert('Success', 'Phone number updated');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -265,30 +321,15 @@ const styles = StyleSheet.create({
     color: colors.subtitle,
     textAlign: 'center',
   },
-  lockedCaption: {
-    marginTop: -8,
-    marginBottom: 16,
-    fontSize: 12,
-    color: colors.subtitle,
-  },
-  fieldContainer: {
+  changeContactButton: {
+    alignSelf: 'flex-end',
+    marginTop: -10,
     marginBottom: 16,
   },
-  label: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 6,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: colors.white,
-    minHeight: 96,
+  changeContactText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primaryDark,
   },
   changePasswordButton: {
     flexDirection: 'row',

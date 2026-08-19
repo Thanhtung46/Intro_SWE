@@ -4,6 +4,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { OtpInput } from '@/components/OtpInput';
 import { otpSchema } from '@/schemas/otpSchema';
 import { resendOtp, verifyOtp } from '@/services/authService';
+import { useLanguage } from '@/context/LanguageContext';
 import { colors } from '@/constants/colors';
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -38,6 +39,7 @@ export default function OtpScreen({
    */
   mode?: 'verify' | 'collect';
 }) {
+  const { t } = useLanguage();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -110,8 +112,8 @@ export default function OtpScreen({
           <Ionicons name="shield-checkmark" size={28} color={colors.primaryDark} />
         </View>
 
-        <Text style={styles.title}>OTP Verification</Text>
-        <Text style={styles.subtitle}>Enter the 6-digit code sent to your email.</Text>
+        <Text style={styles.title}>{t('otp.title')}</Text>
+        <Text style={styles.subtitle}>{t('otp.subtitle')}</Text>
 
         <OtpInput
           value={otp}
@@ -125,7 +127,8 @@ export default function OtpScreen({
 
         <View style={styles.resendRow}>
           <Text style={styles.resendText}>
-            Resend code in <Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
+            {t('otp.resendPrefix')}
+            <Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
           </Text>
           <TouchableOpacity
             testID="resend-link"
@@ -133,7 +136,7 @@ export default function OtpScreen({
             disabled={cooldown > 0 || resending}
           >
             <Text style={[styles.resendLink, cooldown > 0 && styles.resendLinkDisabled]}>
-              {resending ? 'Resending...' : 'Resend code now'}
+              {resending ? t('otp.resending') : t('otp.resendNow')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -145,13 +148,13 @@ export default function OtpScreen({
           disabled={submitting}
         >
           <Text style={styles.verifyButtonText}>
-            {submitting ? 'Verifying...' : mode === 'collect' ? 'Continue' : 'Verify'}
+            {submitting ? t('otp.verifying') : mode === 'collect' ? t('otp.continueButton') : t('otp.verifyButton')}
           </Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
           <Ionicons name="help-circle-outline" size={16} color={colors.subtitle} />
-          <Text style={styles.footerText}> Need help? Contact us</Text>
+          <Text style={styles.footerText}>{t('otp.helpText')}</Text>
         </View>
       </View>
     </View>

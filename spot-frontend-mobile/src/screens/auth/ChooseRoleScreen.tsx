@@ -7,33 +7,37 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import RoleCard from '@/components/common/RoleCard';
+import { useLanguage } from '@/context/LanguageContext';
+import { TranslationKey } from '@/i18n/translations';
 import type { Role } from '@/types/auth';
 
-const ROLE_OPTIONS: {
+function getRoleOptions(t: (key: TranslationKey) => string): {
   id: Role;
   title: string;
   description: string;
   icon: (color: string) => React.ReactNode;
-}[] = [
-  {
-    id: 'player',
-    title: 'Player',
-    description: 'Find venues, connect with teams, and book matches easily.',
-    icon: (color) => <Ionicons name="football-outline" size={30} color={color} />,
-  },
-  {
-    id: 'owner',
-    title: 'Venue Owner',
-    description: 'Manage bookings, revenue, and optimize facility operations.',
-    icon: (color) => <MaterialCommunityIcons name="stadium-variant" size={30} color={color} />,
-  },
-  {
-    id: 'referee',
-    title: 'Referee',
-    description: 'Receive match assignments, build a reputation, and support the sports community.',
-    icon: (color) => <MaterialCommunityIcons name="whistle-outline" size={30} color={color} />,
-  },
-];
+}[] {
+  return [
+    {
+      id: 'player',
+      title: t('chooseRole.playerTitle'),
+      description: t('chooseRole.playerDescription'),
+      icon: (color) => <Ionicons name="football-outline" size={30} color={color} />,
+    },
+    {
+      id: 'owner',
+      title: t('chooseRole.ownerTitle'),
+      description: t('chooseRole.ownerDescription'),
+      icon: (color) => <MaterialCommunityIcons name="stadium-variant" size={30} color={color} />,
+    },
+    {
+      id: 'referee',
+      title: t('chooseRole.refereeTitle'),
+      description: t('chooseRole.refereeDescription'),
+      icon: (color) => <MaterialCommunityIcons name="whistle-outline" size={30} color={color} />,
+    },
+  ];
+}
 
 type Props = {
   selectedRole: Role | null;
@@ -63,6 +67,8 @@ export default function ChooseRoleScreen({
   submitting,
   error,
 }: Props) {
+  const { t } = useLanguage();
+  const roleOptions = getRoleOptions(t);
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [0, TITLE_FADE_RANGE],
@@ -87,7 +93,7 @@ export default function ChooseRoleScreen({
           style={[styles.headerTitle, { opacity: headerTitleOpacity }]}
           numberOfLines={1}
         >
-          Register - Step 2
+          {t('chooseRole.headerTitle')}
         </Animated.Text>
         <View style={styles.headerSide} />
       </View>
@@ -103,12 +109,12 @@ export default function ChooseRoleScreen({
         <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
         <View style={styles.headingBlock}>
-          <Text style={styles.heading}>Who are you?</Text>
-          <Text style={styles.subheading}>Choose your role on the SPOT system.</Text>
+          <Text style={styles.heading}>{t('chooseRole.heading')}</Text>
+          <Text style={styles.subheading}>{t('chooseRole.subheading')}</Text>
         </View>
 
         <View style={styles.roleGrid}>
-          {ROLE_OPTIONS.map((option) => (
+          {roleOptions.map((option) => (
             <RoleCard
               key={option.id}
               title={option.title}
@@ -130,7 +136,9 @@ export default function ChooseRoleScreen({
           accessibilityRole="button"
           accessibilityLabel="Continue"
         >
-          <Text style={styles.completeButtonText}>{submitting ? 'Saving...' : 'Continue'}</Text>
+          <Text style={styles.completeButtonText}>
+            {submitting ? t('chooseRole.saving') : t('chooseRole.continueButton')}
+          </Text>
         </TouchableOpacity>
       </Animated.ScrollView>
     </SafeAreaView>
