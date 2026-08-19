@@ -13,6 +13,7 @@ import { OtpInput } from '@/components/OtpInput';
 import { PasswordField } from '@/components/PasswordField';
 import { ResetPasswordFieldErrors, resetPasswordSchema } from '@/schemas/resetPasswordSchema';
 import { resetPassword } from '@/services/authService';
+import { useLanguage } from '@/context/LanguageContext';
 import { colors } from '@/constants/colors';
 
 export default function ResetPasswordScreen({
@@ -28,6 +29,7 @@ export default function ResetPasswordScreen({
   onBack: () => void;
   onResetComplete: () => void;
 }) {
+  const { t } = useLanguage();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<ResetPasswordFieldErrors>({});
@@ -78,7 +80,7 @@ export default function ResetPasswordScreen({
         <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Reset Password</Text>
+        <Text style={styles.topBarTitle}>{t('resetPassword.topBarTitle')}</Text>
         <View style={styles.topBarSpacer} />
       </View>
 
@@ -88,14 +90,12 @@ export default function ResetPasswordScreen({
             <Ionicons name="lock-open" size={26} color={colors.primaryDark} />
           </View>
 
-          <Text style={styles.title}>Create New Password</Text>
-          <Text style={styles.subtitle}>
-            Your new password must be different from previous used passwords.
-          </Text>
+          <Text style={styles.title}>{t('resetPassword.title')}</Text>
+          <Text style={styles.subtitle}>{t('resetPassword.subtitle')}</Text>
 
           <PasswordField
-            label="New Password"
-            placeholder="Enter new password"
+            label={t('resetPassword.newPasswordLabel')}
+            placeholder={t('resetPassword.newPasswordPlaceholder')}
             value={newPassword}
             onChangeText={setNewPassword}
             error={errors.newPassword}
@@ -103,8 +103,8 @@ export default function ResetPasswordScreen({
           />
 
           <PasswordField
-            label="Confirm Password"
-            placeholder="Confirm new password"
+            label={t('resetPassword.confirmPasswordLabel')}
+            placeholder={t('resetPassword.confirmPasswordPlaceholder')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             error={errors.confirmPassword}
@@ -120,7 +120,7 @@ export default function ResetPasswordScreen({
             disabled={submitting}
           >
             <Text style={styles.submitButtonText}>
-              {submitting ? 'Updating...' : 'Update Password →'}
+              {submitting ? t('resetPassword.updating') : t('resetPassword.updateButton')}
             </Text>
           </TouchableOpacity>
         </View>

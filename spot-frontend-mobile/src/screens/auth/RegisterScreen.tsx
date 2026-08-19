@@ -16,6 +16,7 @@ import { PasswordField } from '@/components/PasswordField';
 import { SelectField } from '@/components/SelectField';
 import { genderOptions, RegisterFieldErrors, registerSchema } from '@/schemas/registerSchema';
 import { register } from '@/services/authService';
+import { useLanguage } from '@/context/LanguageContext';
 import { colors } from '@/constants/colors';
 
 export default function RegisterScreen({
@@ -25,6 +26,7 @@ export default function RegisterScreen({
   onBack: () => void;
   onRegistered: (email: string) => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -98,13 +100,13 @@ export default function RegisterScreen({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
-        <Text style={styles.title}>Register</Text>
-        <Text style={styles.subtitle}>Enter basic information</Text>
+        <Text style={styles.title}>{t('register.title')}</Text>
+        <Text style={styles.subtitle}>{t('register.subtitle')}</Text>
 
         <FormField
-          label="Name"
+          label={t('register.nameLabel')}
           required
-          placeholder="Enter full name"
+          placeholder={t('register.namePlaceholder')}
           value={name}
           onChangeText={setName}
           error={errors.name}
@@ -112,9 +114,9 @@ export default function RegisterScreen({
         />
 
         <FormField
-          label="Email"
+          label={t('register.emailLabel')}
           required
-          placeholder="Enter your email"
+          placeholder={t('register.emailPlaceholder')}
           value={email}
           onChangeText={setEmail}
           error={errors.email}
@@ -124,8 +126,8 @@ export default function RegisterScreen({
 
         <View style={styles.row}>
           <FormField
-            label="Phone number"
-            placeholder="Phone number"
+            label={t('register.phoneLabel')}
+            placeholder={t('register.phonePlaceholder')}
             value={phone}
             onChangeText={setPhone}
             error={errors.phone}
@@ -133,8 +135,8 @@ export default function RegisterScreen({
             containerStyle={styles.rowItem}
           />
           <SelectField
-            label="Gender"
-            placeholder="Select"
+            label={t('register.genderLabel')}
+            placeholder={t('register.genderPlaceholder')}
             value={gender}
             onChange={setGender}
             options={[...genderOptions]}
@@ -144,18 +146,18 @@ export default function RegisterScreen({
         </View>
 
         <PasswordField
-          label="Password"
+          label={t('register.passwordLabel')}
           required
-          placeholder="Min 8 chars, incl. A-Z, 0-9, symbol"
+          placeholder={t('register.passwordPlaceholder')}
           value={password}
           onChangeText={setPassword}
           error={errors.password}
         />
 
         <PasswordField
-          label="Confirm password"
+          label={t('register.confirmPasswordLabel')}
           required
-          placeholder="Confirm your password"
+          placeholder={t('register.confirmPasswordPlaceholder')}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           error={errors.confirmPassword}
@@ -169,14 +171,16 @@ export default function RegisterScreen({
           onPress={handleRegister}
           disabled={submitting}
         >
-          <Text style={styles.registerButtonText}>{submitting ? 'Registering...' : 'Register'}</Text>
+          <Text style={styles.registerButtonText}>
+            {submitting ? t('register.registering') : t('register.registerButton')}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.loginRow}>
-          <Text style={styles.loginText}>Already have an account? </Text>
+          <Text style={styles.loginText}>{t('register.haveAccount')}</Text>
           <Link href="/auth/login" asChild>
             <TouchableOpacity>
-              <Text style={styles.loginLink}>Login</Text>
+              <Text style={styles.loginLink}>{t('register.loginLink')}</Text>
             </TouchableOpacity>
           </Link>
         </View>

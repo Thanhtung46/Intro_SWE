@@ -13,9 +13,11 @@ import {
 import { FormField } from '@/components/FormField';
 import { ForgotPasswordFieldErrors, forgotPasswordSchema } from '@/schemas/forgotPasswordSchema';
 import { forgotPassword } from '@/services/authService';
+import { useLanguage } from '@/context/LanguageContext';
 import { colors } from '@/constants/colors';
 
 export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (email: string) => void }) {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<ForgotPasswordFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -58,14 +60,12 @@ export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (emai
             <Ionicons name="lock-closed" size={26} color={colors.primaryDark} />
           </View>
 
-          <Text style={styles.title}>Forgot Password?</Text>
-          <Text style={styles.subtitle}>
-            Enter your registered email. We will send an OTP code for recovery.
-          </Text>
+          <Text style={styles.title}>{t('forgotPassword.title')}</Text>
+          <Text style={styles.subtitle}>{t('forgotPassword.subtitle')}</Text>
 
           <FormField
-            label="Email Address"
-            placeholder="username@example.com"
+            label={t('forgotPassword.emailLabel')}
+            placeholder={t('forgotPassword.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             error={errors.email}
@@ -82,12 +82,14 @@ export default function ForgotPasswordScreen({ onCodeSent }: { onCodeSent: (emai
             onPress={handleSubmit}
             disabled={submitting}
           >
-            <Text style={styles.submitButtonText}>{submitting ? 'Sending...' : 'Send OTP Code'}</Text>
+            <Text style={styles.submitButtonText}>
+              {submitting ? t('forgotPassword.sending') : t('forgotPassword.sendButton')}
+            </Text>
           </TouchableOpacity>
 
           <Link href="/auth/login" asChild>
             <TouchableOpacity style={styles.backRow}>
-              <Text style={styles.backLink}>← Back to Login</Text>
+              <Text style={styles.backLink}>{t('forgotPassword.backToLogin')}</Text>
             </TouchableOpacity>
           </Link>
         </View>
