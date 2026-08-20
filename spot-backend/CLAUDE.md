@@ -10,7 +10,7 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 Implemented so far:
 
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/groups`+`/api/groups`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/groups`+`/api/groups`, `/tournaments`+`/api/tournaments`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
 
 ## Status (done vs not)
 
@@ -73,6 +73,26 @@ Implemented so far:
 | Group notifications (G5) | Done — join/approve/reject/kick/transfer/flush → inbox |
 | Smoke | `npm run smoke:groups` |
 
+**Tournaments (giải đấu) — T0–T5 done** (Aug 2026)
+
+| Area | Status |
+| :--- | :--- |
+| Migration `012` / `013` / `014` | Done — `schema_tournaments`, notifications, matches |
+| `POST /tournaments` | Done — create gate (80 completed host + rating ≥ 4.5) |
+| `GET /tournaments`, `GET /tournaments/:id` | Done — browse (hide FULL), detail + `canJoin` |
+| `POST/DELETE /tournaments/:id/join` | Done — captain register / withdraw PENDING |
+| Accept / reject / kick / cancel | Done |
+| `GET /tournaments/mine`, `GET /tournaments/my-join-requests` | Done |
+| `POST/DELETE /tournaments/:id/favorite` | Done |
+| `GET /tournaments/:id/players` | Done — accepted teams + roster (sorted by rank) |
+| `PATCH /tournaments/:id` | Done — organizer edit, winners, playerRanks, ACTIVE lock |
+| `POST /tournaments/:id/complete` | Done — early complete when ACTIVE (+ optional winners) |
+| Lifecycle worker | Done — `npm run worker:tournament-lifecycle` |
+| **T2 Matches** | Done — `GET/POST/PATCH/DELETE /tournaments/:id/matches`, `PATCH .../result` |
+| **T3 Standings** | Done — `GET /tournaments/:id/standings` (PTS + tie-break) |
+| **T4 Completed** | Done — winners, player in-team ranks |
+| **T5 Docs + smoke** | Done — `docs/API.md` §9, `npm run smoke:tournaments` |
+
 **Infra / conventions**
 
 | Area | Status |
@@ -85,11 +105,11 @@ Implemented so far:
 | Auth middleware (`authenticate` / `requireRole`) | Done — use on protected routes; `requireRole(...roles)` after `authenticate` |
 | Refresh-token rotate / Redis JWT blacklist | **Not implemented yet** (refresh re-issues tokens; old refresh still valid until TTL) |
 | Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Not implemented yet** |
-| Other domains | Empty scaffolds: `booking`, `venue`, `payment` (schedule read + reviews partial). **`groups` domain implemented (G0–G5).** |
+| Other domains | Empty scaffolds: `booking`, `venue`, `payment` (schedule read + reviews partial). **`groups` G0–G5 done.** **`tournaments` T0–T5 done.** |
 
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
-Contract: [`docs/API.md`](./docs/API.md) (bản đồng bộ với [`API.md`](./API.md) ở repo root). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md) (kèo), [`docs/GROUP_PLAN.md`](./docs/GROUP_PLAN.md) (groups — locked Aug 2026, **G0–G5 implemented**).
+Contract: [`docs/API.md`](./docs/API.md) (bản đồng bộ với [`API.md`](./API.md) ở repo root). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md) (kèo), [`docs/GROUP_PLAN.md`](./docs/GROUP_PLAN.md) (groups — **G0–G5 implemented**), [`docs/TOURNAMENT_PLAN.md`](./docs/TOURNAMENT_PLAN.md) (tournaments — **T0–T5 implemented** Aug 2026).
 
 ## Changelog bảo trì (agent / dev sau này)
 
@@ -117,6 +137,19 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 | **G4** | `API.md` §8, `CLAUDE.md`, `npm run smoke:groups` | — |
 | **G5** | Inbox notifications on join/manage; migration `011` | `011_notification_group_types.sql` |
 
+**Aug 2026 — Tournaments T0–T5** (Figma browse `880:404`, detail `880:282`, tabs Matches/Standings/Players):
+
+| Batch | Nội dung | Migration / worker |
+| :--- | :--- | :--- |
+| **T0** | Create gate; browse/detail/join/mine/favorites | `012_schema_tournaments.sql` |
+| **T1** | Approve/reject/kick/cancel; notifications; lifecycle worker | `013_notification_tournament_types.sql` |
+| **T2** | Matches CRUD + manual results (football/badminton) | `014_schema_tournament_matches.sql` |
+| **T3** | Standings PTS + tie-break | — |
+| **T4** | PATCH tournament; winners; in-team player ranks; early complete | — |
+| **T5** | `docs/API.md` §9; `npm run smoke:tournaments` | — |
+
+**Tournaments product locks (do not revert):** tách biệt kèo + Groups; **1 giải = 1 hạng mục**; join **APPROVAL-only** (captain); create gate **80 COMPLETED host + rating ≥ 4.5**; **`hostedByLabel = SPOT`**; cancel **before startsAt only**; sau **ACTIVE** lock venue/schedule; winners + in-team ranks **manual** on PATCH.
+
 **Groups product locks (do not revert):** skill **hard gate** on join (unlike kèo warn); `memberCount` = admin + accepted members only (**PENDING không tính** — xem bảng dưới); kicked = terminal `403`; `REJECTED` may rejoin; schedule matrix = visualization of recurring slots only (not venue booking).
 
 **`memberCount` — khi nào tăng/giảm (đã chốt Aug 2026):**
@@ -143,6 +176,10 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 | Tests | `tests/unit/groups/*.test.js`, `tests/unit/notification/notification-types.test.js` |
 | Smoke | `scripts/smoke-groups.js` (`npm run smoke:groups`) |
 | Docs | `docs/GROUP_PLAN.md`, `docs/API.md` §8, `API.md` (root copy), `CLAUDE.md` |
+
+**Aug 2026 — Tournaments T0–T5 (implemented):**
+
+Full contract: [`docs/TOURNAMENT_PLAN.md`](./docs/TOURNAMENT_PLAN.md) + **Tournaments (giải đấu)** below + root [`CLAUDE.md`](../CLAUDE.md). Key locks: 1 giải = 1 format (**immutable after create**); join captain + team name/logo + roster; APPROVAL-only; auto-cancel at `registrationDeadline` if not FULL; create gate 80 completed host kèo + rating ≥ 4.5; football single-leg goals; badminton BO3×15; VND display-only; no Groups link.
 
 **Other implemented (non-group):**
 
@@ -176,6 +213,7 @@ npm run smoke:login    # register → role → verify → login JWT
 npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run smoke:groups   # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
+npm run smoke:tournaments  # eligibility seed / create / join / match / standings / PATCH / complete
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -262,6 +300,7 @@ docs/
 ├── API.md
 ├── MATCHMAKING_PLAN.md
 ├── GROUP_PLAN.md
+├── TOURNAMENT_PLAN.md
 tests/unit/
 ├── auth/*.dto.test.js
 ├── matchmaking/*.dto.test.js
@@ -479,7 +518,8 @@ Product review locked. Do **not** re-open unless FE finds a gap.
 | **Logo → Home / Avatar → Profile** | FE | Nav only — no BE endpoint. |
 | **Sparkles (AI search)** | **Out of scope** | Search is text SQL only. |
 | **Notification bell** | **Done (BE)** | `GET /notifications`, `/unread-count`, mark read; match cancel types `MATCH_CANCELLED` |
-| **Groups / Tournaments tabs** | **Out of scope** | Pickup kèo only. |
+| **Groups tab** | **Out of scope (kèo)** | Implemented under `/groups` — see **Groups (hội)**. |
+| **Tournaments tab** | **Out of scope (kèo)** | Product locked — separate `/tournaments` domain; see **Tournaments (giải đấu)**. |
 | **Booking / Schedule** | **Out of scope** | Free listing, no `booking_id`. |
 | **Host rating on card** | **Done** | `host.rating` + `host.reviewCount` from `match_host_reviews`; `null` until có review |
 | **FAB Host / Manage** | **Done (BE)** | Create = `POST /matches` / bulk. Manage = **Manage Matches 101:98** section. |
@@ -721,7 +761,7 @@ Leftover rows in `schema_migrations` — do not delete. Do not `INSERT` name/gen
 `npm run apply:homepage-card`.
 
 **Out of scope (do not add in this domain):** waitlist, Zalo, real MoMo/VNPay,
-`booking_id`, Groups/Tournaments, join-by-code, cover **file upload**/S3
+`booking_id`, **Tournaments** (separate domain — see **Tournaments (giải đấu)**), join-by-code, cover **file upload**/S3
 (URL-only `coverUrl` / `avatarUrl` is in), user profile **hero/cover** image,
 verified-host badge, cron recurring (auto future weeks), AI chatbot,
 Booking/Schedule tabs, Geoapify **on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
@@ -778,7 +818,198 @@ Sport **clubs** separate from pickup kèo. Contract: [`docs/API.md`](./docs/API.
 | Transfer admin | New admin | `GROUP_ADMIN_TRANSFERRED` |
 | PATCH `joinMode`→`AUTO` flush | Each flushed joiner | `GROUP_APPROVED` |
 
-**Out of scope:** group ↔ kèo link; tournament; real venue booking on schedule tab; group chat; max members cap (unless product adds).
+**Out of scope:** group ↔ kèo link; **tournaments** (separate domain — see **Tournaments (giải đấu)**); real venue booking on schedule tab; group chat; max members cap (unless product adds).
+
+### Tournaments (giải đấu)
+
+Sport **tournaments** separate from pickup kèo **and** groups (no `group_id`, no `match_id`). Locked with Nguyễn **Aug 2026** — **BE T0–T5 implemented**. Domain: `src/domains/tournaments/`, schema `schema_tournaments`. **FE contract:** [`docs/API.md`](./docs/API.md) §9.
+
+**Figma → screens (reviewed nodes)**
+
+| Screen | Node | Notes |
+| :--- | :--- | :--- |
+| Homepage tab Tournaments | `880:404` | Browse cards + FAB Create/Manage; format badge beside title |
+| Detail Upcoming (Football) | `880:282` | Tabs: **Overview \| Matches \| Standings \| Players**; CTA **Join Tournament** |
+| Overview Complete (Badminton) | `107:249` | Same tab set; no Sponsors (MVP) |
+| Standings | `107:380` | PTS table; category implicit (1 giải = 1 hạng mục) |
+| Matches schedule | `107:533` | Round + team pair + datetime |
+| Players | `107:2` | Roster / in-team rank when completed |
+| **Missing Figma** | — | Create Tournament, Manage Tournaments, Join registration form — FE may proceed from locks below |
+
+**Sports & format (1 tournament = exactly 1 category)**
+
+| Sport | `format` | `genderDivision` |
+| :--- | :--- | :--- |
+| `FOOTBALL` | `FIVE_A_SIDE` (5v5), `SEVEN_A_SIDE` (7v7), `ELEVEN_A_SIDE` (11v11) | `MEN` \| `WOMEN` — badge e.g. `"11v11"` / `"11v11 Women's"` |
+| `BADMINTON` | `MS`, `WS`, `MD`, `WD`, `MIXED` | `null` (gender encoded in format; Mixed = `MIXED`) |
+
+**FE — format / sport / gender:** set **only** on `POST /tournaments`. **`PATCH /tournaments/:id` does not accept `sport`, `format`, or `genderDivision`** — đổi thể thức = tạo giải mới.
+
+Browse card: **`title`** + format badge (e.g. `Saigon Champions Cup` · `"11v11"`). Currency **VND only** (`registrationFeeVnd`, `prizePoolVnd` display-only — **no payment gateway**).
+
+**Create tournament — eligibility gate**
+
+Only users who pass **both**:
+
+- `hostedCompletedCount >= 80` — kèo where caller is host and `status = COMPLETED`
+- `hostRating.avgRating >= 4.5` — from pickup kèo host reviews (`match_host_reviews`); no minimum review-count floor (80 completed hosts is enough sample)
+
+Fail → **`403`** on `POST /tournaments`.
+
+**Create tournament — required fields**
+
+| Field | Required | Notes |
+| :--- | :--- | :--- |
+| `sport` | ✅ | `FOOTBALL` \| `BADMINTON` (Homepage tab or explicit picker) |
+| `format` | ✅ | See table above |
+| `genderDivision` | ✅ football only | `MEN` \| `WOMEN` |
+| `title`, `coverUrl`, `description` | ✅ | Rules / About live in `description` only (no Rules tab) |
+| `venueName`, `venueAddress`, `province`, `city`, `latitude`, `longitude` | ✅ | Fixed venue for whole giải — match rows only add **date/time** |
+| `startsAt`, `endsAt` | ✅ | `endsAt >= startsAt` |
+| `registrationDeadline` | ✅ | After deadline: **no new joins**; if still not FULL → **auto `CANCELLED`** + notify organizer + accepted captains |
+| `maxTeams` | ✅ | Cap accepted teams; reaching cap → **`FULL`** |
+| `registrationFeeVnd`, `prizePoolVnd` | ✅ | Display-only |
+| `registrationOpensAt` | ❌ | Registration opens immediately on publish |
+| `hostedByLabel` | BE constant | Always **`"SPOT"`** (fixed text — user cannot override) |
+
+Cover / team logo: FE **Supabase Storage** → public URL → BE stores URL (same pattern as kèo `coverUrl` / group gallery).
+
+**Lifecycle & status**
+
+```
+OPEN_REGISTRATION → FULL → ACTIVE → COMPLETED
+        ↓              ↓
+    CANCELLED      CANCELLED (organizer; notify captains)
+```
+
+| Status | Rules |
+| :--- | :--- |
+| `OPEN_REGISTRATION` | Join allowed until `registrationDeadline` and not at `maxTeams` |
+| `FULL` | `acceptedTeamCount = maxTeams`; **hide Join** + **hide from browse**; organizer **may cancel** (notify all captains) |
+| `ACTIVE` | Auto when `startsAt` reached **and** status was `FULL` |
+| `COMPLETED` | Auto when **`endsAt`** reached **or** organizer **`POST /tournaments/:id/complete`** early |
+| `CANCELLED` | Organizer cancel **before `startsAt` only** (`OPEN_REGISTRATION` or `FULL`); **auto** at `registrationDeadline` if not FULL; notify organizer + participants. **No cancel after `ACTIVE`.** |
+
+**After `ACTIVE`:** organizer **cannot PATCH** `venue*`, `startsAt`, `endsAt`, or fixed location fields (locked).
+
+**Join registration (always captain + APPROVAL only)**
+
+- **`POST /tournaments/:id/join`** → **`PENDING`** until organizer approve/reject.
+- **One user = one join request per tournament** (single category per giải).
+- **Required:** `teamName`, `teamLogoUrl`, `roster[]`.
+- Captain = authenticated joiner → organizer views captain **profile + phone** on request (no separate contact field on form).
+
+| Sport | Roster rules |
+| :--- | :--- |
+| **Football** | Each player: **`name`** + **`jerseyNumber`** (required, **unique within team**). Max squad = **format size + 5** → 5v5→**10**, 7v7→**12**, 11v11→**16** |
+| **Badminton singles** (`MS`/`WS`) | **1** player |
+| **Badminton doubles / mixed** | **2** players |
+
+| Edge case | Rule |
+| :--- | :--- |
+| `REJECTED` | Captain **may submit again** (new request) |
+| Captain **withdraw** | Only while `OPEN_REGISTRATION`, **not FULL**, and **before `registrationDeadline`** |
+| Organizer **kick team** | Only **before `startsAt`** (before giải becomes `ACTIVE`) |
+| Kicked captain | Terminal for that giải (mirror group kick — **`403`** rejoin) |
+
+**Browse (`GET /tournaments`)**
+
+- Reuse **Groups filter** pattern: location, province/city, distance — **omit skill level**.
+- Hide tournaments where caller has join request **`PENDING`** or **`ACCEPTED`** (**`REJECTED`** visible again).
+- Hide **`FULL`** from public browse (same spirit as kèo hiding FULL).
+- **Favorites:** `POST/DELETE /tournaments/:id/favorite` + `isFavorited` on list/detail (Figma heart not drawn yet — still in scope).
+
+**Detail tabs**
+
+| Tab | Upcoming / Active | Completed |
+| :--- | :--- | :--- |
+| **Overview** | About, fee, prize, venue, dates, registered teams preview | + winners (manual), final summary |
+| **Matches** | Schedule list (may be empty until organizer adds) | Results |
+| **Standings** | From entered results (PTS calc) | Final table |
+| **Players** | Players of all **accepted** teams | **In-team member ranking** (manual — organizer sets on tournament update) |
+
+**Matches — organizer manual entry (T2 implemented)**
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/tournaments/:id/matches` | List schedule + results |
+| `POST` | `/tournaments/:id/matches` | Organizer; `{ round, teamAId, teamBId, scheduledAt }` |
+| `PATCH` | `/tournaments/:id/matches/:matchId` | Reschedule / change teams (clears result if teams change) |
+| `PATCH` | `/tournaments/:id/matches/:matchId/result` | Football: `{ teamAGoals, teamBGoals }` · Badminton: `{ sets[] }` |
+| `DELETE` | `/tournaments/:id/matches/:matchId` | Organizer |
+
+- **Football:** single leg, draw allowed → `result.outcome` `DRAW` \| `WIN`, `winnerTeamId` null on draw.
+- **Badminton:** BO3 sets, 15 pts, win-by-2, deuce; 1 set allowed (in progress), 2-0 or 2-1 complete.
+- **Rounds:** `GROUP_STAGE`, `ROUND_OF_32`, `ROUND_OF_16`, `QUARTER_FINAL`, `SEMI_FINAL`, `THIRD_PLACE`, `FINAL`.
+- `scheduledAt` must fall between tournament `startsAt` and `endsAt`.
+
+Venue fixed on tournament detail; per match: **`round`**, **`teamA`**, **`teamB`**, **`scheduledAt`**.
+
+**FE — “giải đang ở vòng nào?”:** BE **không có** field `currentRound` trên tournament. Vòng đấu gắn **từng trận** (`match.round`). FE: `GET /tournaments/:id/matches` → group/filter theo `round`; tab Standings dùng `?round=GROUP_STAGE` (optional). Chuyển vòng knock-out = organizer **tạo trận mới** (`POST .../matches`) hoặc **PATCH** `round` trên trận có sẵn — không PATCH giải.
+
+**Round labels (BE enum — fixed set)**
+
+`GROUP_STAGE` · `ROUND_OF_32` · `ROUND_OF_16` · `QUARTER_FINAL` · `SEMI_FINAL` · `THIRD_PLACE` · `FINAL`
+
+**Standings (T3 implemented)**
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/tournaments/:id/standings` | Optional `?round=GROUP_STAGE` filters which match results count |
+
+- All **accepted teams** listed (0 `played` if no results).
+- **Football:** W=3, D=1, L=0 · tie-break: **goalDifference** → **goalsFor** → team name.
+- **Badminton:** W=3, L=0 · only **completed** BO3 matches count · tie-break: **setDifference** → **pointDifference** → **pointsFor**.
+- Response: `{ tournamentId, sport, round, standings: [{ rank, teamId, teamName, teamLogoUrl, played, won, lost, pts, ... }] }`.
+
+**Update & completed (T4 implemented)**
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `PATCH` | `/tournaments/:id` | Organizer; partial update |
+| `POST` | `/tournaments/:id/complete` | Early complete when `ACTIVE`; optional `winners[]` |
+| `GET` | `/tournaments/:id/players` | Accepted teams + roster; sorted by in-team `rank` |
+
+- **ACTIVE lock:** cannot PATCH `venue*`, geo, `startsAt`, `endsAt`, `registrationDeadline` after `ACTIVE`.
+- **`winners`:** `[{ place, teamId }]` → stored in `winners_json`; shown on completed Overview.
+- **`playerRanks`:** `[{ rosterPlayerId, rank \| null }]` — manual in-team order on Players tab.
+- Non-locked info changes notify accepted captains (`TOURNAMENT_UPDATED`).
+
+**Manage Tournaments (FAB — mirror Manage Groups `101:2`)**
+
+| Tab | Section | Content |
+| :--- | :--- | :--- |
+| **Hosted by Me** | My Tournaments | Giải user created (organizer) |
+| | Pending Requests | Inbound join requests to approve/reject |
+| **Joined** | Tournaments | Giải user joined (captain / accepted) |
+| | Join Requests | Outbound `PENDING` / `REJECTED` |
+
+Organizer manage: approve/reject join, **manual** match create + result entry, PATCH info (except locked fields after `ACTIVE`), cancel giải **before `startsAt` only** (with notifications).
+
+**Notifications (inbox only, `sendEmail: false`)**
+
+| Event | Recipient | Type |
+| :--- | :--- | :--- |
+| Join submitted | Organizer | `TOURNAMENT_JOIN_REQUEST` |
+| Approved / rejected | Captain | `TOURNAMENT_JOIN_APPROVED` / `TOURNAMENT_JOIN_REJECTED` |
+| Giải cancelled (manual or auto deadline) | Organizer + captains | `TOURNAMENT_CANCELLED` |
+| Team kicked | Captain | `TOURNAMENT_KICKED` |
+| Info updated (non-locked fields) | Participants | `TOURNAMENT_UPDATED` |
+
+**Smoke / dev test create gate:** `npm run smoke:tournaments` (`scripts/smoke-tournaments.js`) — needs server + `OTP_DEBUG=true` + DB; script **tự seed** 80 kèo COMPLETED + host review cho account smoke. Test bằng account riêng: seed DB thủ công (xem `seedOrganizerEligibility` trong script) — **không có** dev bypass API / env skip eligibility.
+
+**Implementation phases**
+
+| Phase | Status |
+| :--- | :--- |
+| **T0** | Done — browse, detail, join, mine, favorites |
+| **T1** | Done — approve/reject, cancel, kick, notifications, lifecycle worker |
+| **T2** | Done — matches CRUD + manual result (football goals / badminton sets) |
+| **T3** | Done — `GET /tournaments/:id/standings` (PTS, GD / set diff tie-break) |
+| **T4** | Done — PATCH tournament, winners, player ranks, early complete |
+| **T5** | Done — `docs/API.md` §9, `npm run smoke:tournaments` |
+
+**Out of scope (tournaments MVP):** link to **Groups**; sponsors; payment gateway; skill gate on join; real bracket auto-generation; card penalty / referee tooling; `registrationOpensAt` scheduling.
 
 ## Env / Supabase
 

@@ -1,7 +1,8 @@
 # SPOT — Matchmaking plan (kèo)
 
 Plan for backend work after auth is done.  
-Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in this plan.
+Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in this plan.  
+**Tournaments:** see [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md) (locked Aug 2026, separate domain).
 
 | | |
 | :--- | :--- |

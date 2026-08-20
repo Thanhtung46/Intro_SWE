@@ -101,7 +101,7 @@ Tech stack per component:
 | `spot-frontend-web/` | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Zustand, Axios | Scaffolded but **`docker build`/`next build` fail today** — missing `src/app/globals.css`, `tsconfig.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`. `npm run dev` may still work despite this. |
 | `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
-| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service), ESM, Node ≥ 18 | **Runnable** (local or Docker). Auth + **matchmaking (kèo) Phases 1–5** + **Groups (hội) G0–G5** done. Default DB is **Supabase Postgres** (Session pooler). See `spot-backend/CLAUDE.md`. |
+| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service), ESM, Node ≥ 18 | **Runnable** (local or Docker). Auth + **matchmaking (kèo) Phases 1–5** + **Groups (hội) G0–G5** + **Tournaments (giải đấu) T0–T5** done. Default DB is **Supabase Postgres** (Session pooler). See `spot-backend/CLAUDE.md`. |
 | `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
 | Infra | PostgreSQL 15-alpine (optional profile), Redis 7-alpine, Docker Compose | Default backend uses **Supabase** + Redis. `admin-console` docker build verified. AI images still missing Dockerfiles. |
 | `spot-frontend-mobile/` | Expo, React Native, expo-router, Zustand, Axios — `package.json` currently pins Expo `^57`/React Native `^0.86`/React `19.2.8` (not Expo 49/RN 0.72 as this line used to say; version drifts fast here, so check `package.json` directly). See `spot-frontend-mobile/CLAUDE.md` for current status — it has a real, mostly-wired auth/onboarding/home flow, not an empty scaffold, and plain `npm install` works (no `--legacy-peer-deps` needed anymore). |
@@ -120,6 +120,7 @@ Implemented under `spot-backend/` (do not re-document full API here):
 - **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders + match cancel types + **group join types (G5)**; venue reviews + reply; **pickup kèo host reviews** (`POST /matches/:id/review`)
 - **Matchmaking (kèo):** browse/list/detail/join/mine/my-join-requests; lifecycle expiry worker; Manage Squad fields; post-match review + `summary`; host `rating` live on cards/profile
 - **Groups (hội) G0–G5:** create/browse/detail; join AUTO/APPROVAL; mine/favorites; admin PATCH + courts/slots; members/schedule matrix/gallery; kick/transfer/leave/delete; inbox notifications — Figma Manage `101:2`, detail tabs `810:*`. Product locks: skill **hard gate** on join; `memberCount` = admin + accepted only (**PENDING không tính**). Detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Groups (hội)**; contract: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8.
+- **Tournaments (giải đấu) T0–T5:** create/browse/detail/join (captain + APPROVAL); mine/favorites; organizer manage; matches + results; standings PTS; PATCH winners + in-team ranks; lifecycle worker — Figma browse `880:404`, detail tabs Overview/Matches/Standings/Players. Product locks below + [`spot-backend/docs/TOURNAMENT_PLAN.md`](./spot-backend/docs/TOURNAMENT_PLAN.md). **FE contract:** [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §9; agent map: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) **Tournaments (giải đấu)**.
 - **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo → `007` venue images → `008` notification match types → `009` match host reviews → **`010` groups** → **`011` group notification types**. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
 - **Not yet:** JWT refresh rotate/blacklist; admin approve OWNER/REFEREE; booking CRUD UI / payment / S3 CDN
 
@@ -271,7 +272,7 @@ Product locks: [`spot-backend/docs/MATCHMAKING_PLAN.md`](./spot-backend/docs/MAT
 | Host phone | Only `GET /matches/:id` when caller is host or `yourRequest.status === ACCEPTED`. Never on list / mine / `/users/:id`. |
 | Rating | `host.rating` + `host.reviewCount` on cards from `match_host_reviews`; `null`/`0` until first review. Post-match: `POST /matches/:id/review`, `GET /matches/:id` → `summary`. |
 | Search / map | Homepage **`location=`** = SQL on **`title` + `venueName` + `venueAddress`** (unaccent, fuzzy ≥3 chars, multi-word AND). Same request returns **`suggestions[]`** (max 5, kinds `title` \| `venueName` \| `venueAddress`) while user types — Postgres only, **not** Geoapify/NLP. **Does not** search province/city names or GPS — use `province`/`city` or Distance filters. Filter tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025**). Map / directions = **FE Geoapify**; no key on backend. |
-| Out of scope (kèo only) | Waitlist, Zalo, MoMo/VNPay, **Tournaments**, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad |
+| Out of scope (kèo only) | Waitlist, Zalo, MoMo/VNPay, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad — **Tournaments** = separate domain (see below) |
 
 `GET /matches/mine` must stay **before** `GET /matches/:id` in routes.
 `full_name` / `gender` / `avatar_url` are on `schema_auth.user_profiles`, not `users`.
@@ -290,7 +291,7 @@ section **Homepage 1** and **Homepage search**.
 | Browse hides `FULL`; profile `hostUserId` shows FULL | Card distance from user GPS |
 | Filter sheet: sport, date, time, skill, price **VND**, tỉnh/quận | Sparkles / AI search icon |
 | `GET /geo/vn`, favorites, distance XOR location | Notification bell (BE: inbox + match cancel) |
-| List card fields (`coverUrl`, host + rating, hearts, avatars, admin names) | **Tournaments** tab (BE chưa có) |
+| List card fields (`coverUrl`, host + rating, hearts, avatars, admin names) | **Tournaments tab** — BE **T0–T5 done**; contract [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §9 |
 | | Booking / Schedule |
 
 Other Matches screens (detail `100:401`, Join `100:551`, host profile `432:1211`,
@@ -312,7 +313,7 @@ Full detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Mana
 | 8 | **Homepage dedupe** | **`GET /matches`** hides kèo caller hosts + `PENDING`/`ACCEPTED`/`KICKED` requests; **`REJECTED` shows again** (re-join) | Avoid same kèo on feed + Manage; detail still via Manage / deep link |
 | 9 | **Empty state** | — | Figma `101:98` only empty Active; filled list = reuse cards + chips (no separate frame) |
 
-**Manage Matches** (`101:98`) và **Manage Groups** (`101:2`) là hai màn riêng — đừng trộn route/tab. Groups BE: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8; agent map: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) **Groups (hội)**.
+**Manage Matches** (`101:98`), **Manage Groups** (`101:2`), và **Manage Tournaments** (mirror Groups FAB) là các màn riêng — đừng trộn route/tab. Groups BE: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8; Tournaments: §9; agent map: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md).
 
 Hide verified on kèo host profile; hide Booking chrome on filter sheet.
 
@@ -359,6 +360,74 @@ Product locks: [`spot-backend/docs/GROUP_PLAN.md`](./spot-backend/docs/GROUP_PLA
 | Notifications (G5) | `GROUP_JOIN_REQUEST`, `GROUP_APPROVED`, `GROUP_REJECTED`, `GROUP_KICKED`, `GROUP_ADMIN_TRANSFERRED` |
 | Migrations | `010_schema_groups.sql`, `011_notification_group_types.sql` |
 | Smoke | `npm run smoke:groups` |
+
+### Tournaments (giải đấu) — implemented (T0–T5, Aug 2026)
+
+Separate domain from kèo **and** Groups (no `match_id`, no `group_id`). Full plan:
+[`spot-backend/docs/TOURNAMENT_PLAN.md`](./spot-backend/docs/TOURNAMENT_PLAN.md).
+Agent + API: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) **Tournaments (giải đấu)** · [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §9.
+
+| | |
+| :--- | :--- |
+| Prefix | `/tournaments` + `/api/tournaments` |
+| Figma (reviewed) | Browse `880:404`; detail Upcoming `880:282`; Complete overview `107:249`; Standings `107:380`; Matches `107:533`; Players `107:2` |
+| **Missing Figma** | Create Tournament, Manage Tournaments, Join form — build from product locks below |
+| Detail tabs | **Overview \| Matches \| Standings \| Players** (all sports) |
+| CTA | **Join Tournament** (hidden when FULL / past deadline / already joined) |
+| Smoke | `npm run smoke:tournaments` (script tự seed eligibility — không có dev bypass API) |
+
+**Quyết định đã chốt với Nguyễn (Aug 2026 — đừng revert)**
+
+| Topic | Rule |
+| :--- | :--- |
+| Phạm vi | Tách kèo + Groups; **1 giải = 1 hạng mục** (một `format` + gender) |
+| Tạo giải | Chỉ user ≥ **80 kèo hosted COMPLETED** + **host rating avg ≥ 4.5** → else `403` |
+| Hosted by | Luôn hiển thị **`SPOT`** (`hostedByLabel` — BE constant) |
+| Join | **Captain only**; luôn **APPROVAL** (`PENDING`); bắt buộc `teamName` + `teamLogoUrl` + `roster` |
+| Football roster | Name + jersey (unique/team); max squad = format+5 (5v5→10, 7v7→12, 11v11→16) |
+| Badminton roster | Singles=1; doubles/mixed=2 |
+| Lifecycle | `OPEN_REGISTRATION` → `FULL` → `ACTIVE` → `COMPLETED`; auto-cancel nếu hết deadline mà chưa FULL |
+| Cancel | Organizer **chỉ trước `startsAt`** — **không** sau `ACTIVE` |
+| Sau ACTIVE | **Lock** venue, geo, `startsAt`, `endsAt`, `registrationDeadline` on PATCH |
+| Matches | Organizer nhập tay: round + team A vs B + datetime; venue = giải venue; **không có `currentRound` trên giải** — FE group `GET .../matches` theo `round` |
+| Format | Chỉ set lúc **create** — **không** PATCH `sport`/`format`/`genderDivision` |
+| Football result | Single leg; goals A vs B; **draw OK** |
+| Badminton result | BO3; 15 pts/set; win-by-2; deuce @15 |
+| Standings | Auto PTS: football W=3,D=1,L=0; badminton W=3,L=0; tie-break GD / set diff |
+| Winners | **Manual** on PATCH / optional on `POST .../complete` — `[{ place, teamId }]` |
+| Players tab (completed) | **In-team rank manual** — PATCH `playerRanks: [{ rosterPlayerId, rank }]` |
+| Browse | Filter như Groups **không skill**; ẩn FULL; ẩn join PENDING/ACCEPTED; REJECTED hiện lại |
+| Favorites | `POST/DELETE .../favorite` + `isFavorited` (Figma chưa vẽ heart — vẫn làm) |
+| Money | `registrationFeeVnd`, `prizePoolVnd` display-only VND — **no payment** |
+| Rules | Chỉ trong **`description`** (About) — không tab Rules |
+
+**Sport / format (pick ONE at create)**
+
+| Sport | Formats | Extra |
+| :--- | :--- | :--- |
+| Football | `FIVE_A_SIDE`, `SEVEN_A_SIDE`, `ELEVEN_A_SIDE` | + `genderDivision` `MEN`/`WOMEN` — badge e.g. `"11v11 Women's"` |
+| Badminton | `MS`, `WS`, `MD`, `WD`, `MIXED` | Roster 1 or 2; omit `genderDivision` |
+
+**Lifecycle (FE badges)**
+
+| Status | FE behavior |
+| :--- | :--- |
+| `OPEN_REGISTRATION` | Show **Join Tournament**; countdown `registrationDeadline` |
+| `FULL` | Hide Join; hide browse; deep link / Manage vẫn thấy |
+| `ACTIVE` | Auto at `startsAt` when was FULL |
+| `COMPLETED` | Auto at `endsAt` or organizer `POST .../complete` |
+| `CANCELLED` | Auto deadline without FULL; organizer cancel before starts |
+
+**Manage Tournaments (FAB — mirror Manage Groups `101:2`)**
+
+| Tab | Sections |
+| :--- | :--- |
+| **Hosted by Me** | My Tournaments + Pending join requests |
+| **Joined** | Tournaments joined + my join requests |
+
+**Notifications (inbox):** `TOURNAMENT_JOIN_REQUEST`, `TOURNAMENT_JOIN_APPROVED`, `TOURNAMENT_JOIN_REJECTED`, `TOURNAMENT_CANCELLED`, `TOURNAMENT_KICKED`, `TOURNAMENT_UPDATED`.
+
+**Out of scope MVP:** Groups link, sponsors, payment gateway, skill gate on join, auto-bracket generator.
 
 **Data flow:** frontends → `spot-backend` (REST `:3000`) → Supabase Postgres + Redis. Planned: backend → AI services recommendation (5001), noshow (5002), nlp (5003) — AI not implemented yet.
 

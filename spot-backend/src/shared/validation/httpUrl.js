@@ -45,3 +45,35 @@ export function optionalHttpUrl(fieldName) {
       return value.trim();
     });
 }
+
+export function requiredHttpUrl(fieldName) {
+  return z
+    .string({ required_error: `${fieldName} is required` })
+    .trim()
+    .min(1, `${fieldName} is required`)
+    .superRefine((value, ctx) => {
+      if (value.length > HTTP_URL_MAX_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${fieldName} must be at most ${HTTP_URL_MAX_LENGTH} characters`,
+        });
+        return;
+      }
+      let parsed;
+      try {
+        parsed = new URL(value);
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${fieldName} must be a valid http(s) URL`,
+        });
+        return;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${fieldName} must be a valid http(s) URL`,
+        });
+      }
+    });
+}
