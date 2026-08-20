@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -11,19 +11,21 @@ import {
   View,
 } from 'react-native';
 import { FormField } from '@/components/FormField';
-import { GoogleIcon } from '@/components/GoogleIcon';
 import { PasswordField } from '@/components/PasswordField';
 import { useUser } from '@/context/UserContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 import { LoginFieldErrors, loginSchema } from '@/schemas/loginSchema';
 import { login } from '@/services/authService';
-import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { setRefreshToken, setToken } from '../../utils/authStorage';
 
 export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string) => void }) {
   const { setUser } = useUser();
   const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -93,6 +95,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
             error={errors.email}
             autoCapitalize="none"
             keyboardType="email-address"
+            themeColors={c}
           />
 
           <PasswordField
@@ -102,6 +105,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
             value={password}
             onChangeText={setPassword}
             error={errors.password}
+            themeColors={c}
             labelRight={
               <Link href="/auth/forgot-password" asChild>
                 <TouchableOpacity>
@@ -120,21 +124,6 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
             disabled={submitting}
           >
             <Text style={styles.loginButtonText}>{submitting ? t('login.loggingIn') : t('login.loginButton')}</Text>
-          </TouchableOpacity>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('login.or')}</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            testID="google-login-button"
-            style={styles.googleButton}
-            onPress={() => comingSoon('Login with Google')}
-          >
-            <GoogleIcon size={18} />
-            <Text style={styles.googleButtonText}>{t('login.loginWithGoogle')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -168,132 +157,103 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 32,
-    alignItems: 'stretch',
-  },
-  logo: {
-    width: 72,
-    height: 72,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.primaryDark,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.subtitle,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  card: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: 16,
-    padding: 20,
-  },
-  forgotLink: {
-    fontSize: 13,
-    color: colors.primaryDark,
-    fontWeight: '600',
-  },
-  formError: {
-    color: colors.formError,
-    fontSize: 13,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  loginButton: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  registerText: {
-    color: colors.subtitle,
-    fontSize: 14,
-  },
-  registerLink: {
-    color: colors.primaryDark,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    color: colors.subtitle,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingVertical: 12,
-    backgroundColor: colors.white,
-  },
-  googleButtonText: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '400',
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  footerCopyright: {
-    fontSize: 12,
-    color: colors.subtitle,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  footerLinksRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  footerLink: {
-    fontSize: 12,
-    color: colors.subtitle,
-  },
-  footerSeparator: {
-    fontSize: 12,
-    color: colors.subtitle,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      backgroundColor: c.authScreenBg,
+    },
+    content: {
+      paddingHorizontal: 24,
+      paddingTop: 48,
+      paddingBottom: 32,
+      alignItems: 'stretch',
+    },
+    logo: {
+      width: 72,
+      height: 72,
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '700',
+      color: c.accentText,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginTop: 4,
+      marginBottom: 24,
+    },
+    card: {
+      backgroundColor: c.loginCardBg,
+      borderRadius: 16,
+      padding: 20,
+    },
+    forgotLink: {
+      fontSize: 13,
+      color: c.accentText,
+      fontWeight: '600',
+    },
+    formError: {
+      color: c.error,
+      fontSize: 13,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    loginButton: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    loginButtonDisabled: {
+      opacity: 0.6,
+    },
+    loginButtonText: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    registerRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 24,
+    },
+    registerText: {
+      color: c.textSecondaryAlt,
+      fontSize: 14,
+    },
+    registerLink: {
+      color: c.accentText,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    footer: {
+      alignItems: 'center',
+      marginTop: 32,
+    },
+    footerCopyright: {
+      fontSize: 12,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    footerLinksRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    footerLink: {
+      fontSize: 12,
+      color: c.textSecondary,
+    },
+    footerSeparator: {
+      fontSize: 12,
+      color: c.textSecondary,
+    },
+  });
+}

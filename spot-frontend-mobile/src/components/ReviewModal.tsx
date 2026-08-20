@@ -13,15 +13,19 @@ import {
 } from 'react-native';
 import { createReview } from '../services/reviewService';
 import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ReviewModalProps {
   visible: boolean;
   bookingId: number | null;
   onClose: () => void;
   onSubmitted: (bookingId: number) => void;
+  themeColors?: ThemeColors;
 }
 
-export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: ReviewModalProps) {
+export function ReviewModal({ visible, bookingId, onClose, onSubmitted, themeColors }: ReviewModalProps) {
+  const { t } = useLanguage();
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +44,7 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
 
   const handleSubmit = async () => {
     if (!bookingId || rating < 1) {
-      setFormError('Please select a star rating.');
+      setFormError(t('review.ratingRequired'));
       return;
     }
     setFormError(null);
@@ -53,7 +57,7 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
     setSubmitting(false);
 
     if (!result.success) {
-      setFormError(result.message || 'Something went wrong. Please try again.');
+      setFormError(result.message || t('common.genericError'));
       return;
     }
 
@@ -67,8 +71,13 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View style={styles.card} testID="review-modal-card">
-                <Text style={styles.title}>Rate your experience</Text>
+              <View
+                style={[styles.card, themeColors && { backgroundColor: themeColors.surface }]}
+                testID="review-modal-card"
+              >
+                <Text style={[styles.title, themeColors && { color: themeColors.textPrimary }]}>
+                  {t('review.modalTitle')}
+                </Text>
 
                 <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map((value) => (
@@ -81,7 +90,7 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
                       <Ionicons
                         name={value <= rating ? 'star' : 'star-outline'}
                         size={32}
-                        color={colors.amber}
+                        color={themeColors ? themeColors.profileReviewsIconColor : colors.amber}
                       />
                     </TouchableOpacity>
                   ))}
@@ -89,9 +98,12 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
 
                 <TextInput
                   testID="review-text-input"
-                  style={styles.textarea}
-                  placeholder="Share your experience (optional)"
-                  placeholderTextColor={colors.placeholder}
+                  style={[
+                    styles.textarea,
+                    themeColors && { borderColor: themeColors.divider, color: themeColors.textPrimary },
+                  ]}
+                  placeholder={t('review.placeholder')}
+                  placeholderTextColor={themeColors ? themeColors.textMuted : colors.placeholder}
                   value={reviewText}
                   onChangeText={setReviewText}
                   multiline
@@ -99,19 +111,29 @@ export function ReviewModal({ visible, bookingId, onClose, onSubmitted }: Review
                   textAlignVertical="top"
                 />
 
-                {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+                {formError ? (
+                  <Text style={[styles.formError, themeColors && { color: themeColors.error }]}>{formError}</Text>
+                ) : null}
 
                 <TouchableOpacity
                   testID="review-submit-button"
-                  style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+                  style={[
+                    styles.submitButton,
+                    themeColors && { backgroundColor: themeColors.primary },
+                    submitting && styles.submitButtonDisabled,
+                  ]}
                   onPress={handleSubmit}
                   disabled={submitting}
                 >
-                  <Text style={styles.submitButtonText}>{submitting ? 'Submitting...' : 'Submit Review'}</Text>
+                  <Text style={[styles.submitButtonText, themeColors && { color: themeColors.white }]}>
+                    {submitting ? t('review.submitting') : t('review.submit')}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity testID="review-cancel-button" style={styles.cancelButton} onPress={handleClose}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={[styles.cancelButtonText, themeColors && { color: themeColors.textSecondary }]}>
+                    {t('common.cancel')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>

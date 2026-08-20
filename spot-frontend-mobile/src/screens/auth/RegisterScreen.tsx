@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -14,10 +14,11 @@ import {
 import { FormField } from '@/components/FormField';
 import { PasswordField } from '@/components/PasswordField';
 import { SelectField } from '@/components/SelectField';
-import { genderOptions, RegisterFieldErrors, registerSchema } from '@/schemas/registerSchema';
+import { getGenderOptions, RegisterFieldErrors, registerSchema } from '@/schemas/registerSchema';
 import { register } from '@/services/authService';
 import { useLanguage } from '@/context/LanguageContext';
-import { colors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
 export default function RegisterScreen({
   onBack,
@@ -27,6 +28,8 @@ export default function RegisterScreen({
   onRegistered: (email: string) => void;
 }) {
   const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -93,7 +96,7 @@ export default function RegisterScreen({
     >
       <View style={styles.topBar}>
         <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.primaryDark} />
+          <Ionicons name="arrow-back" size={24} color={c.accentText} />
         </TouchableOpacity>
       </View>
 
@@ -111,6 +114,7 @@ export default function RegisterScreen({
           onChangeText={setName}
           error={errors.name}
           autoCapitalize="words"
+          themeColors={c}
         />
 
         <FormField
@@ -122,6 +126,7 @@ export default function RegisterScreen({
           error={errors.email}
           autoCapitalize="none"
           keyboardType="email-address"
+          themeColors={c}
         />
 
         <View style={styles.row}>
@@ -133,15 +138,17 @@ export default function RegisterScreen({
             error={errors.phone}
             keyboardType="phone-pad"
             containerStyle={styles.rowItem}
+            themeColors={c}
           />
           <SelectField
             label={t('register.genderLabel')}
             placeholder={t('register.genderPlaceholder')}
             value={gender}
             onChange={setGender}
-            options={[...genderOptions]}
+            options={getGenderOptions(t)}
             error={errors.gender}
             containerStyle={styles.rowItem}
+            themeColors={c}
           />
         </View>
 
@@ -152,6 +159,7 @@ export default function RegisterScreen({
           value={password}
           onChangeText={setPassword}
           error={errors.password}
+          themeColors={c}
         />
 
         <PasswordField
@@ -161,6 +169,7 @@ export default function RegisterScreen({
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           error={errors.confirmPassword}
+          themeColors={c}
         />
 
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
@@ -189,81 +198,83 @@ export default function RegisterScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  topBar: {
-    height: 56,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    backgroundColor: colors.white,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    alignItems: 'stretch',
-  },
-  logo: {
-    width: 96,
-    height: 96,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.primaryDark,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.subtitle,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rowItem: {
-    flex: 1,
-  },
-  formError: {
-    color: colors.formError,
-    fontSize: 13,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  registerButton: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  registerButtonDisabled: {
-    opacity: 0.6,
-  },
-  registerButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  loginRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  loginText: {
-    color: colors.subtitle,
-    fontSize: 14,
-  },
-  loginLink: {
-    color: colors.primaryDark,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      backgroundColor: c.authScreenBg,
+    },
+    topBar: {
+      height: 56,
+      justifyContent: 'center',
+      paddingHorizontal: 16,
+      backgroundColor: c.authScreenBg,
+    },
+    content: {
+      paddingHorizontal: 24,
+      paddingBottom: 32,
+      alignItems: 'stretch',
+    },
+    logo: {
+      width: 96,
+      height: 96,
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '700',
+      color: c.accentText,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondaryAlt,
+      textAlign: 'center',
+      marginTop: 4,
+      marginBottom: 24,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    rowItem: {
+      flex: 1,
+    },
+    formError: {
+      color: c.error,
+      fontSize: 13,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    registerButton: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    registerButtonDisabled: {
+      opacity: 0.6,
+    },
+    registerButtonText: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    loginRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 20,
+    },
+    loginText: {
+      color: c.textSecondaryAlt,
+      fontSize: 14,
+    },
+    loginLink: {
+      color: c.accentText,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+  });
+}

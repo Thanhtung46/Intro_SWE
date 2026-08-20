@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
 import { FormField } from '@/components/FormField';
 import { OtpInput } from '@/components/OtpInput';
-import { colors } from '@/constants/colors';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 import {
   ProfileUpdateUser,
   confirmEmailChange,
@@ -32,6 +34,9 @@ function formatCountdown(seconds: number) {
 }
 
 export function ChangeContactModal({ visible, onClose, type, onSuccess }: ChangeContactModalProps) {
+  const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [newValue, setNewValue] = useState('');
   const [inputError, setInputError] = useState<string | undefined>();
@@ -60,8 +65,6 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
     return () => clearInterval(timer);
   }, [step, cooldown]);
 
-  const label = type === 'email' ? 'Email' : 'Phone Number';
-
   const handleSendCode = async () => {
     const trimmed = newValue.trim();
     if (type === 'email') {
@@ -71,7 +74,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
         return;
       }
     } else if (!PHONE_REGEX.test(trimmed)) {
-      setInputError('Enter a valid Vietnamese phone number');
+      setInputError(t('changeContact.invalidPhone'));
       return;
     }
     setInputError(undefined);
@@ -81,7 +84,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
     setSending(false);
 
     if (!result.success) {
-      setInputError(result.message || 'Something went wrong. Please try again.');
+      setInputError(result.message || t('common.genericError'));
       return;
     }
 
@@ -102,7 +105,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
       if (result.attemptsRemaining !== undefined) {
         setOtpError(`${result.message} (${result.attemptsRemaining} attempt(s) remaining)`);
       } else {
-        setOtpError(result.message || 'Something went wrong. Please try again.');
+        setOtpError(result.message || t('common.genericError'));
       }
       return;
     }
@@ -122,7 +125,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
       setOtp('');
       setCooldown(result.resendAvailableInSeconds ?? RESEND_COOLDOWN_SECONDS);
     } else {
-      setOtpError(result.message || 'Something went wrong. Please try again.');
+      setOtpError(result.message || t('common.genericError'));
     }
   };
 
@@ -132,11 +135,13 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
         <TouchableOpacity style={styles.card} activeOpacity={1} onPress={() => {}}>
           {step === 'input' ? (
             <>
-              <Text style={styles.title}>Change {label}</Text>
+              <Text style={styles.title}>
+                {type === 'email' ? t('changeContact.changeEmailTitle') : t('changeContact.changePhoneTitle')}
+              </Text>
               <FormField
                 testID={`change-contact-${type}-input`}
-                label={`New ${label}`}
-                placeholder={type === 'email' ? 'Enter new email' : 'Enter new phone number'}
+                label={type === 'email' ? t('changeContact.newEmailLabel') : t('changeContact.newPhoneLabel')}
+                placeholder={type === 'email' ? t('changeContact.emailPlaceholder') : t('changeContact.phonePlaceholder')}
                 value={newValue}
                 onChangeText={(text) => {
                   setNewValue(text);
@@ -145,6 +150,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
                 error={inputError}
                 keyboardType={type === 'email' ? 'email-address' : 'phone-pad'}
                 autoCapitalize="none"
+                themeColors={c}
               />
               <TouchableOpacity
                 testID="change-contact-send-code"
@@ -152,30 +158,37 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
                 onPress={handleSendCode}
                 disabled={sending}
               >
-                <Text style={styles.primaryButtonText}>{sending ? 'Sending...' : 'Send Code'}</Text>
+                <Text style={styles.primaryButtonText}>{sending ? t('changeContact.sending') : t('changeContact.sendCode')}</Text>
               </TouchableOpacity>
               <TouchableOpacity testID="change-contact-cancel" style={styles.linkButton} onPress={onClose}>
-                <Text style={styles.linkText}>Cancel</Text>
+                <Text style={styles.linkText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={styles.title}>Enter Code</Text>
+              <Text style={styles.title}>{t('changeContact.otpTitle')}</Text>
               <Text style={styles.subtitle}>
-                {type === 'email' ? `Code sent to ${newValue}` : 'Code sent to your current email'}
+                {type === 'email' ? `${t('changeContact.codeSentToPrefix')}${newValue}` : t('changeContact.codeSentToCurrentEmail')}
               </Text>
 
-              <OtpInput value={otp} onChange={setOtp} onComplete={runConfirm} error={!!otpError} containerStyle={styles.otpRow} />
+              <OtpInput
+                value={otp}
+                onChange={setOtp}
+                onComplete={runConfirm}
+                error={!!otpError}
+                containerStyle={styles.otpRow}
+                themeColors={c}
+              />
 
               {otpError ? <Text style={styles.errorText}>{otpError}</Text> : null}
 
               <View style={styles.resendRow}>
                 <Text style={styles.resendText}>
-                  Resend code in <Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
+                  {t('otp.resendPrefix')}<Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
                 </Text>
                 <TouchableOpacity testID="change-contact-resend" onPress={handleResend} disabled={cooldown > 0 || resending}>
                   <Text style={[styles.resendLink, cooldown > 0 && styles.resendLinkDisabled]}>
-                    {resending ? 'Resending...' : 'Resend code now'}
+                    {resending ? t('otp.resending') : t('otp.resendNow')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -186,7 +199,7 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
                 onPress={() => runConfirm(otp)}
                 disabled={confirming}
               >
-                <Text style={styles.primaryButtonText}>{confirming ? 'Confirming...' : 'Confirm'}</Text>
+                <Text style={styles.primaryButtonText}>{confirming ? t('changeContact.confirming') : t('common.confirm')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -199,7 +212,9 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
                   setCooldown(RESEND_COOLDOWN_SECONDS);
                 }}
               >
-                <Text style={styles.linkText}>Change {label.toLowerCase()}</Text>
+                <Text style={styles.linkText}>
+                  {type === 'email' ? t('changeContact.changeEmailLinkText') : t('changeContact.changePhoneLinkText')}
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -209,80 +224,82 @@ export function ChangeContactModal({ visible, onClose, type, onSuccess }: Change
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 20,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.subtitle,
-    marginBottom: 16,
-  },
-  otpRow: {
-    marginBottom: 4,
-  },
-  errorText: {
-    color: colors.formError,
-    fontSize: 13,
-    marginTop: 8,
-  },
-  resendRow: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  resendText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  resendCountdown: {
-    color: colors.primaryDark,
-    fontWeight: '600',
-  },
-  resendLink: {
-    fontSize: 14,
-    color: colors.primaryDark,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  resendLinkDisabled: {
-    color: colors.placeholder,
-  },
-  primaryButton: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  linkButton: {
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  linkText: {
-    fontSize: 14,
-    color: colors.primaryDark,
-    fontWeight: '600',
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    card: {
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      padding: 20,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.textPrimary,
+      marginBottom: 12,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: c.textSecondary,
+      marginBottom: 16,
+    },
+    otpRow: {
+      marginBottom: 4,
+    },
+    errorText: {
+      color: c.error,
+      fontSize: 13,
+      marginTop: 8,
+    },
+    resendRow: {
+      marginTop: 16,
+      alignItems: 'center',
+    },
+    resendText: {
+      fontSize: 14,
+      color: c.textPrimary,
+    },
+    resendCountdown: {
+      color: c.primary,
+      fontWeight: '600',
+    },
+    resendLink: {
+      fontSize: 14,
+      color: c.primary,
+      fontWeight: '600',
+      marginTop: 4,
+    },
+    resendLinkDisabled: {
+      color: c.textMuted,
+    },
+    primaryButton: {
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 20,
+    },
+    primaryButtonDisabled: {
+      opacity: 0.6,
+    },
+    primaryButtonText: {
+      color: c.white,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    linkButton: {
+      marginTop: 12,
+      alignItems: 'center',
+    },
+    linkText: {
+      fontSize: 14,
+      color: c.primary,
+      fontWeight: '600',
+    },
+  });
+}
