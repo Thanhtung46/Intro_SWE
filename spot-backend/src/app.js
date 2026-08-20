@@ -12,6 +12,7 @@ import notificationRoutes from './domains/notification/routes.js';
 import reviewRoutes from './domains/review/routes.js';
 import venueRoutes from './domains/venue/routes.js';
 import bookingRoutes from './domains/booking/routes.js';
+import groupRoutes from './domains/groups/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,8 @@ app.use('/venues', venueRoutes);
 app.use('/api/venues', venueRoutes);
 app.use('/bookings', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/groups', groupRoutes);
+app.use('/api/groups', groupRoutes);
 
 app.use(errorHandler);
 

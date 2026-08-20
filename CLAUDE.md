@@ -101,7 +101,7 @@ Tech stack per component:
 | `spot-frontend-web/` | Next.js 14 (App Router), React 18, TypeScript, Tailwind, Zustand, Axios | Scaffolded but **`docker build`/`next build` fail today** — missing `src/app/globals.css`, `tsconfig.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`. `npm run dev` may still work despite this. |
 | `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
-| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service), ESM, Node ≥ 18 | **Runnable** (local or Docker). Auth + **matchmaking (kèo) Phases 1–5 done** (list/filter/detail/join/host-profile). Default DB is **Supabase Postgres** (Session pooler), not the optional compose `postgres` profile. See `spot-backend/CLAUDE.md`. |
+| `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service), ESM, Node ≥ 18 | **Runnable** (local or Docker). Auth + **matchmaking (kèo) Phases 1–5** + **Groups (hội) G0–G5** done. Default DB is **Supabase Postgres** (Session pooler). See `spot-backend/CLAUDE.md`. |
 | `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
 | Infra | PostgreSQL 15-alpine (optional profile), Redis 7-alpine, Docker Compose | Default backend uses **Supabase** + Redis. `admin-console` docker build verified. AI images still missing Dockerfiles. |
 | `spot-frontend-mobile/` | Expo, React Native, expo-router, Zustand, Axios — `package.json` currently pins Expo `^57`/React Native `^0.86`/React `19.2.8` (not Expo 49/RN 0.72 as this line used to say; version drifts fast here, so check `package.json` directly). See `spot-frontend-mobile/CLAUDE.md` for current status — it has a real, mostly-wired auth/onboarding/home flow, not an empty scaffold, and plain `npm install` works (no `--legacy-peer-deps` needed anymore). |
@@ -110,16 +110,17 @@ Tech stack per component:
 | `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
 | Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified; **backend** builds with `env_file: spot-backend/.env` + `REDIS_HOST=redis`. Default backend DB is **Supabase**, not compose postgres. |
 
-### Backend snapshot (auth + profile + matchmaking)
+### Backend snapshot (auth + profile + matchmaking + groups)
 
 Implemented under `spot-backend/` (do not re-document full API here):
 
 - **Auth:** register → role → OTP → login/refresh; forgot/reset password
 - **Profile Hub:** `user_profiles` (display + prefs); `GET/PATCH /users/me`; Main Profile `GET /users/me/profile`; Settings `GET/PATCH /users/me/preferences`; password change; local avatar upload
 - **Contact change:** OTP-gated email/phone (FR-1.4) — not via plain PATCH
-- **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders + match cancel types; venue reviews + reply; **pickup kèo host reviews** (`POST /matches/:id/review`)
+- **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders + match cancel types + **group join types (G5)**; venue reviews + reply; **pickup kèo host reviews** (`POST /matches/:id/review`)
 - **Matchmaking (kèo):** browse/list/detail/join/mine/my-join-requests; lifecycle expiry worker; Manage Squad fields; post-match review + `summary`; host `rating` live on cards/profile
-- **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo → `007` venue images → `008` notification match types → `009` match host reviews. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
+- **Groups (hội) G0–G5:** create/browse/detail; join AUTO/APPROVAL; mine/favorites; admin PATCH + courts/slots; members/schedule matrix/gallery; kick/transfer/leave/delete; inbox notifications — Figma Manage `101:2`, detail tabs `810:*`. Product locks: skill **hard gate** on join; `memberCount` = admin + accepted only (**PENDING không tính**). Detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Groups (hội)**; contract: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8.
+- **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo → `007` venue images → `008` notification match types → `009` match host reviews → **`010` groups** → **`011` group notification types**. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
 - **Not yet:** JWT refresh rotate/blacklist; admin approve OWNER/REFEREE; booking CRUD UI / payment / S3 CDN
 
 ## Common Commands
@@ -162,6 +163,7 @@ npm test
 npm run smoke:login      # OTP_DEBUG=true
 npm run smoke:profile
 npm run smoke:matches    # host / join / approve / kick / mine / cancel
+npm run smoke:groups     # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
 npm run worker:match-expiry   # prod/cron — process ended kèo
 ```
 Compose (from this repo root `Intro_SWE/`):
@@ -230,7 +232,7 @@ See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
 ├── spot-frontend-web/       # Next.js web app
 ├── spot-frontend-mobile/    # Expo mobile app
 ├── spot-admin-console/      # Vite admin dashboard
-├── spot-backend/            # Express API — domain-driven src/domains/{auth,booking,venue,payment,matchmaking,referee,review,notification,admin}/
+├── spot-backend/            # Express API — domain-driven src/domains/{auth,booking,venue,payment,matchmaking,groups,referee,review,notification,admin}/
 ├── spot-ai-services/        # 3 planned FastAPI microservices (empty scaffolds)
 ├── docker-compose.yml               # dev stack — each service builds from its own app's Dockerfile
 ├── docker-compose.production.yml    # prod stack
@@ -242,7 +244,7 @@ See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
 **Data flow (current):**
 `spot-frontend-web` / `spot-frontend-mobile` / `spot-admin-console` →
 `spot-backend` REST (`:3000`) → Supabase Postgres + Redis (`:6379`).
-Auth + matchmaking (kèo) are implemented. AI microservices (recommendation
+Auth + matchmaking (kèo) + **groups (hội)** are implemented. AI microservices (recommendation
 5001, noshow 5002, nlp 5003) are still empty scaffolds — do not call them
 from matchmaking.
 
@@ -269,7 +271,7 @@ Product locks: [`spot-backend/docs/MATCHMAKING_PLAN.md`](./spot-backend/docs/MAT
 | Host phone | Only `GET /matches/:id` when caller is host or `yourRequest.status === ACCEPTED`. Never on list / mine / `/users/:id`. |
 | Rating | `host.rating` + `host.reviewCount` on cards from `match_host_reviews`; `null`/`0` until first review. Post-match: `POST /matches/:id/review`, `GET /matches/:id` → `summary`. |
 | Search / map | Homepage **`location=`** = SQL on **`title` + `venueName` + `venueAddress`** (unaccent, fuzzy ≥3 chars, multi-word AND). Same request returns **`suggestions[]`** (max 5, kinds `title` \| `venueName` \| `venueAddress`) while user types — Postgres only, **not** Geoapify/NLP. **Does not** search province/city names or GPS — use `province`/`city` or Distance filters. Filter tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025**). Map / directions = **FE Geoapify**; no key on backend. |
-| Out of scope | Waitlist, Zalo, MoMo/VNPay, Groups, Tournaments, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad |
+| Out of scope (kèo only) | Waitlist, Zalo, MoMo/VNPay, **Tournaments**, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad |
 
 `GET /matches/mine` must stay **before** `GET /matches/:id` in routes.
 `full_name` / `gender` / `avatar_url` are on `schema_auth.user_profiles`, not `users`.
@@ -288,7 +290,7 @@ section **Homepage 1** and **Homepage search**.
 | Browse hides `FULL`; profile `hostUserId` shows FULL | Card distance from user GPS |
 | Filter sheet: sport, date, time, skill, price **VND**, tỉnh/quận | Sparkles / AI search icon |
 | `GET /geo/vn`, favorites, distance XOR location | Notification bell (BE: inbox + match cancel) |
-| List card fields (`coverUrl`, host + rating, hearts, avatars, admin names) | Groups / Tournaments tabs |
+| List card fields (`coverUrl`, host + rating, hearts, avatars, admin names) | **Tournaments** tab (BE chưa có) |
 | | Booking / Schedule |
 
 Other Matches screens (detail `100:401`, Join `100:551`, host profile `432:1211`,
@@ -310,9 +312,9 @@ Full detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Mana
 | 8 | **Homepage dedupe** | **`GET /matches`** hides kèo caller hosts + `PENDING`/`ACCEPTED`/`KICKED` requests; **`REJECTED` shows again** (re-join) | Avoid same kèo on feed + Manage; detail still via Manage / deep link |
 | 9 | **Empty state** | — | Figma `101:98` only empty Active; filled list = reuse cards + chips (no separate frame) |
 
-Do **not** mix with **Manage Group** (`101:2`) — Groups out of scope.
+**Manage Matches** (`101:98`) và **Manage Groups** (`101:2`) là hai màn riêng — đừng trộn route/tab. Groups BE: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8; agent map: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) **Groups (hội)**.
 
-Hide Groups / reviews / verified on profile; hide Booking chrome on filter sheet.
+Hide verified on kèo host profile; hide Booking chrome on filter sheet.
 
 **Figma Host form (`99:2`) — product locked (BE + FE contract)**
 
@@ -336,7 +338,28 @@ Reference UX: [Vmito create session](https://vmito.com/vi/sessions/new) (recurri
 
 **Do not confuse with Homepage search:** `GET /matches?location=` = find **joinable kèo** (browse pool). `GET /matches/venue-suggestions` = reuse **venues** for Host (wider DB pool).
 
-Smoke (server up, `OTP_DEBUG=true`): `cd spot-backend && npm run smoke:matches`.
+Smoke (server up, `OTP_DEBUG=true`): `cd spot-backend && npm run smoke:matches` · `npm run smoke:groups`.
+
+### Groups (hội) — implemented (G0–G5, Aug 2026)
+
+Separate domain from kèo (`schema_groups`, not `schema_matchmaking`). Agent rules + Figma:
+[`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Groups (hội)**.
+FE/tester contract: [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8.
+Product locks: [`spot-backend/docs/GROUP_PLAN.md`](./spot-backend/docs/GROUP_PLAN.md).
+
+| | |
+| :--- | :--- |
+| Prefix | `/groups` + `/api/groups` |
+| Figma | Manage Groups `101:2`; detail About `810:156`, Schedule `810:772`, Members `810:924`, Gallery `810:308`; browse `810:612` |
+| Create | `POST /groups` — PLAYER; `sport`; courts + `recurringSlots`; `joinMode` `AUTO` \| `APPROVAL` |
+| Browse | `GET /groups` — search `name`/venue/address; province/city; distance; **`suggestions[]`**; hide nếu member hoặc join `PENDING`/`KICKED` (**`REJECTED` hiện lại**) |
+| Join | Skill **hard gate** (`400`) — khác kèo (warn). **`memberCount`**: admin + accepted only; **PENDING không tính**. AUTO → +1 ngay; APPROVAL → +1 khi accept hoặc PATCH `joinMode`→`AUTO` flush |
+| Manage | `GET /groups/mine`, `GET /groups/my-join-requests`; admin accept/reject/kick/transfer; `PATCH /groups/:id`; `DELETE /groups/:id` |
+| Tabs | Members `GET .../members`; Schedule matrix `GET .../schedule?date=`; Gallery CRUD (max 50) |
+| Notifications (G5) | `GROUP_JOIN_REQUEST`, `GROUP_APPROVED`, `GROUP_REJECTED`, `GROUP_KICKED`, `GROUP_ADMIN_TRANSFERRED` |
+| Migrations | `010_schema_groups.sql`, `011_notification_group_types.sql` |
+| Smoke | `npm run smoke:groups` |
+
 **Data flow:** frontends → `spot-backend` (REST `:3000`) → Supabase Postgres + Redis. Planned: backend → AI services recommendation (5001), noshow (5002), nlp (5003) — AI not implemented yet.
 
 ## Code Style & Conventions
@@ -354,7 +377,7 @@ committed yet so it currently fails to run):
 ## Important Guidelines
 
 - **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — they are independent repositories, not git submodules of this repo. A `git status`/`git commit` at this repo's root does **not** track changes inside them.
-- **`spot-backend` is runnable** (auth + matchmaking, including `/users/:id`). Read `spot-backend/CLAUDE.md` before changing kèo APIs. Compose from this directory, not from `spot-backend/`.
+- **`spot-backend` is runnable** (auth + matchmaking + groups). Read `spot-backend/CLAUDE.md` before changing kèo or groups APIs. Compose from this directory, not from `spot-backend/`.
 - **`spot-ai-services/*` are empty directory scaffolds** — check for `requirements.txt`/app code before assuming a service is implemented. Matchmaking does **not** depend on them.
 - **Env files**: `.env.development` and `.env.production` live at the repo root and are gitignored — never let real credentials get committed; verify `git status` shows them untracked before adding secrets. Note `docker-compose.yml` doesn't actually read `.env.development` (its values are hard-coded inline); `docker-compose.production.yml` does need `.env.production`, but only via an explicit `--env-file` flag — see Docker caveat above.
 - **`Docs/` and `PA/`** hold course assignment materials (requirements docs, PDFs) — reference-only, not part of the running application.

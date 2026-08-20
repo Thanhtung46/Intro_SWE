@@ -10,7 +10,7 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 Implemented so far:
 
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/groups`+`/api/groups`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
 
 ## Status (done vs not)
 
@@ -53,23 +53,43 @@ Implemented so far:
 | `POST /matches/:id/cancel` | Done — pending → `REJECTED`; status `CANCELLED`; notify joiners (`MATCH_CANCELLED`, `data.reason=HOST_CANCEL`) |
 | Match expiry worker | Done — `npm run worker:match-expiry`; dev `POST /matches/dev/process-expired` (non-prod). Đủ người → `COMPLETED`; thiếu người → `CANCELLED` + notify |
 
+**Groups (hội) — G0–G5 done** (Aug 2026)
+
+| Area | Status |
+| :--- | :--- |
+| `POST /groups` | Done — PLAYER create; `sport` query/body; courts + recurringSlots + joinMode |
+| `GET /groups` | Done — browse; search `name`/venue/address; province/city; distance; `suggestions[]` |
+| `GET /groups/:id` | Done — About + `recurringSlots[]`, `zaloUrl`, `myRole`, `memberCount` |
+| `POST /groups/:id/join` | Done — skill **hard gate**; AUTO vs APPROVAL; kicked → `403` rejoin |
+| `DELETE /groups/:id/join` | Done — cancel PENDING |
+| `GET /groups/mine` | Done — `tab` + `section` (managed/joined) |
+| `GET /groups/my-join-requests` | Done — PENDING + REJECTED; `pendingCount` |
+| Accept / reject / kick / transfer-admin / leave / delete | Done |
+| `POST` / `DELETE /groups/:id/favorite` | Done |
+| `PATCH /groups/:id` | Done — admin partial edit; courts replace; `joinMode`→`AUTO` flushes PENDING |
+| `GET /groups/:id/members` | Done — paginated + `search` (full name) |
+| `GET /groups/:id/schedule` | Done — `?date=` → 30-min matrix `BOOKED`/`AVAILABLE` |
+| Gallery CRUD | Done — `GET/POST/DELETE /groups/:id/gallery`; max 50 |
+| Group notifications (G5) | Done — join/approve/reject/kick/transfer/flush → inbox |
+| Smoke | `npm run smoke:groups` |
+
 **Infra / conventions**
 
 | Area | Status |
 | :--- | :--- |
 | Password hashing | `argon2id` via `argon2` (not bcrypt) |
-| Validation | Zod DTOs under `domains/auth/dto/` and `domains/matchmaking/dto/` |
+| Validation | Zod DTOs under `domains/{auth,matchmaking,groups}/dto/` |
 | Email | Gmail SMTP (`SMTP_*` / `EMAIL_FROM`); `OTP_DEBUG` returns `debugOtp` in non-prod (only when OTP was issued) |
 | DB | Hosted **Supabase Postgres** via Session pooler + SSL (`pg`) |
 | Redis | Attempt counters + resend cooldown, keyed by `{email}:{purpose}` (soft-fail if Redis down) |
 | Auth middleware (`authenticate` / `requireRole`) | Done — use on protected routes; `requireRole(...roles)` after `authenticate` |
 | Refresh-token rotate / Redis JWT blacklist | **Not implemented yet** (refresh re-issues tokens; old refresh still valid until TTL) |
 | Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Not implemented yet** |
-| Other domains | Still empty scaffolds (`booking`, `venue`, `payment`, …) |
+| Other domains | Empty scaffolds: `booking`, `venue`, `payment` (schedule read + reviews partial). **`groups` domain implemented (G0–G5).** |
 
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
-Contract: [`docs/API.md`](./docs/API.md) (bản đồng bộ với [`API.md`](./API.md) ở repo root). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
+Contract: [`docs/API.md`](./docs/API.md) (bản đồng bộ với [`API.md`](./API.md) ở repo root). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md) (kèo), [`docs/GROUP_PLAN.md`](./docs/GROUP_PLAN.md) (groups — locked Aug 2026, **G0–G5 implemented**).
 
 ## Changelog bảo trì (agent / dev sau này)
 
@@ -85,14 +105,57 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 **Quy tắc tab Completed (đã chốt — đừng revert):** chỉ `ends_at <= now` + `filled_count >= max_players` + `status <> CANCELLED` + participant `ACCEPTED`. **Không** gồm: host cancel, thiếu người, kicked (xem lại qua `GET /matches/:id` + notify).
 
 **Files then touched:** `match.service.js`, `match.repository.js`, `join-request.repository.js`, `match-outcome.js`, `match-host-review.service.js`, `auth.service.js`, `notification.service.js`, tests under `tests/unit/matchmaking/` + `tests/unit/review/`.
+
+**Aug 2026 — Groups G0–G5** (Figma Manage Groups `101:2`, detail tabs `810:*`):
+
+| Batch | Nội dung | Migration |
+| :--- | :--- | :--- |
+| **G0** | Create / browse / detail; courts + recurring schedule | `010_schema_groups.sql` |
+| **G1** | Join AUTO/APPROVAL; mine; favorites; kick/transfer/leave/delete | — |
+| **G2** | `PATCH /groups/:id`; courts replace; joinMode→AUTO flush pending | — |
+| **G3** | Members tab + search; schedule matrix; gallery CRUD (max 50) | — |
+| **G4** | `API.md` §8, `CLAUDE.md`, `npm run smoke:groups` | — |
+| **G5** | Inbox notifications on join/manage; migration `011` | `011_notification_group_types.sql` |
+
+**Groups product locks (do not revert):** skill **hard gate** on join (unlike kèo warn); `memberCount` = admin + accepted members only (**PENDING không tính** — xem bảng dưới); kicked = terminal `403`; `REJECTED` may rejoin; schedule matrix = visualization of recurring slots only (not venue booking).
+
+**`memberCount` — khi nào tăng/giảm (đã chốt Aug 2026):**
+
+| Sự kiện | `memberCount` | Ghi chú |
+| :--- | :--- | :--- |
+| `POST /groups` | `1` | Admin = member duy nhất lúc tạo |
+| Join `AUTO` thành công | `+1` ngay | Thêm `group_members` + `adjustMemberCount(+1)` |
+| Join `APPROVAL` (PENDING) | **không đổi** | Chờ admin accept |
+| Accept request | `+1` | Nếu chưa có row member |
+| Reject / hủy PENDING | không đổi | |
+| `PATCH joinMode`→`AUTO` flush | `+N` | Mỗi pending chưa là member |
+| Kick / member leave | `-1` | |
+| Transfer admin | không đổi | Chỉ đổi role + `admin_user_id` |
+
+**Files touched (Groups):**
+
+| Layer | Path |
+| :--- | :--- |
+| Domain | `src/domains/groups/{routes,controller,service,entity,dto,repository}/` |
+| Notifications | `src/domains/groups/service/group-notification.service.js` |
+| Constants | `src/shared/constants/groups.js` |
+| Migrations | `migrations/010_schema_groups.sql`, `011_notification_group_types.sql` |
+| Tests | `tests/unit/groups/*.test.js`, `tests/unit/notification/notification-types.test.js` |
+| Smoke | `scripts/smoke-groups.js` (`npm run smoke:groups`) |
+| Docs | `docs/GROUP_PLAN.md`, `docs/API.md` §8, `API.md` (root copy), `CLAUDE.md` |
+
+**Other implemented (non-group):**
+
+| Area | Notes |
+| :--- | :--- |
 | Auth | register → role → OTP → login/refresh; forgot/reset password |
 | Profile | `GET/PATCH /users/me`, Main Profile stats, preferences, password change, avatar upload |
-| Contact change | OTP email/phone under `/users/me/email|phone/...` |
+| Contact change | OTP email/phone under `/users/me/email\|phone/...` |
 | Schedule | `GET /users/me/schedule` + dev seed |
-| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`); match cancel/expiry (`MATCH_CANCELLED`) |
-| Reviews | venue booking reviews + **pickup kèo host reviews** (`POST /matches/:id/review`, `GET /reviews/hosts/:userId/reviews`) |
+| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`); match cancel/expiry; **group join types (G5)** |
+| Reviews | venue booking reviews + pickup kèo host reviews |
 
-**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment.
+**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment. Empty scaffolds: `booking`, `venue`, `payment` (partial schedule read only).
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
 
@@ -112,6 +175,7 @@ npm run smoke:otp      # register → verify (needs server + OTP_DEBUG=true)
 npm run smoke:login    # register → role → verify → login JWT
 npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
+npm run smoke:groups   # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -156,6 +220,13 @@ src/
 │   ├── entity/match.entity.js
 │   ├── repository/{match,match-court,join-request,match-favorite}.repository.js
 │   └── service/match.service.js
+├── domains/groups/
+│   ├── routes.js
+│   ├── controller/group.controller.js
+│   ├── dto/{create,list,update,join,list-mine,my-join-requests,list-members,schedule-query,gallery}.dto.js
+│   ├── entity/group.entity.js
+│   ├── repository/{group,group-court,group-schedule,group-member,group-join-request,group-favorite,group-gallery}.repository.js
+│   └── service/group.service.js
 ├── domains/{admin,booking,notification,payment,referee,review,venue}/
 ├── events/{handlers,topics}/     # empty
 └── shared/
@@ -179,18 +250,22 @@ migrations/
 ├── 006_schema_matchmaking.sql    # pickup kèo + fold + province/city
 ├── 008_notification_match_types.sql  # MATCH_CANCELLED + MATCH_EXPIRED_UNDERFILLED on inbox.type
 ├── 009_schema_match_host_reviews.sql   # pickup kèo participant → host rating
+├── 010_schema_groups.sql               # sport groups (hội)
+├── 011_notification_group_types.sql    # GROUP_* inbox types
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
 ├── apply-homepage-card.js / apply-match-search.js / apply-match-admin.js
 ├── smoke-register.js / smoke-otp-flow.js / smoke-login.js
-├── smoke-forgot-password.js / smoke-matches.js
+├── smoke-forgot-password.js / smoke-matches.js / smoke-groups.js
 docs/
 ├── API.md
 ├── MATCHMAKING_PLAN.md
+├── GROUP_PLAN.md
 tests/unit/
 ├── auth/*.dto.test.js
 ├── matchmaking/*.dto.test.js
+├── groups/*.test.js
 ├── matchmaking/{fold-search-text,vn-admin}.test.js
 └── shared/{sports,pitch,share}.test.js
 Dockerfile / .dockerignore / .env.example
@@ -274,7 +349,7 @@ forgot-password — filter `purpose = 'FORGOT_PASSWORD'` in Supabase Table Edito
 
 ### Matchmaking (kèo)
 
-Pickup matches only (no Groups / Tournaments). Sports: `BADMINTON`, `FOOTBALL`.
+Pickup **kèo** matches only in `schema_matchmaking` (Groups live in separate `schema_groups`). Sports: `BADMINTON`, `FOOTBALL`.
 Host is a **free listing** — no `booking_id`, no venue catalog lock.
 Contract: [`docs/API.md`](./docs/API.md) §7. Product locks:
 [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
@@ -656,6 +731,55 @@ Reset kèo data:
 `npm run reset:matches` (or `docker compose run --rm backend npm run reset:matches`).
 Windows bind-mount: after changing `src/`, `docker restart spot-backend`.
 
+### Groups (hội)
+
+Sport **clubs** separate from pickup kèo. Contract: [`docs/API.md`](./docs/API.md) §8. Product lock: [`docs/GROUP_PLAN.md`](./docs/GROUP_PLAN.md).
+
+**Figma → API**
+
+| Screen | Node | API |
+| :--- | :--- | :--- |
+| Browse Groups | `810:612` | `GET /groups` + filters/search |
+| Detail About | `810:156` | `GET /groups/:id` |
+| Detail Schedule | `810:772` | `GET /groups/:id/schedule?date=` |
+| Detail Members | `810:924` | `GET /groups/:id/members?search=` |
+| Detail Gallery | `810:308` | `GET/POST/DELETE /groups/:id/gallery` |
+| Manage Groups | `101:2` | `GET /groups/mine` |
+
+**Key rules (locked)**
+
+- `name` = GROUP NAME; `title` = tagline; sport from Homepage tab (`?sport=` on create).
+- Join skill = **hard gate** (`400`) — unlike kèo `skillWarning`.
+- `memberCount` = admin + **accepted** members; PENDING not counted. **AUTO join** → +1 immediately; **APPROVAL** → +1 only on accept (or flush).
+- Roles: `ADMIN` \| `MEMBER` only; one admin; transfer before admin leave.
+- Kicked → terminal `KICKED`, rejoin same group → `403`. `REJECTED` may rejoin.
+- `PATCH` courts = **replace** (clears slots unless `recurringSlots` resent).
+- `joinMode` → `AUTO` in PATCH auto-accepts all `PENDING`.
+- Schedule matrix: 30-min steps; `BOOKED` = overlaps recurring slot (not real booking).
+- Gallery: admin only; Supabase URL on FE; max 50 images.
+
+**Browse exclusion (`GET /groups`)** — hide groups where caller is member or join request `PENDING`/`KICKED`; **`REJECTED` visible again**.
+
+**Static routes before `GET /:id`:** `/mine`, `/my-join-requests`, then `/:id/members`, `/:id/schedule`, `/:id/gallery`, `/:id/requests`, …
+
+**Schema (`schema_groups`)** — `010_schema_groups.sql`: `groups`, `group_courts`, `group_schedule_slots`, `group_members`, `group_join_requests`, `group_favorites`, `group_gallery_images`. Reuses `schema_matchmaking.fold_search_text` for browse search.
+
+**Smoke:** `npm run smoke:groups` (`scripts/smoke-groups.js`) — needs server + `OTP_DEBUG=true`; includes inbox type checks.
+
+**Notifications (G5):** `group-notification.service.js` → `createNotification` after successful group actions. Types in `shared/constants/notification.js`; migration `011`. In-app only (`sendEmail: false`).
+
+| Event | Recipient | Type |
+| :--- | :--- | :--- |
+| Join (`APPROVAL`) | Admin | `GROUP_JOIN_REQUEST` |
+| Join (`AUTO`) | Joiner | `GROUP_APPROVED` |
+| Accept request | Joiner | `GROUP_APPROVED` |
+| Reject request | Joiner | `GROUP_REJECTED` |
+| Kick member | Kicked user | `GROUP_KICKED` |
+| Transfer admin | New admin | `GROUP_ADMIN_TRANSFERRED` |
+| PATCH `joinMode`→`AUTO` flush | Each flushed joiner | `GROUP_APPROVED` |
+
+**Out of scope:** group ↔ kèo link; tournament; real venue booking on schedule tab; group chat; max members cap (unless product adds).
+
 ## Env / Supabase
 
 Required for DB (see `.env.example`):
@@ -711,8 +835,8 @@ functions, PascalCase classes). No linter config exists yet — nothing to run.
   (`REJECTED` reappears for re-join).
   Search = DB on `title`/`venueName`/`venueAddress` + `suggestions[]` (see
   **Homepage search**).   Admin dropdown = `GET /geo/vn` (pre-2025). Prices VND.
-  Do not add waitlist / Zalo / real payment / `booking_id` / Groups / Geoapify-on-backend /
-  2025 ward map / NLP search / football position on squad.
+  Do not add waitlist / Zalo / real payment / `booking_id` / Geoapify-on-backend /
+  2025 ward map / NLP search / football position on squad. **Groups** = separate domain — see **Groups (hội)** section, not matchmaking.
 - UI “Venue Owner” maps to DB/API role `OWNER`.
 - FE role-based navigation reads `role` from login JWT / `user`. Protect later
   APIs with `authenticate` / `requireRole` from `shared/middleware/authenticate.js`.
