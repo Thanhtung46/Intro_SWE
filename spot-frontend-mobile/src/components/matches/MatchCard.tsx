@@ -13,7 +13,7 @@ type Props = {
   match: Match;
   onPress: () => void;
   onToggleFavorite: () => void;
-  onShare: () => void;
+  onDirections: () => void;
 };
 
 /**
@@ -21,8 +21,13 @@ type Props = {
  * MatchesHomepageScreen.tsx once a second real consumer showed up
  * (Manage/My Matches + Join Match - Map's list fallback, SPOT-76 tasks
  * #6/#7) — same bar used for extracting BottomNavBar/FilterSheet.
+ *
+ * The paper-plane icon is GPS directions to the venue, not sharing — see
+ * spot-backend/CLAUDE.md ("Paper-plane = directions, not share") and
+ * src/utils/directions.ts. `onDirections` is a callback prop (not owned
+ * here) so every screen can wire the same `openDirections(match)` helper.
  */
-export default function MatchCard({ match, onPress, onToggleFavorite, onShare }: Props) {
+export default function MatchCard({ match, onPress, onToggleFavorite, onDirections }: Props) {
   const isFull = match.status === 'FULL' || match.spotsLeft < 1;
   const priceLabel =
     match.priceMax != null && match.priceMax !== match.priceMin
@@ -49,7 +54,7 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onShare }:
           <TouchableOpacity testID={`match-favorite-${match.matchId}`} style={styles.cardIconButton} onPress={onToggleFavorite}>
             <Ionicons name={match.isFavorited ? 'heart' : 'heart-outline'} size={16} color={match.isFavorited ? colors.error : colors.white} />
           </TouchableOpacity>
-          <TouchableOpacity testID={`match-share-${match.matchId}`} style={styles.cardIconButton} onPress={onShare}>
+          <TouchableOpacity testID={`match-directions-${match.matchId}`} style={styles.cardIconButton} onPress={onDirections}>
             <Ionicons name="paper-plane-outline" size={15} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -69,13 +74,17 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onShare }:
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle}>{match.title}</Text>
+        <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+          {match.title}
+        </Text>
 
         <View style={styles.cardHostRow}>
           <View style={styles.hostAvatar}>
             <Text style={styles.hostAvatarText}>{(match.hostFullName || 'H').charAt(0).toUpperCase()}</Text>
           </View>
-          <Text style={styles.hostName}>{match.hostFullName}</Text>
+          <Text style={styles.hostName} numberOfLines={1} ellipsizeMode="tail">
+            {match.hostFullName}
+          </Text>
           <Text style={styles.hostMeta}>· {match.host.matchCount} matches</Text>
         </View>
 
@@ -86,7 +95,7 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onShare }:
           </View>
           <View style={styles.cardMetaRow}>
             <Ionicons name="location-outline" size={14} color={colors.bodyText} />
-            <Text style={styles.cardMetaText}>
+            <Text style={[styles.cardMetaText, styles.cardMetaTextTruncate]} numberOfLines={1} ellipsizeMode="tail">
               {match.venueName}, {match.venueAddress}
             </Text>
           </View>
@@ -173,12 +182,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hostAvatarText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
-  hostName: { fontSize: 12, fontWeight: '700', color: colors.headingText },
-  hostMeta: { fontSize: 11, color: colors.outline },
+  hostName: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.headingText },
+  hostMeta: { flexShrink: 0, fontSize: 11, color: colors.outline },
 
   cardMetaBlock: { gap: spacing.xxs, marginTop: spacing.xs },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
   cardMetaText: { fontSize: 13, color: colors.bodyText },
+  cardMetaTextTruncate: { flexShrink: 1 },
   skillChips: { flexDirection: 'row', gap: spacing.xxs },
   skillPill: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   skillPillText: { fontSize: 11, fontWeight: '700' },

@@ -1,41 +1,88 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
+import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
 import { BottomNavBar } from '@/components/common/BottomNavBar';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
+import { openVenueDirections } from '@/utils/directions';
 import type { Match, Sport } from '@/types/match';
 
 type Status = 'loading' | 'ready' | 'error';
 type Category = 'ALL' | Sport;
+type ViewMode = 'map' | 'list';
 
 type Props = {
   onBack: () => void;
   onOpenMatch: (matchId: number) => void;
 };
 
+// Ho Chi Minh City center — fallback when no visible match has coords yet.
+const DEFAULT_REGION = { latitude: 10.7769, longitude: 106.7009, latitudeDelta: 0.1, longitudeDelta: 0.1 };
+
+const SPORT_PIN: Record<Sport, { tintColor: string; emoji: string }> = {
+  FOOTBALL: { tintColor: '#3B82F6', emoji: '⚽' },
+  BADMINTON: { tintColor: '#22C55E', emoji: '🏸' },
+};
+
+// Offsets matches that share the exact same venue coords (common with
+// seeded/smoke-test data — several kèo hosted at one venue) so their pins
+// don't render pixel-on-pixel and become one untappable blob. Spreads them
+// in a small ring (~35m radius) around the shared point; groups of 1 are
+// untouched.
+const OVERLAP_SPREAD_DEGREES = 0.00035;
+
+function spreadOverlappingMarkers(
+  matches: (Match & { latitude: number; longitude: number })[]
+): AppMapMarker[] {
+  const groups = new Map<string, typeof matches>();
+  for (const m of matches) {
+    const key = `${m.latitude.toFixed(5)},${m.longitude.toFixed(5)}`;
+    const group = groups.get(key);
+    if (group) group.push(m);
+    else groups.set(key, [m]);
+  }
+
+  const markers: AppMapMarker[] = [];
+  for (const group of groups.values()) {
+    group.forEach((m, index) => {
+      const angle = (2 * Math.PI * index) / group.length;
+      const offset = group.length > 1 ? OVERLAP_SPREAD_DEGREES : 0;
+      markers.push({
+        id: String(m.matchId),
+        latitude: m.latitude + offset * Math.sin(angle),
+        longitude: m.longitude + offset * Math.cos(angle),
+        ...SPORT_PIN[m.sport],
+      });
+    });
+  }
+  return markers;
+}
+
 /**
- * Join Match - Map (Figma node 426:2, SPOT-76 task #6). List-fallback per
- * user's choice — no map library installed (react-native-maps/expo-location/
- * react-native-webview are all missing, and react-native-maps needs
- * `expo prebuild`/a dev client, so introducing it wasn't worth it for this
- * ticket). Keeps the search/category header from Figma, swaps the map
- * viewport for the same match-list rendering used everywhere else, with an
- * explicit "coming soon" banner so it reads as a deliberate interim state.
+ * Join Match - Map (Figma node 426:2, SPOT-76 task #6). Real map now — see
+ * src/components/common/AppMap.tsx for the WebView + Leaflet + Geoapify
+ * wiring (no Google Maps API key needed). Matches without lat/lng (optional
+ * field) can't get a pin, so they're filtered out of the map but still show
+ * in List view. Map is the default view with a List toggle, not the other
+ * way around, matching the Figma frame's own name.
  */
 export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
+  const router = useRouter();
   const [category, setCategory] = useState<Category>('ALL');
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('map');
+  const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
 
   const fetchMatches = useCallback(async () => {
     setStatus('loading');
@@ -66,6 +113,20 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
     }
   };
 
+  const mappableMatches = useMemo(
+    () => matches.filter((m): m is Match & { latitude: number; longitude: number } => m.latitude != null && m.longitude != null),
+    [matches]
+  );
+
+  const markers: AppMapMarker[] = useMemo(() => spreadOverlappingMarkers(mappableMatches), [mappableMatches]);
+
+  const initialRegion = useMemo(() => {
+    const first = mappableMatches[0];
+    return first ? { ...DEFAULT_REGION, latitude: first.latitude, longitude: first.longitude } : DEFAULT_REGION;
+  }, [mappableMatches]);
+
+  const selectedMatch = matches.find((m) => m.matchId === selectedMatchId) ?? null;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -85,6 +146,13 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
             returnKeyType="search"
           />
         </View>
+        <TouchableOpacity
+          testID="join-map-view-toggle"
+          style={styles.viewToggleButton}
+          onPress={() => setViewMode((v) => (v === 'map' ? 'list' : 'map'))}
+        >
+          <Ionicons name={viewMode === 'map' ? 'list' : 'map-outline'} size={18} color={colors.white} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.categoryRow}>
@@ -107,38 +175,66 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
         })}
       </View>
 
-      {!bannerDismissed && (
-        <View style={styles.banner}>
-          <Ionicons name="map-outline" size={16} color={colors.primaryDark} />
-          <Text style={styles.bannerText}>Map view is coming soon — showing matches as a list for now.</Text>
-          <TouchableOpacity testID="join-map-dismiss-banner" onPress={() => setBannerDismissed(true)}>
-            <Ionicons name="close" size={16} color={colors.primaryDark} />
-          </TouchableOpacity>
-        </View>
-      )}
+      {status === 'error' && <ErrorBanner message={errorMessage} onRetry={fetchMatches} />}
 
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {status === 'loading' ? (
-          <ActivityIndicator style={styles.spinner} color={colors.primary} />
-        ) : status === 'error' ? (
-          <ErrorBanner message={errorMessage} onRetry={fetchMatches} />
-        ) : matches.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>No matches found nearby.</Text>
-          </View>
-        ) : (
-          matches.map((match) => (
-            <MatchCard
-              key={match.matchId}
-              match={match}
-              onPress={() => onOpenMatch(match.matchId)}
-              onToggleFavorite={() => handleToggleFavorite(match)}
-              onShare={() => undefined}
-            />
-          ))
-        )}
-      </ScrollView>
+      {viewMode === 'map' ? (
+        <View style={styles.mapArea}>
+          {status === 'loading' ? (
+            <ActivityIndicator style={styles.spinner} color={colors.primary} />
+          ) : (
+            <>
+              <AppMap
+                markers={markers}
+                onSelectMarker={(id) => setSelectedMatchId(Number(id))}
+                initialRegion={initialRegion}
+              />
+              {matches.length > 0 && mappableMatches.length === 0 && (
+                <View style={styles.noPinsNotice}>
+                  <Text style={styles.noPinsNoticeText}>None of these matches have a map location yet — switch to List.</Text>
+                </View>
+              )}
+              {selectedMatch && (
+                <View style={styles.popupWrap}>
+                  <TouchableOpacity
+                    testID="join-map-popup-close"
+                    style={styles.popupCloseButton}
+                    onPress={() => setSelectedMatchId(null)}
+                  >
+                    <Ionicons name="close" size={16} color={colors.headingText} />
+                  </TouchableOpacity>
+                  <MatchCard
+                    match={selectedMatch}
+                    onPress={() => onOpenMatch(selectedMatch.matchId)}
+                    onToggleFavorite={() => handleToggleFavorite(selectedMatch)}
+                    onDirections={() => openVenueDirections(router, selectedMatch)}
+                  />
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      ) : (
+        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+          {status === 'loading' ? (
+            <ActivityIndicator style={styles.spinner} color={colors.primary} />
+          ) : matches.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={28} color={colors.outline} />
+              <Text style={styles.emptyStateText}>No matches found nearby.</Text>
+            </View>
+          ) : (
+            matches.map((match) => (
+              <MatchCard
+                key={match.matchId}
+                match={match}
+                onPress={() => onOpenMatch(match.matchId)}
+                onToggleFavorite={() => handleToggleFavorite(match)}
+                onDirections={() => openVenueDirections(router, match)}
+              />
+            ))
+          )}
+        </ScrollView>
+      )}
 
       <BottomNavBar active="matches" />
     </SafeAreaView>
@@ -168,6 +264,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.headingText },
+  viewToggleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   categoryRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   categoryChip: {
@@ -184,17 +288,35 @@ const styles = StyleSheet.create({
   categoryChipText: { fontSize: 13, fontWeight: '700', color: colors.headingText },
   categoryChipTextActive: { color: colors.white },
 
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+  mapArea: { flex: 1 },
+  noPinsNotice: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.md,
+    right: spacing.md,
     backgroundColor: colors.selectedBackground,
     borderRadius: 12,
     padding: spacing.sm,
   },
-  bannerText: { flex: 1, fontSize: 12, color: colors.primaryDark },
+  noPinsNoticeText: { fontSize: 12, color: colors.primaryDark, textAlign: 'center' },
+  popupWrap: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.md },
+  popupCloseButton: {
+    position: 'absolute',
+    top: -14,
+    right: -6,
+    zIndex: 1,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
 
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },

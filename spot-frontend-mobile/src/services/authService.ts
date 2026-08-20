@@ -454,10 +454,12 @@ export async function getMe(seed?: Pick<LoginUser, 'fullName' | 'phoneNumber'>):
   void seed;
   const token = await getToken();
   try {
-    const res = await client.get(`${API_URL}/auth/me`, {
+    // GET /auth/me responds { user: {...} }, not the profile flat at the
+    // top level — unwrap it here so callers get CurrentUserProfile directly.
+    const res = await client.get<{ user: CurrentUserProfile }>(`${API_URL}/auth/me`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    return res.data as CurrentUserProfile;
+    return res.data.user;
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
     throw new Error(error.response?.data?.message || getErrorMessage(err));

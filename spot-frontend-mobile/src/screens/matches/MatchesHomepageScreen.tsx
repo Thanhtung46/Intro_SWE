@@ -1,11 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import FilterSheet from '@/components/matches/FilterSheet';
@@ -20,7 +20,8 @@ import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
-import type { Match, Sport } from '@/types/match';
+import { openVenueDirections } from '@/utils/directions';
+import type { Match, MatchSuggestion, Sport } from '@/types/match';
 import { EMPTY_MATCH_FILTERS, type MatchFilters } from '@/types/matchFilters';
 
 type SubTab = 'matches' | 'groups' | 'tournaments';
@@ -30,7 +31,7 @@ type Status = 'loading' | 'ready' | 'error';
 type Props = {
   onOpenMap: () => void;
   onOpenMatch: (matchId: number) => void;
-  onHostMatch: () => void;
+  onHostMatch: (sport: Sport) => void;
   onManageMatches: () => void;
 };
 
@@ -40,10 +41,10 @@ type FabAction = { icon: keyof typeof Ionicons.glyphMap; label: string; onPress:
 // don't route through props.onHostMatch/onManageMatches (those are reserved
 // for the real Matches-tab actions once built), so the alert text always
 // matches what was actually tapped.
-function getFabActions(subTab: SubTab, props: Props, comingSoon: (feature: string) => void): FabAction[] {
+function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (feature: string) => void): FabAction[] {
   if (subTab === 'matches') {
     return [
-      { icon: 'megaphone-outline', label: 'Host a Match', onPress: props.onHostMatch },
+      { icon: 'megaphone-outline', label: 'Host a Match', onPress: () => props.onHostMatch(sport) },
       { icon: 'people-outline', label: 'Manage Matches', onPress: props.onManageMatches },
     ];
   }
@@ -87,6 +88,7 @@ const MAP_BUTTON_SIZE = 44;
  * note #1 ("Group, Tournament — chưa làm") — see SPOT-76 plan mục 2.5.
  */
 export default function MatchesHomepageScreen(props: Props) {
+  const router = useRouter();
   const [sport, setSport] = useState<Sport>('FOOTBALL');
   const [subTab, setSubTab] = useState<SubTab>('matches');
   const [searchText, setSearchText] = useState('');
@@ -98,6 +100,9 @@ export default function MatchesHomepageScreen(props: Props) {
   const [fabOpen, setFabOpen] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
+  const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
+  const [suggestionsVisible, setSuggestionsVisible] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const fetchMatches = useCallback(
     async (isRefresh = false) => {
@@ -114,6 +119,7 @@ export default function MatchesHomepageScreen(props: Props) {
           priceMax: filters.priceMax,
           province: filters.province,
           city: filters.city,
+          favorited: filters.favorited,
         });
         setMatches(result.matches);
         setStatus('ready');
@@ -131,6 +137,41 @@ export default function MatchesHomepageScreen(props: Props) {
     fetchMatches();
   }, [fetchMatches]);
 
+  // Search-as-you-type dropdown — separate from `appliedLocation`/`fetchMatches`
+  // above so the visible match list only changes on submit/tap, not on every
+  // keystroke (spot-backend/CLAUDE.md "Homepage search": debounce ~300ms).
+  useEffect(() => {
+    const trimmed = searchText.trim();
+    if (!trimmed) {
+      setSuggestions([]);
+      return;
+    }
+    setSuggestionsLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const result = await listMatches({ sport, location: trimmed });
+        setSuggestions(result.suggestions ?? []);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchText, sport]);
+
+  const applySuggestion = (suggestion: MatchSuggestion) => {
+    setSearchText(suggestion.text);
+    setAppliedLocation(suggestion.text);
+    setSuggestionsVisible(false);
+  };
+
+  const suggestionIcon = (kind: MatchSuggestion['kind']): keyof typeof Ionicons.glyphMap => {
+    if (kind === 'venueName') return 'storefront-outline';
+    if (kind === 'venueAddress') return 'location-outline';
+    return 'pricetag-outline';
+  };
+
   const handleToggleFavorite = async (match: Match) => {
     const nextFavorited = !match.isFavorited;
     setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
@@ -143,9 +184,6 @@ export default function MatchesHomepageScreen(props: Props) {
     }
   };
 
-  const handleShare = (match: Match) => {
-    Share.share({ message: `${match.title} — ${match.venueName}, ${match.venueAddress}` }).catch(() => undefined);
-  };
 
   const handleSubTabPress = (tab: SubTab) => {
     setSubTab(tab);
@@ -155,7 +193,7 @@ export default function MatchesHomepageScreen(props: Props) {
   };
 
   const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
-  const fabActions = getFabActions(subTab, props, comingSoon);
+  const fabActions = getFabActions(subTab, sport, props, comingSoon);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
@@ -169,11 +207,11 @@ export default function MatchesHomepageScreen(props: Props) {
               style={[styles.sportButton, isActive && styles.sportButtonActive]}
               onPress={() => setSport(item)}
             >
-              <Ionicons
-                name={item === 'FOOTBALL' ? 'football-outline' : 'tennisball-outline'}
-                size={16}
-                color={isActive ? colors.white : colors.primaryDark}
-              />
+              {item === 'FOOTBALL' ? (
+                <Ionicons name="football-outline" size={16} color={isActive ? colors.white : colors.primaryDark} />
+              ) : (
+                <MaterialCommunityIcons name="badminton" size={16} color={isActive ? colors.white : colors.primaryDark} />
+              )}
               <Text style={[styles.sportButtonText, isActive && styles.sportButtonTextActive]}>
                 {item === 'FOOTBALL' ? 'Football' : 'Badminton'}
               </Text>
@@ -192,7 +230,11 @@ export default function MatchesHomepageScreen(props: Props) {
             placeholderTextColor={colors.outline}
             value={searchText}
             onChangeText={setSearchText}
-            onSubmitEditing={() => setAppliedLocation(searchText)}
+            onFocus={() => setSuggestionsVisible(true)}
+            onSubmitEditing={() => {
+              setAppliedLocation(searchText);
+              setSuggestionsVisible(false);
+            }}
             returnKeyType="search"
           />
           <TouchableOpacity testID="matches-filter-button" onPress={() => setFilterVisible(true)} hitSlop={8}>
@@ -203,6 +245,28 @@ export default function MatchesHomepageScreen(props: Props) {
           <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
         </TouchableOpacity>
       </View>
+
+      {suggestionsVisible && searchText.trim().length > 0 && (suggestionsLoading || suggestions.length > 0) && (
+        <View testID="matches-search-suggestions" style={styles.suggestionsBox}>
+          {suggestionsLoading ? (
+            <ActivityIndicator style={styles.suggestionsSpinner} color={colors.primary} />
+          ) : (
+            suggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={`${suggestion.kind}-${suggestion.text}`}
+                testID={`matches-search-suggestion-${index}`}
+                style={styles.suggestionRow}
+                onPress={() => applySuggestion(suggestion)}
+              >
+                <Ionicons name={suggestionIcon(suggestion.kind)} size={16} color={colors.outline} />
+                <Text style={styles.suggestionText} numberOfLines={1}>
+                  {suggestion.text}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      )}
 
       <View style={styles.subTabs}>
         {([
@@ -252,7 +316,7 @@ export default function MatchesHomepageScreen(props: Props) {
               match={match}
               onPress={() => props.onOpenMatch(match.matchId)}
               onToggleFavorite={() => handleToggleFavorite(match)}
-              onShare={() => handleShare(match)}
+              onDirections={() => openVenueDirections(router, match)}
             />
           ))
         )}
@@ -357,6 +421,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  suggestionsBox: {
+    marginHorizontal: spacing.md,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingVertical: spacing.xs,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  suggestionsSpinner: { paddingVertical: spacing.sm },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  suggestionText: { flex: 1, fontSize: 13, color: colors.headingText },
+
   subTabs: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,
@@ -387,11 +476,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    borderWidth: 3,
+    borderColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 12,
   },
   fabMenu: {
     position: 'absolute',

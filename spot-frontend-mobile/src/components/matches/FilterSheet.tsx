@@ -1,12 +1,16 @@
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { formatVnd } from '@/utils/format';
+import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
 import { getVnAdminTree } from '@/services/matchService';
 import type { MatchFilters } from '@/types/matchFilters';
 import type { Sport } from '@/types/match';
@@ -22,18 +26,23 @@ type Props = {
 
 type LocationMode = 'location' | 'distance';
 
+const PRICE_MIN = 0;
+const PRICE_MAX = 500000;
+const PRICE_STEP = 10000;
+// Extra inset beyond the sheet's own content padding so the slider's thumbs
+// (and their larger touch targets) never sit flush against the screen edge
+// / the phone's gesture-nav strip.
+const SLIDER_INSET = spacing.md;
+
 /**
  * Filter sheet (Figma node 87:1903, SPOT-76). Self-contained Modal-based
  * component like src/components/ProfileMenu.tsx — not a route, so no
  * expo-router dependency, matching the thin-route split's scope (only
  * app/<route>.tsx + src/screens pairs need that split).
  *
- * Location (Province/City) now calls the real `GET /geo/vn` shape via
- * matchService's `getVnAdminTree()` mock — spot-backend shipped this
- * dataset in commit 84474d2 (SPOT-76 plan mục 2.1, previously blocked on
- * an npm VN-provinces package that didn't work in React Native; the
- * backend team solved it server-side instead). `SelectField` (already used
- * by profile edit) backs both dropdowns — City is empty/disabled until a
+ * Location (Province/City) calls the real `GET /geo/vn` shape via
+ * matchService's `getVnAdminTree()` — `SelectField` (already used by
+ * profile edit) backs both dropdowns — City is empty/disabled until a
  * Province is picked.
  *
  * Distance (radius slider) is still stubbed: needs the device's current
@@ -41,24 +50,31 @@ type LocationMode = 'location' | 'distance';
  * itself renders this section dimmed/inert when Location is selected, so
  * the "not functional yet" state already matches the design intent.
  *
- * No slider/date-picker library is installed (`@react-native-community/*`
- * isn't a dependency), so Date/Time/Price use plain TextInput fields typed
- * to match spot-backend's exact formats (YYYY-MM-DD / HH:mm) instead of the
- * drag widgets Figma mocks — swap for a real picker/slider if one gets
- * added as a dependency later.
+ * Date/Time use `@react-native-community/datetimepicker` (Expo Go
+ * compatible) instead of plain text fields, matching Figma's calendar/clock
+ * pickers. Price Range uses a two-thumb slider
+ * (`@ptomasroos/react-native-multi-slider`, pure JS, no native build step)
+ * in VND (see src/utils/format.ts's currency decision — Figma mocks `$`
+ * but spot-backend only ever works in VND).
  */
 export default function FilterSheet({ visible, sport, initialFilters, onClose, onApply }: Props) {
   const [date, setDate] = useState('');
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [priceMin, setPriceMin] = useState('');
-  const [priceMax, setPriceMax] = useState('');
+  const [priceMin, setPriceMin] = useState(PRICE_MIN);
+  const [priceMax, setPriceMax] = useState(PRICE_MAX);
+  const [favoritedOnly, setFavoritedOnly] = useState(false);
   const [locationMode, setLocationMode] = useState<LocationMode>('location');
   const [provinces, setProvinces] = useState<VnProvince[]>([]);
   const [provincesLoading, setProvincesLoading] = useState(false);
   const [provinceCode, setProvinceCode] = useState('');
   const [cityCode, setCityCode] = useState('');
+  const [sliderWidth, setSliderWidth] = useState(0);
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimeFromPicker, setShowTimeFromPicker] = useState(false);
+  const [showTimeToPicker, setShowTimeToPicker] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -66,8 +82,9 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setTimeFrom(initialFilters.timeFrom ?? '');
     setTimeTo(initialFilters.timeTo ?? '');
     setSelectedSkills(initialFilters.skill);
-    setPriceMin(initialFilters.priceMin != null ? String(initialFilters.priceMin) : '');
-    setPriceMax(initialFilters.priceMax != null ? String(initialFilters.priceMax) : '');
+    setPriceMin(initialFilters.priceMin ?? PRICE_MIN);
+    setPriceMax(initialFilters.priceMax ?? PRICE_MAX);
+    setFavoritedOnly(initialFilters.favorited ?? false);
     setProvinceCode(initialFilters.province ?? '');
     setCityCode(initialFilters.city ?? '');
   }, [visible, initialFilters]);
@@ -93,27 +110,45 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setTimeFrom('');
     setTimeTo('');
     setSelectedSkills([]);
-    setPriceMin('');
-    setPriceMax('');
+    setPriceMin(PRICE_MIN);
+    setPriceMax(PRICE_MAX);
+    setFavoritedOnly(false);
     setProvinceCode('');
     setCityCode('');
     setLocationMode('location');
   };
 
   const handleApply = () => {
-    const parsedMin = priceMin.trim() ? Number(priceMin) : undefined;
-    const parsedMax = priceMax.trim() ? Number(priceMax) : undefined;
     onApply({
-      date: date.trim() || undefined,
-      timeFrom: timeFrom.trim() || undefined,
-      timeTo: timeTo.trim() || undefined,
+      date: date || undefined,
+      timeFrom: timeFrom || undefined,
+      timeTo: timeTo || undefined,
       skill: selectedSkills,
-      priceMin: Number.isFinite(parsedMin) ? parsedMin : undefined,
-      priceMax: Number.isFinite(parsedMax) ? parsedMax : undefined,
+      priceMin: priceMin > PRICE_MIN ? priceMin : undefined,
+      priceMax: priceMax < PRICE_MAX ? priceMax : undefined,
       province: locationMode === 'location' ? provinceCode || undefined : undefined,
       city: locationMode === 'location' ? cityCode || undefined : undefined,
+      favorited: favoritedOnly || undefined,
     });
     onClose();
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed' || !selected) return;
+    setDate(toIsoDate(selected));
+  };
+
+  const handleTimeFromChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShowTimeFromPicker(false);
+    if (event.type === 'dismissed' || !selected) return;
+    setTimeFrom(toHm(selected));
+  };
+
+  const handleTimeToChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShowTimeToPicker(false);
+    if (event.type === 'dismissed' || !selected) return;
+    setTimeTo(toHm(selected));
   };
 
   return (
@@ -130,14 +165,29 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Date</Text>
-              <TextInput
+              <TouchableOpacity
                 testID="filter-date-input"
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.outline}
-                value={date}
-                onChangeText={setDate}
-              />
+                style={styles.pickerField}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>
+                  {date ? formatDisplayDate(date) : 'Select a date'}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date ? parseIsoDate(date) : new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                />
+              )}
+              {Platform.OS === 'ios' && showDatePicker && (
+                <TouchableOpacity style={styles.doneButton} onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.doneButtonText}>Done</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.section}>
@@ -145,27 +195,56 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
               <View style={styles.row}>
                 <View style={styles.rowItem}>
                   <Text style={styles.fieldLabel}>From</Text>
-                  <TextInput
+                  <TouchableOpacity
                     testID="filter-time-from-input"
-                    style={styles.input}
-                    placeholder="HH:mm"
-                    placeholderTextColor={colors.outline}
-                    value={timeFrom}
-                    onChangeText={setTimeFrom}
-                  />
+                    style={styles.pickerField}
+                    onPress={() => setShowTimeFromPicker(true)}
+                  >
+                    <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
+                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.rowItem}>
                   <Text style={styles.fieldLabel}>To</Text>
-                  <TextInput
+                  <TouchableOpacity
                     testID="filter-time-to-input"
-                    style={styles.input}
-                    placeholder="HH:mm"
-                    placeholderTextColor={colors.outline}
-                    value={timeTo}
-                    onChangeText={setTimeTo}
-                  />
+                    style={styles.pickerField}
+                    onPress={() => setShowTimeToPicker(true)}
+                  >
+                    <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
+                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
                 </View>
               </View>
+              {showTimeFromPicker && (
+                <DateTimePicker
+                  value={timeFrom ? parseHm(timeFrom) : new Date()}
+                  mode="time"
+                  is24Hour
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleTimeFromChange}
+                />
+              )}
+              {showTimeToPicker && (
+                <DateTimePicker
+                  value={timeTo ? parseHm(timeTo) : new Date()}
+                  mode="time"
+                  is24Hour
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleTimeToChange}
+                />
+              )}
+              {Platform.OS === 'ios' && (showTimeFromPicker || showTimeToPicker) && (
+                <TouchableOpacity
+                  style={styles.doneButton}
+                  onPress={() => {
+                    setShowTimeFromPicker(false);
+                    setShowTimeToPicker(false);
+                  }}
+                >
+                  <Text style={styles.doneButtonText}>Done</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.section}>
@@ -192,12 +271,28 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                   />
                   <SelectField
                     label="Ward/Commune"
-                    placeholder={provinceCode ? 'Select ward' : 'Pick a province first'}
+                    placeholder={provinceCode ? 'Select ward' : 'Pick province'}
                     value={cityCode}
                     onChange={setCityCode}
                     options={cityOptions}
                     containerStyle={styles.rowItem}
                   />
+                  <View style={styles.favoriteWrap}>
+                    <Text style={styles.favoriteSpacerLabel}> </Text>
+                    <TouchableOpacity
+                      testID="filter-favorited-toggle"
+                      style={styles.favoriteButton}
+                      onPress={() => setFavoritedOnly((prev) => !prev)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Favorited matches only"
+                    >
+                      <Ionicons
+                        name={favoritedOnly ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={favoritedOnly ? colors.error : colors.primaryDark}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -227,11 +322,13 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       testID={`filter-skill-${skill.code}`}
                       style={[
                         styles.skillChip,
-                        { backgroundColor: selected ? tier.text : tier.bg, borderColor: tier.border },
+                        { backgroundColor: tier.text, borderColor: tier.text },
+                        selected && styles.skillChipSelected,
                       ]}
                       onPress={() => toggleSkill(skill.code)}
                     >
-                      <Text style={[styles.skillChipText, { color: selected ? colors.white : tier.text }]}>{skill.label}</Text>
+                      {selected && <Ionicons name="checkmark" size={14} color={colors.white} style={styles.skillChipCheck} />}
+                      <Text style={styles.skillChipText}>{skill.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -239,26 +336,34 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Price Range (VNĐ)</Text>
-              <View style={styles.row}>
-                <TextInput
-                  testID="filter-price-min-input"
-                  style={[styles.input, styles.rowItem]}
-                  placeholder="Min"
-                  placeholderTextColor={colors.outline}
-                  keyboardType="numeric"
-                  value={priceMin}
-                  onChangeText={setPriceMin}
-                />
-                <TextInput
-                  testID="filter-price-max-input"
-                  style={[styles.input, styles.rowItem]}
-                  placeholder="Max"
-                  placeholderTextColor={colors.outline}
-                  keyboardType="numeric"
-                  value={priceMax}
-                  onChangeText={setPriceMax}
-                />
+              <View style={styles.priceHeaderRow}>
+                <Text style={styles.sectionLabel}>Price Range</Text>
+                <Text style={styles.priceValue}>
+                  {formatVnd(priceMin)} - {priceMax >= PRICE_MAX ? `${formatVnd(PRICE_MAX)}+` : formatVnd(priceMax)}
+                </Text>
+              </View>
+              <View style={styles.sliderWrap} onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}>
+                {sliderWidth > 0 && (
+                  <MultiSlider
+                    values={[priceMin, priceMax]}
+                    min={PRICE_MIN}
+                    max={PRICE_MAX}
+                    step={PRICE_STEP}
+                    sliderLength={Math.max(sliderWidth - SLIDER_INSET * 2, 0)}
+                    onValuesChange={([lo, hi]) => {
+                      setPriceMin(lo);
+                      setPriceMax(hi);
+                    }}
+                    selectedStyle={{ backgroundColor: colors.primaryDark }}
+                    unselectedStyle={{ backgroundColor: colors.cardBorder }}
+                    markerStyle={styles.sliderMarker}
+                    touchDimensions={{ height: 40, width: 40, borderRadius: 20, slipDisplacement: 40 }}
+                  />
+                )}
+              </View>
+              <View style={styles.priceRangeLabels}>
+                <Text style={styles.helperText}>{formatVnd(PRICE_MIN)}</Text>
+                <Text style={styles.helperText}>{formatVnd(PRICE_MAX)}+</Text>
               </View>
             </View>
           </ScrollView>
@@ -309,15 +414,31 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm },
   rowItem: { flex: 1, gap: spacing.xxs },
   geoLoading: { alignSelf: 'flex-start', marginVertical: spacing.sm },
-  input: {
+  pickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    fontSize: 14,
-    color: colors.headingText,
     backgroundColor: colors.white,
+  },
+  pickerValue: { fontSize: 14, color: colors.headingText },
+  pickerPlaceholder: { fontSize: 14, color: colors.outline },
+  doneButton: { alignSelf: 'flex-end', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  doneButtonText: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
+  favoriteWrap: { gap: spacing.xxs },
+  favoriteSpacerLabel: { fontSize: 14, marginBottom: 6, opacity: 0 },
+  favoriteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   radioOuter: {
@@ -332,19 +453,32 @@ const styles = StyleSheet.create({
   radioOuterActive: { borderColor: colors.primaryDark },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primaryDark },
   disabledBlock: { flexDirection: 'row', gap: spacing.sm, opacity: 0.4 },
-  disabledField: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 8,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
   disabledFieldText: { fontSize: 13, color: colors.bodyText },
   helperText: { fontSize: 11, color: colors.outline },
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  skillChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  skillChipText: { fontSize: 13, fontWeight: '700' },
+  skillChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  skillChipSelected: { borderColor: colors.headingText, borderWidth: 2 },
+  skillChipCheck: { marginRight: spacing.xxs },
+  skillChipText: { fontSize: 13, fontWeight: '700', color: colors.white },
+  priceHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceValue: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  sliderWrap: { width: '100%', alignItems: 'center', paddingVertical: spacing.xs, paddingHorizontal: SLIDER_INSET },
+  sliderMarker: {
+    height: 22,
+    width: 22,
+    borderRadius: 11,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primaryDark,
+  },
+  priceRangeLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   footer: {
     flexDirection: 'row',
     gap: spacing.sm,

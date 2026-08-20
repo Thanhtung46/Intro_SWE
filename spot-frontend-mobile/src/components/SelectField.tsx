@@ -34,7 +34,7 @@ export function SelectField({ label, required, placeholder, value, options, onCh
         onPress={() => setOpen(true)}
         activeOpacity={0.7}
       >
-        <Text style={selected ? styles.valueText : styles.placeholderText}>
+        <Text style={selected ? styles.valueText : styles.placeholderText} numberOfLines={1} ellipsizeMode="tail">
           {selected ? selected.label : placeholder}
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.placeholder} />
@@ -93,10 +93,14 @@ const styles = StyleSheet.create({
     borderColor: colors.formError,
   },
   valueText: {
+    flexShrink: 1,
+    marginRight: 8,
     fontSize: 15,
     color: colors.text,
   },
   placeholderText: {
+    flexShrink: 1,
+    marginRight: 8,
     fontSize: 15,
     color: colors.placeholder,
   },

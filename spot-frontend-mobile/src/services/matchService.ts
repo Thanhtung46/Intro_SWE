@@ -1,16 +1,20 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
-import { API_URL } from '../config/env';
-import { getToken } from '@/utils/authStorage';
+import { AxiosError } from 'axios';
+import apiClient from './apiClient';
 import type {
+  CreateMatchBulkPayload,
   CreateMatchPayload,
   HostProfile,
+  HostReviewsResult,
   JoinMatchPayload,
   JoinRequest,
   ListMatchesQuery,
   ListMatchesResult,
   ListMineQuery,
+  ListMyJoinRequestsResult,
   Match,
   MatchDetail,
+  Sport,
+  VenueSuggestion,
 } from '@/types/match';
 import type { VnAdminTree } from '@/types/geo';
 
@@ -20,15 +24,16 @@ import type { VnAdminTree } from '@/types/geo';
 // confirmed runnable — exported names/signatures kept stable, so no call
 // site (screens/components) needed to change.
 //
-// Every request needs `Authorization: Bearer <token>` (spot-backend's
-// `authenticate` middleware) — via src/utils/authStorage.ts's getToken(),
-// per .claude/rules/api-conventions.md ("Auth tokens — always via
-// expo-secure-store"). If nothing is signed in yet (no token stored),
-// requests go out without the header and spot-backend will 401 — that's a
-// login/session concern outside this file's scope, not something to paper
-// over here.
-
-const client: AxiosInstance = axios.create();
+// Routed through src/services/apiClient.ts (not a standalone axios
+// instance) so every call here gets its Authorization header attached
+// automatically *and* gets the 401 → refresh-token → retry handling that
+// lives on apiClient's interceptors. This file used to have its own plain
+// `axios.create()` + a manual authHeaders() helper with none of that retry
+// logic — meaning the access token (15 min TTL) expiring mid-session
+// surfaced as an un-recoverable "Invalid or expired token" on every Matches
+// screen instead of silently refreshing like the rest of the app already
+// does. Fixed by switching to apiClient; paths below are relative
+// (apiClient already carries `baseURL: API_URL`).
 
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -37,11 +42,6 @@ export function getErrorMessage(error: unknown): string {
 
 interface ApiErrorBody {
   message?: string;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const token = await getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /** Maps an AxiosError to a thrown Error with spot-backend's message when available — screens already catch + call getErrorMessage(err). */
@@ -64,11 +64,12 @@ function throwFromAxiosError(err: unknown, fallback: string): never {
  */
 export async function listMatches(query: ListMatchesQuery = {}): Promise<ListMatchesResult> {
   try {
-    const res = await client.get(`${API_URL}/matches`, {
-      params: query,
-      headers: await authHeaders(),
-    });
-    return { matches: res.data.matches as Match[], total: res.data.total as number };
+    const res = await apiClient.get('/matches', { params: query });
+    return {
+      matches: res.data.matches as Match[],
+      total: res.data.total as number,
+      suggestions: res.data.suggestions as ListMatchesResult['suggestions'],
+    };
   } catch (err) {
     throwFromAxiosError(err, "Couldn't load matches. Check your network and try again.");
   }
@@ -77,40 +78,98 @@ export async function listMatches(query: ListMatchesQuery = {}): Promise<ListMat
 /** GET /matches/mine — "Manage Matches" (FAB > Matches tab), tab=active|completed. */
 export async function listMine(query: ListMineQuery = {}): Promise<ListMatchesResult> {
   try {
-    const res = await client.get(`${API_URL}/matches/mine`, {
-      params: query,
-      headers: await authHeaders(),
-    });
+    const res = await apiClient.get('/matches/mine', { params: query });
     return { matches: res.data.matches as Match[], total: res.data.total as number };
   } catch (err) {
     throwFromAxiosError(err, "Couldn't load your matches. Check your network and try again.");
   }
 }
 
+/** GET /matches/my-join-requests — Manage Matches "Requests" tab (joiner's own PENDING + REJECTED). */
+export async function listMyJoinRequests(
+  query: { status?: 'PENDING' | 'REJECTED'; limit?: number; offset?: number } = {}
+): Promise<ListMyJoinRequestsResult> {
+  try {
+    const res = await apiClient.get('/matches/my-join-requests', { params: query });
+    return {
+      requests: res.data.requests,
+      total: res.data.total,
+      pendingCount: res.data.pendingCount,
+    };
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load your join requests. Check your network and try again.");
+  }
+}
+
+/** DELETE /matches/:id/join — participant cancels their own PENDING join request. */
+export async function cancelJoinRequest(matchId: number): Promise<void> {
+  try {
+    await apiClient.delete(`/matches/${matchId}/join`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't cancel your request. Check your network and try again.");
+  }
+}
+
+/** GET /matches/:id/requests — host's waiting list (Manage Squad "Pending Approval"), PENDING only. */
+export async function listMatchRequests(matchId: number): Promise<JoinRequest[]> {
+  try {
+    const res = await apiClient.get(`/matches/${matchId}/requests`);
+    return res.data.requests as JoinRequest[];
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load join requests. Check your network and try again.");
+  }
+}
+
+/** POST /matches/:id/requests/:requestId/accept — Manage Squad "Approve". */
+export async function acceptJoinRequest(matchId: number, requestId: number): Promise<void> {
+  try {
+    await apiClient.post(`/matches/${matchId}/requests/${requestId}/accept`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't approve this request. Check your network and try again.");
+  }
+}
+
+/** POST /matches/:id/requests/:requestId/reject — Manage Squad "Decline". */
+export async function rejectJoinRequest(matchId: number, requestId: number): Promise<void> {
+  try {
+    await apiClient.post(`/matches/${matchId}/requests/${requestId}/reject`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't decline this request. Check your network and try again.");
+  }
+}
+
 /** GET /matches/:id — Match detail (`100:401`) + Join Match sheet (`100:551`). */
 export async function getMatchDetail(matchId: number): Promise<MatchDetail> {
   try {
-    const res = await client.get(`${API_URL}/matches/${matchId}`, {
-      headers: await authHeaders(),
-    });
+    const res = await apiClient.get(`/matches/${matchId}`);
     return res.data as MatchDetail;
   } catch (err) {
     throwFromAxiosError(err, 'Match not found.');
   }
 }
 
+export type JoinMatchResult = {
+  request: JoinRequest;
+  skillWarning: boolean;
+  warning: string | null;
+};
+
 /**
  * POST /matches/:id/join — multi-guest, `join-match.dto.js` allows up to 10
  * guests + optional message/phoneNumber override. `guests[].gender` here is
  * the GENDER_RANGE fee split, not a profile edit — see SPOT-76 plan mục 2.2
  * (Gender/Skill on "You" card are read-only, only Phone + Message editable).
+ *
+ * Response is { message, skillWarning, warning, request, match } — not a
+ * flat JoinRequest (same shape mistake as getMe()/hostMatch() before those
+ * were fixed). skillWarning/warning were silently dropped by the old
+ * `res.data as JoinRequest` cast, so joining out-of-range never surfaced
+ * spot-backend's "skill mismatch — warns but still joins" warning anywhere.
  */
-export async function joinMatch(matchId: number, payload: JoinMatchPayload): Promise<JoinRequest> {
+export async function joinMatch(matchId: number, payload: JoinMatchPayload): Promise<JoinMatchResult> {
   try {
-    const res = await client.post(`${API_URL}/matches/${matchId}/join`, payload, {
-      headers: await authHeaders(),
-    });
-    return res.data as JoinRequest;
+    const res = await apiClient.post<JoinMatchResult>(`/matches/${matchId}/join`, payload);
+    return { request: res.data.request, skillWarning: res.data.skillWarning, warning: res.data.warning };
   } catch (err) {
     throwFromAxiosError(err, "Couldn't send your request. Check your network and try again.");
   }
@@ -119,11 +178,10 @@ export async function joinMatch(matchId: number, payload: JoinMatchPayload): Pro
 /** POST/DELETE /matches/:id/favorite — heart icon on card/detail. */
 export async function setFavorite(matchId: number, favorited: boolean): Promise<{ isFavorited: boolean }> {
   try {
-    const headers = await authHeaders();
     if (favorited) {
-      await client.post(`${API_URL}/matches/${matchId}/favorite`, undefined, { headers });
+      await apiClient.post(`/matches/${matchId}/favorite`);
     } else {
-      await client.delete(`${API_URL}/matches/${matchId}/favorite`, { headers });
+      await apiClient.delete(`/matches/${matchId}/favorite`);
     }
     return { isFavorited: favorited };
   } catch (err) {
@@ -138,12 +196,49 @@ export async function setFavorite(matchId: number, favorited: boolean): Promise<
  */
 export async function hostMatch(payload: CreateMatchPayload): Promise<Match> {
   try {
-    const res = await client.post(`${API_URL}/matches`, payload, {
-      headers: await authHeaders(),
-    });
-    return res.data as Match;
+    // POST /matches responds { message, match: {...} } — unwrap it, same
+    // shape mistake as getMe()/getHostProfile() before this was fixed.
+    const res = await apiClient.post<{ match: Match }>('/matches', payload);
+    return res.data.match;
   } catch (err) {
     throwFromAxiosError(err, "Couldn't create your match. Check your network and try again.");
+  }
+}
+
+export type HostMatchBulkResult = {
+  totalRequested: number;
+  totalCreated: number;
+  created: Match[];
+  failed: { startsAt: string; endsAt: string; message: string; details?: unknown }[];
+};
+
+/**
+ * POST /matches/bulk — recurring kèo (Vmito-style multi-publish). Partial
+ * failures (409 per slot, e.g. pitch already booked) come back in `failed`
+ * alongside whatever did succeed in `created` — this only throws when
+ * *every* slot failed (spot-backend/CLAUDE.md "Recurring / N kèo").
+ */
+export async function hostMatchBulk(payload: CreateMatchBulkPayload): Promise<HostMatchBulkResult> {
+  try {
+    const res = await apiClient.post<HostMatchBulkResult>('/matches/bulk', payload);
+    return res.data;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't create your matches. Check your network and try again.");
+  }
+}
+
+/**
+ * GET /matches/venue-suggestions — Host form location picker (wider pool
+ * than Homepage browse; `location` is required, min 1 char).
+ */
+export async function getVenueSuggestions(location: string, sport?: Sport): Promise<VenueSuggestion[]> {
+  try {
+    const res = await apiClient.get<{ suggestions: VenueSuggestion[] }>('/matches/venue-suggestions', {
+      params: { location, sport },
+    });
+    return res.data.suggestions;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load venue suggestions. Check your network and try again.");
   }
 }
 
@@ -154,12 +249,23 @@ export async function hostMatch(payload: CreateMatchPayload): Promise<Match> {
  */
 export async function getHostProfile(userId: number): Promise<HostProfile> {
   try {
-    const res = await client.get(`${API_URL}/users/${userId}`, {
-      headers: await authHeaders(),
-    });
-    return res.data as HostProfile;
+    // GET /users/:id responds { user: {...} }, not the profile flat at the
+    // top level — unwrap it here so callers get HostProfile directly (same
+    // response shape as GET /auth/me, see authService.ts's getMe()).
+    const res = await apiClient.get<{ user: HostProfile }>(`/users/${userId}`);
+    return res.data.user;
   } catch (err) {
     throwFromAxiosError(err, 'User not found.');
+  }
+}
+
+/** GET /reviews/hosts/:userId/reviews — Check Profile's Reviews section. */
+export async function getHostReviews(userId: number, limit = 20): Promise<HostReviewsResult> {
+  try {
+    const res = await apiClient.get(`/reviews/hosts/${userId}/reviews`, { params: { limit } });
+    return res.data as HostReviewsResult;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load reviews. Check your network and try again.");
   }
 }
 
@@ -174,9 +280,7 @@ let vnAdminTreeCache: VnAdminTree | null = null;
 export async function getVnAdminTree(): Promise<VnAdminTree> {
   if (vnAdminTreeCache) return vnAdminTreeCache;
   try {
-    const res = await client.get(`${API_URL}/geo/vn`, {
-      headers: await authHeaders(),
-    });
+    const res = await apiClient.get('/geo/vn');
     vnAdminTreeCache = { provinces: res.data.provinces } as VnAdminTree;
     return vnAdminTreeCache;
   } catch (err) {

@@ -2,11 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import FormField from '@/components/common/FormField';
+import InfoDialog from '@/components/common/InfoDialog';
 import SubmitButton from '@/components/common/SubmitButton';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -45,6 +46,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [submitError, setSubmitError] = useState('');
+  const [resultDialog, setResultDialog] = useState<{ tone: 'success' | 'warning'; title: string; message: string } | null>(null);
 
   const {
     control,
@@ -72,10 +74,18 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError('');
     try {
-      await joinMatch(matchId, values);
-      Alert.alert('Request sent', "You'll be notified once the host responds.");
+      const result = await joinMatch(matchId, values);
       onClose();
-      onSubmitted();
+      setResultDialog(
+        result.skillWarning
+          ? {
+              tone: 'warning',
+              title: 'Request Sent — Skill Warning',
+              message:
+                result.warning ?? 'Your skill (or a guest skill) is outside this match range, but the request was still sent.',
+            }
+          : { tone: 'success', title: 'Request Sent', message: "You'll be notified once the host responds." }
+      );
     } catch (err) {
       setSubmitError(getErrorMessage(err));
     }
@@ -85,6 +95,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
   const profileSkillLabel = profile ? skillLabel(sport, profile.skills[sportSkillKey]) : null;
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
@@ -172,6 +183,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                         onChangeText={field.onChange}
                         multiline
                         numberOfLines={3}
+                        style={styles.messageInput}
                         error={fieldState.error?.message}
                       />
                     )}
@@ -304,6 +316,18 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
         </SafeAreaView>
       </View>
     </Modal>
+
+    <InfoDialog
+      visible={resultDialog != null}
+      tone={resultDialog?.tone ?? 'success'}
+      title={resultDialog?.title ?? ''}
+      message={resultDialog?.message ?? ''}
+      onDismiss={() => {
+        setResultDialog(null);
+        onSubmitted();
+      }}
+    />
+    </>
   );
 }
 
@@ -330,6 +354,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.md },
+  messageInput: { height: 90, paddingTop: spacing.sm, textAlignVertical: 'top' },
 
   skillBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.skillTierOrangeBg, borderRadius: 12, padding: spacing.md },
   skillBannerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.skillTierOrangeText, alignItems: 'center', justifyContent: 'center' },

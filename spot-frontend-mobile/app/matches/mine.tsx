@@ -6,6 +6,10 @@ export default function ManageMatchesRoute() {
   const router = useRouter();
 
   return (
-    <ManageMatchesScreen onBack={() => router.back()} onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)} />
+    <ManageMatchesScreen
+      onBack={() => router.back()}
+      onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)}
+      onManageSquad={(matchId) => router.push(`/matches/${matchId}/squad`)}
+    />
   );
 }

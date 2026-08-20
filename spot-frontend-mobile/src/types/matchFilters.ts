@@ -15,6 +15,7 @@ export type MatchFilters = {
   // via commit 84474d2). `city` requires `province`.
   province?: string;
   city?: string;
+  favorited?: boolean;
 };
 
 export const EMPTY_MATCH_FILTERS: MatchFilters = { skill: [] };

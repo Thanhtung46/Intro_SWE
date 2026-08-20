@@ -4,12 +4,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import JoinMatchSheet from '@/components/matches/JoinMatchSheet';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
+import { cancelJoinRequest, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
 import type { MatchDetail, Participant } from '@/types/match';
 import { formatMatchWhen, formatVnd } from '@/utils/format';
 
@@ -52,6 +53,8 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     setStatus('loading');
@@ -68,6 +71,20 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  const handleConfirmCancelRequest = async () => {
+    if (!detail) return;
+    setCancelDialogVisible(false);
+    setIsCancelling(true);
+    try {
+      await cancelJoinRequest(detail.match.matchId);
+      await fetchDetail();
+    } catch (err) {
+      Alert.alert('Something went wrong', getErrorMessage(err));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleToggleFavorite = async () => {
     if (!detail) return;
@@ -97,7 +114,8 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
     );
   }
 
-  const { match, participants, canJoin } = detail;
+  const { match, participants, canJoin, yourRequest } = detail;
+  const isPending = yourRequest?.status === 'PENDING';
   const host = participants.find((p) => p.role === 'HOST');
   const squadMembers = buildSquadMembers(participants);
   const openSlots = Math.max(0, match.maxPlayers - 1 - squadMembers.length);
@@ -123,20 +141,11 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
             <View style={styles.sportBadge}>
               <Text style={styles.sportBadgeText}>{match.sport} · {match.format.replace(/_/g, ' ')}</Text>
             </View>
-            <Text style={styles.heroTitle}>{match.title}</Text>
+            <Text style={styles.heroTitle} numberOfLines={2} ellipsizeMode="tail">
+              {match.title}
+            </Text>
           </View>
         </View>
-
-        <SafeAreaView edges={['top']} style={styles.heroTopBarWrap}>
-          <View style={styles.heroTopBar}>
-            <TouchableOpacity testID="match-detail-back" style={styles.heroIconButton} onPress={onBack}>
-              <Ionicons name="arrow-back" size={18} color={colors.white} />
-            </TouchableOpacity>
-            <TouchableOpacity testID="match-detail-favorite" style={styles.heroIconButton} onPress={handleToggleFavorite}>
-              <Ionicons name={match.isFavorited ? 'heart' : 'heart-outline'} size={18} color={match.isFavorited ? colors.error : colors.white} />
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
 
         <View style={styles.infoStrip}>
           <InfoStripItem icon="calendar-outline" label="Time" value={formatMatchWhen(match.startsAt, match.endsAt)} />
@@ -150,8 +159,12 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
               <Ionicons name="location-outline" size={20} color={colors.primaryDark} />
             </View>
             <View style={styles.locationTextWrap}>
-              <Text style={styles.locationName}>{match.venueName}</Text>
-              <Text style={styles.locationAddress}>{match.venueAddress}</Text>
+              <Text style={styles.locationName} numberOfLines={1} ellipsizeMode="tail">
+                {match.venueName}
+              </Text>
+              <Text style={styles.locationAddress} numberOfLines={1} ellipsizeMode="tail">
+                {match.venueAddress}
+              </Text>
             </View>
             <View style={styles.mapButton}>
               <Text style={styles.mapButtonText}>Map</Text>
@@ -180,12 +193,18 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
                 </View>
                 <View style={styles.hostInfo}>
                   <View style={styles.hostNameRow}>
-                    <Text style={styles.hostName}>{host.fullName}</Text>
+                    <Text style={styles.hostName} numberOfLines={1} ellipsizeMode="tail">
+                      {host.fullName}
+                    </Text>
                     <View style={styles.hostBadge}>
                       <Text style={styles.hostBadgeText}>MATCH HOST</Text>
                     </View>
                   </View>
-                  {host.phoneNumber ? <Text style={styles.hostPhone}>{host.phoneNumber}</Text> : null}
+                  {host.phoneNumber ? (
+                    <Text style={styles.hostPhone} numberOfLines={1} ellipsizeMode="tail">
+                      {host.phoneNumber}
+                    </Text>
+                  ) : null}
                 </View>
               </TouchableOpacity>
             )}
@@ -228,21 +247,43 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
         </View>
       </ScrollView>
 
+      <SafeAreaView edges={['top']} style={styles.heroTopBarWrap}>
+        <View style={styles.heroTopBar}>
+          <TouchableOpacity testID="match-detail-back" style={styles.heroIconButton} onPress={onBack}>
+            <Ionicons name="arrow-back" size={18} color={colors.white} />
+          </TouchableOpacity>
+          <TouchableOpacity testID="match-detail-favorite" style={styles.heroIconButton} onPress={handleToggleFavorite}>
+            <Ionicons name={match.isFavorited ? 'heart' : 'heart-outline'} size={18} color={match.isFavorited ? colors.error : colors.white} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
       <SafeAreaView edges={['bottom']} style={styles.actionBarWrap}>
         <View style={styles.actionBar}>
           <View>
             <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
             <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
           </View>
-          <TouchableOpacity
-            testID="match-detail-join"
-            style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
-            onPress={() => setJoinSheetVisible(true)}
-            disabled={!canJoin}
-          >
-            <Text style={styles.joinButtonText}>{canJoin ? 'Join Match' : match.spotsLeft < 1 ? 'Full' : 'Requested'}</Text>
-            {canJoin && <Ionicons name="flash" size={16} color={colors.white} />}
-          </TouchableOpacity>
+          {isPending ? (
+            <TouchableOpacity
+              testID="match-detail-cancel-request"
+              style={[styles.cancelRequestButton, isCancelling && styles.joinButtonDisabled]}
+              onPress={() => setCancelDialogVisible(true)}
+              disabled={isCancelling}
+            >
+              <Text style={styles.cancelRequestButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel Request'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              testID="match-detail-join"
+              style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
+              onPress={() => setJoinSheetVisible(true)}
+              disabled={!canJoin}
+            >
+              <Text style={styles.joinButtonText}>{canJoin ? 'Join Match' : match.spotsLeft < 1 ? 'Full' : 'Requested'}</Text>
+              {canJoin && <Ionicons name="flash" size={16} color={colors.white} />}
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
 
@@ -256,6 +297,16 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
         }
         onClose={() => setJoinSheetVisible(false)}
         onSubmitted={fetchDetail}
+      />
+
+      <ConfirmDialog
+        visible={cancelDialogVisible}
+        title="Cancel request?"
+        message="You'll be removed from the waiting list — you can join again later."
+        confirmLabel="Cancel Request"
+        cancelLabel="Keep Request"
+        onConfirm={handleConfirmCancelRequest}
+        onCancel={() => setCancelDialogVisible(false)}
       />
     </View>
   );
@@ -299,7 +350,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.glassIconButtonBackground,
+    backgroundColor: colors.stickyIconButtonBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -358,8 +409,14 @@ const styles = StyleSheet.create({
   hostAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
   hostInfo: { flex: 1, gap: spacing.xxs },
   hostNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  hostName: { fontSize: 15, fontWeight: '700', color: colors.headingText },
-  hostBadge: { backgroundColor: colors.selectedBackground, borderRadius: 4, paddingHorizontal: spacing.xs, paddingVertical: 1 },
+  hostName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.headingText },
+  hostBadge: {
+    flexShrink: 0,
+    backgroundColor: colors.selectedBackground,
+    borderRadius: 4,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 1,
+  },
   hostBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primary },
   hostPhone: { fontSize: 12, color: colors.bodyText },
 
@@ -414,4 +471,13 @@ const styles = StyleSheet.create({
   },
   joinButtonDisabled: { backgroundColor: colors.outline },
   joinButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
+
+  cancelRequestButton: {
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  cancelRequestButtonText: { fontSize: 16, fontWeight: '700', color: colors.error },
 });

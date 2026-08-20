@@ -82,6 +82,12 @@ export const colors = {
   // Translucent icon-button background sitting on top of a hero image
   // (Match Detail's back/favorite buttons, Check Profile's back button).
   glassIconButtonBackground: 'rgba(255, 255, 255, 0.2)',
+  // Same back/favorite buttons but fixed above the ScrollView (SPOT-76 fix
+  // for the header scrolling away) — a light 20%-white glass reads fine
+  // over the blue hero but goes nearly invisible once the scroll position
+  // puts white page content behind it, so this stays a dark translucent
+  // circle regardless of what's scrolled underneath.
+  stickyIconButtonBackground: 'rgba(17, 24, 39, 0.45)',
   // Chip background inside JoinMatchSheet's "Required Skill Level" banner.
   skillBannerChipBackground: 'rgba(255, 255, 255, 0.6)',
   // Header's 3 glass circle buttons (AI/notifications/avatar, node 95:2417) —
