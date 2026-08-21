@@ -659,6 +659,17 @@ export async function countHostedByUser(client, hostUserId) {
   return rows[0]?.total ?? 0;
 }
 
+export async function countCompletedHostedByUser(client, hostUserId) {
+  const { rows } = await client.query(
+    `SELECT COUNT(*)::int AS total
+     FROM schema_matchmaking.matches
+     WHERE host_user_id = $1
+       AND status = $2`,
+    [hostUserId, MATCH_STATUSES.COMPLETED],
+  );
+  return rows[0]?.total ?? 0;
+}
+
 export async function countJoinedByUser(client, userId) {
   const { rows } = await client.query(
     `SELECT COUNT(*)::int AS total

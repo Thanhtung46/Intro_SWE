@@ -67,13 +67,18 @@ async function expectInboxType(token, type, step) {
   }
 }
 
+function phoneFor(tag) {
+  const tagSalt = [...tag].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return `08${String(stamp + tagSalt).slice(-8)}`;
+}
+
 async function registerPlayer({ tag, fullName, skill = 'REC_BASIC' }) {
   const email = emailFor(tag);
   const registered = await request('POST', '/auth/register', {
     body: {
       fullName,
       email,
-      phoneNumber: `08${String(stamp + tag.length).slice(-8)}`,
+      phoneNumber: phoneFor(tag),
       gender: 'male',
       password,
       confirmPassword: password,
@@ -267,8 +272,12 @@ expectStatus('list members', members, 200);
 if (members.json.total < 2) {
   fail('members search total', members.json);
 }
-if (!members.json.members?.some((row) => row.isAdmin)) {
-  fail('members admin flag', members.json);
+const allMembers = await request('GET', `/groups/${approvalGroupId}/members`, {
+  token: joiner1.token,
+});
+expectStatus('list all members', allMembers, 200);
+if (!allMembers.json.members?.some((row) => row.isAdmin)) {
+  fail('members admin flag', allMembers.json);
 }
 
 const schedule = await request(
