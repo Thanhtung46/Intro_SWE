@@ -27,23 +27,22 @@ export function openDirections(venue: Venue): void {
 
 /**
  * The paper-plane icon's actual handler (MatchCard, Check Profile, Join
- * Match Map — Figma "Paper-plane = directions, not share"). Navigates to
- * SPOT's own venue map (app/matches/venue-map.tsx) when coords exist;
- * without them there's nothing to plot on our map, so it falls back to
- * openDirections() (external app, accepts a free-text address).
+ * Match Map — Figma "Paper-plane = directions, not share"). Always opens
+ * SPOT's own venue map (app/matches/venue-map.tsx) first — never jumps
+ * straight to the external Maps app. VenueMapScreen itself shows an
+ * "Open in Google Maps" button (openDirections(), above) for when the host
+ * actually wants turn-by-turn directions; without lat/lng it falls back to
+ * a text-only view there instead of a pin (see VenueMapScreen.tsx).
  */
 export function openVenueDirections(router: ImperativeRouter, venue: Venue): void {
-  if (venue.latitude == null || venue.longitude == null) {
-    openDirections(venue);
-    return;
-  }
   router.push({
     pathname: '/matches/venue-map',
     params: {
       venueName: venue.venueName,
       venueAddress: venue.venueAddress,
-      latitude: String(venue.latitude),
-      longitude: String(venue.longitude),
+      ...(venue.latitude != null && venue.longitude != null
+        ? { latitude: String(venue.latitude), longitude: String(venue.longitude) }
+        : {}),
     },
   });
 }

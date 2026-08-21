@@ -58,7 +58,7 @@ export const API_URL = `${resolveApiBaseUrl()}/api`;
  * same way — protect it via Geoapify's dashboard domain/referrer allowlist,
  * not by keeping it out of the built app.
  */
-const GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY;
+export const GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY;
 
 /** XYZ tile URL template for react-native-maps' <UrlTile> — undefined if no key is configured. */
 export const GEOAPIFY_TILE_URL_TEMPLATE = GEOAPIFY_API_KEY

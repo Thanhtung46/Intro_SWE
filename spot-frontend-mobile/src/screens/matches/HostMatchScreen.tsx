@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import SubmitButton from '@/components/common/SubmitButton';
+import PinDropModal from '@/components/matches/PinDropModal';
 import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -86,6 +87,13 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
   const [provinces, setProvinces] = useState<VnProvince[]>([]);
   const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([]);
   const [venueSuggestionsVisible, setVenueSuggestionsVisible] = useState(false);
+  const [pinPickerVisible, setPinPickerVisible] = useState(false);
+  const [locationFieldHeight, setLocationFieldHeight] = useState(0);
+  // True once Province/Ward were filled from a trusted DB venue suggestion
+  // (applyVenueSuggestion) — greys them out read-only. Editing the venue
+  // name again, or dropping a pin on the map instead, unlocks them so the
+  // host can pick manually (no reverse-geocoding — see PinDropModal).
+  const [locationLocked, setLocationLocked] = useState(false);
 
   // Basics
   const [title, setTitle] = useState('');
@@ -160,6 +168,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
     setLatitude(suggestion.latitude);
     setLongitude(suggestion.longitude);
     setVenueSuggestionsVisible(false);
+    setLocationLocked(true);
   }
 
   function toggleSkill(code: string) {
@@ -378,39 +387,44 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           </Field>
 
           <Field label="Location" error={fieldErrors.venueName}>
-            <View style={styles.pickerField}>
-              <TextInput
-                testID="host-match-venue-name"
-                style={styles.locationInput}
-                placeholder="Select venue..."
-                placeholderTextColor={colors.outline}
-                value={venueName}
-                onChangeText={(t) => {
-                  setVenueName(t);
-                  setVenueSuggestionsVisible(true);
-                }}
-                onFocus={() => setVenueSuggestionsVisible(true)}
-              />
-              <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
-            </View>
-            {venueSuggestionsVisible && venueSuggestions.length > 0 && (
-              <View style={styles.suggestionsBox}>
-                {venueSuggestions.map((s, index) => (
-                  <TouchableOpacity
-                    key={`${s.venueName}-${index}`}
-                    testID={`host-match-venue-suggestion-${index}`}
-                    style={styles.suggestionRow}
-                    onPress={() => applyVenueSuggestion(s)}
-                  >
-                    <Ionicons name="location-outline" size={14} color={colors.outline} />
-                    <View style={styles.flexShrink}>
-                      <Text style={styles.suggestionText} numberOfLines={1}>{s.venueName}</Text>
-                      <Text style={styles.suggestionSubtext} numberOfLines={1}>{s.venueAddress}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.locationFieldWrap}>
+              <View style={styles.pickerField} onLayout={(e) => setLocationFieldHeight(e.nativeEvent.layout.height)}>
+                <TextInput
+                  testID="host-match-venue-name"
+                  style={styles.locationInput}
+                  placeholder="Select venue..."
+                  placeholderTextColor={colors.outline}
+                  value={venueName}
+                  onChangeText={(t) => {
+                    setVenueName(t);
+                    setVenueSuggestionsVisible(true);
+                    setLocationLocked(false);
+                  }}
+                  onFocus={() => setVenueSuggestionsVisible(true)}
+                />
+                <TouchableOpacity testID="host-match-open-map-picker" onPress={() => setPinPickerVisible(true)}>
+                  <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                </TouchableOpacity>
               </View>
-            )}
+              {venueSuggestionsVisible && venueSuggestions.length > 0 && (
+                <View style={[styles.suggestionsBox, { top: locationFieldHeight + spacing.xxs }]}>
+                  {venueSuggestions.map((s, index) => (
+                    <TouchableOpacity
+                      key={`${s.venueName}-${index}`}
+                      testID={`host-match-venue-suggestion-${index}`}
+                      style={styles.suggestionRow}
+                      onPress={() => applyVenueSuggestion(s)}
+                    >
+                      <Ionicons name="location-outline" size={14} color={colors.outline} />
+                      <View style={styles.flexShrink}>
+                        <Text style={styles.suggestionText} numberOfLines={1}>{s.venueName}</Text>
+                        <Text style={styles.suggestionSubtext} numberOfLines={1}>{s.venueAddress}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </Field>
 
           <Field label="Address" error={fieldErrors.venueAddress}>
@@ -436,6 +450,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
               options={provinces.map((p) => ({ label: p.name, value: p.code }))}
               error={fieldErrors.province}
               containerStyle={styles.rowItem}
+              disabled={locationLocked}
             />
             <SelectField
               label="Ward/Commune"
@@ -445,6 +460,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
               options={cityOptions}
               error={fieldErrors.city}
               containerStyle={styles.rowItem}
+              disabled={locationLocked}
             />
           </View>
         </Section>
@@ -782,6 +798,25 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
 
         <SubmitButton label={isRecurring ? 'Publish Matches' : 'Publish Match'} loading={isSubmitting} onPress={handleSubmit} />
       </ScrollView>
+
+      <PinDropModal
+        visible={pinPickerVisible}
+        initialLatitude={latitude}
+        initialLongitude={longitude}
+        provinces={provinces}
+        onCancel={() => setPinPickerVisible(false)}
+        onConfirm={({ latitude: lat, longitude: lng, address, province: matchedProvince, city: matchedCity }) => {
+          setLatitude(lat);
+          setLongitude(lng);
+          if (address) setVenueAddress(address);
+          if (matchedProvince) {
+            setProvince(matchedProvince);
+            setCity(matchedCity ?? ''); // clear stale city — it may belong to the previous province
+          }
+          setLocationLocked(false);
+          setPinPickerVisible(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -883,13 +918,24 @@ const styles = StyleSheet.create({
   readOnlyInput: { backgroundColor: colors.iconBackground, color: colors.bodyText },
   locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
 
+  // Absolute overlay (not in normal flow) so opening the dropdown doesn't
+  // shove Address/Province/Ward down the screen — `top` is set inline from
+  // the measured pickerField height (locationFieldHeight).
+  locationFieldWrap: { position: 'relative', zIndex: 20, elevation: 20 },
   suggestionsBox: {
-    marginTop: spacing.xxs,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: 10,
     backgroundColor: colors.white,
     overflow: 'hidden',
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 20,
   },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },

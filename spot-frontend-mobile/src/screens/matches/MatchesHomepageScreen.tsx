@@ -1,8 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -98,6 +99,20 @@ export default function MatchesHomepageScreen(props: Props) {
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  const fabAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleFab = useCallback(
+    (next: boolean) => {
+      setFabOpen(next);
+      Animated.spring(fabAnim, {
+        toValue: next ? 1 : 0,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 90,
+      }).start();
+    },
+    [fabAnim]
+  );
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
   const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
@@ -322,35 +337,55 @@ export default function MatchesHomepageScreen(props: Props) {
         )}
       </ScrollView>
 
-      {fabOpen && (
-        <View style={styles.fabMenu}>
-          {fabActions.map((action, index) => (
-            <React.Fragment key={action.label}>
-              {index > 0 && <View style={styles.fabMenuDivider} />}
-              <TouchableOpacity
-                testID={`fab-action-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
-                style={styles.fabMenuItem}
-                onPress={() => {
-                  setFabOpen(false);
-                  action.onPress();
-                }}
-              >
-                <View style={styles.fabMenuIcon}>
-                  <Ionicons name={action.icon} size={16} color={colors.primaryDark} />
-                </View>
-                <Text style={styles.fabMenuLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
-        </View>
-      )}
+      <Animated.View
+        pointerEvents={fabOpen ? 'auto' : 'none'}
+        style={[
+          styles.fabMenu,
+          {
+            opacity: fabAnim,
+            transform: [
+              { scale: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+              { translateY: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+            ],
+          },
+        ]}
+      >
+        {fabActions.map((action, index) => (
+          <React.Fragment key={action.label}>
+            {index > 0 && <View style={styles.fabMenuDivider} />}
+            <TouchableOpacity
+              testID={`fab-action-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+              style={styles.fabMenuItem}
+              onPress={() => {
+                toggleFab(false);
+                action.onPress();
+              }}
+            >
+              <View style={styles.fabMenuIcon}>
+                <Ionicons name={action.icon} size={16} color={colors.primaryDark} />
+              </View>
+              <Text style={styles.fabMenuLabel}>{action.label}</Text>
+            </TouchableOpacity>
+          </React.Fragment>
+        ))}
+      </Animated.View>
       <TouchableOpacity
         testID="matches-fab"
         style={styles.fab}
-        onPress={() => setFabOpen((open) => !open)}
+        onPress={() => toggleFab(!fabOpen)}
         activeOpacity={0.85}
       >
-        <Ionicons name={fabOpen ? 'close' : 'add'} size={26} color={colors.white} />
+        <Animated.View
+          style={{
+            transform: [
+              {
+                rotate: fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '135deg'] }),
+              },
+            ],
+          }}
+        >
+          <Ionicons name="add" size={26} color={colors.white} />
+        </Animated.View>
       </TouchableOpacity>
 
       <FilterSheet
