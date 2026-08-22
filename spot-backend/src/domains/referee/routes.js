@@ -24,6 +24,8 @@ router.post('/assignments/:id/decline', refereeController.declineAssignment);
 router.get('/venues/registrations', refereeController.listVenueRegistrations);
 router.post('/venues/:venueId/register', refereeController.registerVenue);
 router.delete('/venues/:venueId/register', refereeController.cancelVenueRegistration);
+router.post('/venues/:venueId/favorite', refereeController.favoriteVenue);
+router.delete('/venues/:venueId/favorite', refereeController.unfavoriteVenue);
 
 router.get('/schedule', refereeController.getSchedule);
 router.get('/earnings', refereeController.getEarnings);

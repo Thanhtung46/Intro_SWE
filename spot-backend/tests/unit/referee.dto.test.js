@@ -18,6 +18,38 @@ test('parseBoardQueryDto rejects lat without lng', () => {
   assert.throws(() => parseBoardQueryDto({ sport: 'football', lat: 10.7 }));
 });
 
+test('parseBoardQueryDto rejects province with distance', () => {
+  assert.throws(() =>
+    parseBoardQueryDto({
+      sport: 'football',
+      province: '79',
+      lat: 10.7,
+      lng: 106.7,
+    }),
+  );
+});
+
+test('parseBoardQueryDto accepts province and city', () => {
+  const q = parseBoardQueryDto({ sport: 'football', province: '79', city: '778' });
+  assert.equal(q.province, '79');
+  assert.equal(q.city, '778');
+});
+
+test('parseBoardQueryDto defaults radiusKm when lat/lng provided', () => {
+  const q = parseBoardQueryDto({ sport: 'football', lat: 10.7, lng: 106.7 });
+  assert.equal(q.radiusKm, 20);
+});
+
+test('parseBoardQueryDto accepts favorited and q', () => {
+  const q = parseBoardQueryDto({
+    sport: 'football',
+    favorited: 'true',
+    q: 'arena',
+  });
+  assert.equal(q.favorited, true);
+  assert.equal(q.q, 'arena');
+});
+
 test('parseRegisterVenueDto accepts badminton', () => {
   const dto = parseRegisterVenueDto({ sportType: 'badminton' });
   assert.equal(dto.sportType, 'Badminton');

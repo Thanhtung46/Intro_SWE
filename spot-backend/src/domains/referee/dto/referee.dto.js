@@ -4,6 +4,27 @@ import {
   REFEREE_INVITATION_TABS,
   REFEREE_COMPLETED_FILTERS,
 } from '../../../shared/constants/referee.js';
+import {
+  isVnCityInProvince,
+  isVnProvince,
+} from '../../../shared/constants/vn-admin.js';
+
+const blankToUndefined = (value) =>
+  value === '' || value === undefined || value === null ? undefined : value;
+
+function optionalBoolean(value) {
+  const next = blankToUndefined(value);
+  if (next === undefined) {
+    return undefined;
+  }
+  if (next === true || next === 'true' || next === '1') {
+    return true;
+  }
+  if (next === false || next === 'false' || next === '0') {
+    return false;
+  }
+  return next;
+}
 
 const sportQuerySchema = z
   .string()
@@ -12,25 +33,106 @@ const sportQuerySchema = z
   .transform((v) => normalizeSportType(v))
   .refine((v) => v != null, 'Unsupported sport');
 
-export const boardQuerySchema = z.object({
-  sport: sportQuerySchema,
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
-  radiusKm: z.coerce.number().min(1).max(100).optional().default(20),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
-});
+export const boardQuerySchema = z
+  .object({
+    sport: sportQuerySchema,
+    lat: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().min(-90).max(90).optional(),
+    ),
+    lng: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().min(-180).max(180).optional(),
+    ),
+    latitude: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().min(-90).max(90).optional(),
+    ),
+    longitude: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().min(-180).max(180).optional(),
+    ),
+    radiusKm: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().min(1).max(20).optional(),
+    ),
+    province: z.preprocess(
+      blankToUndefined,
+      z.string().trim().min(1).max(5).optional(),
+    ),
+    city: z.preprocess(
+      blankToUndefined,
+      z.string().trim().min(1).max(5).optional(),
+    ),
+    q: z.preprocess(
+      blankToUndefined,
+      z.string().trim().min(1).max(255).optional(),
+    ),
+    favorited: z.preprocess(optionalBoolean, z.boolean().optional()),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+  })
+  .transform((data) => ({
+    ...data,
+    lat: data.lat ?? data.latitude,
+    lng: data.lng ?? data.longitude,
+  }))
+  .superRefine((data, ctx) => {
+    const hasLat = data.lat != null;
+    const hasLng = data.lng != null;
+    const hasProvince = data.province != null;
+    const hasCity = data.city != null;
+
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasLat ? ['lng'] : ['lat'],
+        message: 'lat and lng must be provided together',
+      });
+    }
+
+    if ((hasProvince || hasCity) && (hasLat || hasLng)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message:
+          'Use province/city or distance (lat, lng, radiusKm), not both',
+      });
+    }
+
+    if (data.city && !data.province) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is required when filtering by city',
+      });
+    }
+
+    if (data.province && !isVnProvince(data.province)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['province'],
+        message: 'province is not a valid pre-2025 tỉnh/thành phố code',
+      });
+    }
+
+    if (
+      data.province &&
+      data.city &&
+      !isVnCityInProvince(data.province, data.city)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['city'],
+        message: 'city must belong to province (pre-2025 quận/huyện codes)',
+      });
+    }
+  });
 
 export function parseBoardQueryDto(query) {
   const parsed = boardQuerySchema.parse(query ?? {});
-  if ((parsed.lat != null) !== (parsed.lng != null)) {
-    throw new z.ZodError([
-      {
-        code: z.ZodIssueCode.custom,
-        message: 'lat and lng must be provided together',
-        path: ['lat'],
-      },
-    ]);
+  if (parsed.lat != null && parsed.lng != null && parsed.radiusKm == null) {
+    parsed.radiusKm = 20;
   }
   return parsed;
 }

@@ -38,14 +38,9 @@ API reference: `spot-backend/docs/API.md`. Agent notes: `spot-backend/CLAUDE.md`
 ## Docker
 
 ```bash
-<<<<<<< HEAD
 docker compose up -d postgres redis          # always works
 docker compose up -d --build admin-console   # also works
-=======
-docker compose up -d postgres redis
-docker compose up -d --build admin-console
 docker compose up -d --build redis backend   # env_file: spot-backend/.env
->>>>>>> develop
 docker compose run --rm backend npm run migrate
 ```
 

@@ -1,6 +1,6 @@
 /**
  * Smoke: referee signup batch → admin approve → board apply → booking hire → accept.
- * Requires: server up, migrations 009/010, OTP_DEBUG=true, seed-admin run.
+ * Requires: server up, migrations 015–022, OTP_DEBUG=true, seed-admin run.
  */
 import '../src/shared/config/env.js';
 import config from '../src/shared/config/env.js';
@@ -188,6 +188,34 @@ assertOk('seed', seed, 201);
 
 const venueId = seed.json.venue?.venueId;
 const fieldId = seed.json.field?.fieldId;
+
+const boardByProvince = await get(
+  '/referee/board?sport=football&province=79&city=778',
+  refToken,
+);
+log('board province filter', boardByProvince);
+assertOk('board province', boardByProvince, 200);
+if (!(boardByProvince.json.venues ?? []).some((v) => v.venueId === venueId)) {
+  throw new Error('Seeded venue not found with province=79&city=778');
+}
+
+const favoriteVenue = await post(`/referee/venues/${venueId}/favorite`, {}, refToken);
+log('favorite venue', favoriteVenue);
+assertOk('favorite venue', favoriteVenue, 200);
+
+const boardFavorited = await get('/referee/board?sport=football&favorited=true', refToken);
+log('board favorited', boardFavorited);
+assertOk('board favorited', boardFavorited, 200);
+if (!(boardFavorited.json.venues ?? []).some((v) => v.venueId === venueId)) {
+  throw new Error('Favorited venue missing from favorited board filter');
+}
+
+const boardSearch = await get(
+  `/referee/board?sport=football&q=${encodeURIComponent('Smoke Venue')}`,
+  refToken,
+);
+log('board search q', boardSearch);
+assertOk('board search', boardSearch, 200);
 
 const boardBefore = await get('/referee/board?sport=football', refToken);
 log('board before apply', boardBefore);

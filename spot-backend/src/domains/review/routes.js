@@ -5,6 +5,11 @@ import config from '../../shared/config/env.js';
 
 const router = Router();
 
+router.get(
+  '/hosts/:userId/reviews',
+  authenticate,
+  reviewController.listHostMatchReviews,
+);
 router.post('/', authenticate, reviewController.create);
 router.post('/referee', authenticate, reviewController.createRefereeReview);
 router.post('/:id/reply', authenticate, reviewController.reply);

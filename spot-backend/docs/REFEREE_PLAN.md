@@ -1,8 +1,38 @@
 # SPOT Referee Feature — Implementation Plan
 
-> **Status:** Locked product spec — **BE implemented** (migrations `009`/`010`, `/referee/*`, batch verification)  
+> **Status:** Locked product spec — **BE implemented (Aug 2026)** — migrations `015`–`022`, `/referee/*`, board filter/favourite, Plan A pending API  
 > **Scope:** Mobile FE (`spot-frontend-mobile`) + Backend (`spot-backend`)  
-> **Figma file:** `ZTpFWfkdcEpHH4xJaKaBxT/Spot` — nodes `224:*`
+> **Figma file:** `ZTpFWfkdcEpHH4xJaKaBxT/Spot` — nodes `224:*`  
+> **FE contract (chi tiết từng endpoint):** [`API.md`](./API.md) §19
+
+---
+
+## 0. BE vs FE — báo cáo triển khai (Aug 2026)
+
+Bảng này tóm tắt những gì đã **chốt product + implement BE** sau merge matchmaking. FE mobile **chưa wire** — dùng bảng này làm checklist.
+
+| Hạng mục | BE | FE mobile | Ghi chú |
+| :--- | :---: | :---: | :--- |
+| Onboarding REFEREE + batch 3 docs | ✅ | ❌ | `POST /users/me/verification-requests/batch` |
+| Admin approve + `certifiedSportTypes` | ✅ | ❌ | Admin console chưa có UI |
+| Job Board list + Apply pool | ✅ | ❌ | `GET /referee/board`, `POST .../register` |
+| Board filter Tỉnh/Phường (H23) | ✅ | ❌ | `province`+`city`, XOR distance; `GET /geo/vn` |
+| Board distance 1–20 km | ✅ | ❌ | `lat`/`lng`/`radiusKm` |
+| Board search `q=` | ✅ | ❌ | Tên sân / địa chỉ |
+| Venue favourite (H22) | ✅ | ❌ | `POST/DELETE .../favorite`, `?favorited=true` |
+| Pending tab **Plan A** | ✅ | ❌ | `matchInvitations[]` + `myVenues[]` một API |
+| Accept / Decline (first wins) | ✅ | ❌ | `409 ASSIGNMENT_ALREADY_TAKEN` |
+| Confirmed / Completed tabs | ✅ | ❌ | `tab=confirmed\|completed` |
+| Schedule + Earnings | ✅ | ❌ | Calendar dots, chart data thật |
+| Hire referee fan-out | ✅ | ❌ | Player `POST /bookings` + `dev/mark-paid` |
+| Player rating referee | ✅ | ❌ | `REFEREE_RATING_REQUEST` + `POST /reviews/referee` |
+| Payment gateway IPN | ❌ | ❌ | Post-MVP — dùng `dev/mark-paid` |
+| FCM push | ❌ | ❌ | In-app + email only |
+| Assignment detail Zalo/Call UI | — | ❌ | BE trả assignment + reuse `GET /venues/:id` contact |
+
+**Migrations:** `015` admin → `016` referee schema → `017`–`020` reviews/rating notify → `021` venue `province`/`city` → `022` `referee_venue_favorites`.
+
+**Smoke:** `cd spot-backend && npm run smoke:referee` (cần `OTP_DEBUG=true`, `npm run seed:admin`, migrate `015`–`022`).
 
 ---
 
@@ -43,7 +73,7 @@ Onboarding: Register → OTP → Choose Referee → 3 docs → Pending (admin) �
 | Cancel | Trọng tài **hủy pool sân** từ section **My venues** trên tab Pending (**Plan A** — FE thêm dưới Pending Queue; Figma `224:3113` chưa vẽ) |
 | Q3-B | Hủy pool vẫn **giữ** assignment `ACCEPTED` hiện tại; không nhận invitation mới tại sân đó |
 | H22 | **Favourite sân (MVP)** — heart trên Job Board card + filter “favourites only” trong sheet `224:5828`. BE: `venue_favorites` + `POST/DELETE /referee/venues/:id/favorite`, `GET /board?favorited=true`, field `isFavorited` trên board DTO. **Khác** `match_favorites` (kèo player). |
-| H23 | **Filter sheet** (`224:5828`): Sport tabs + **Location** (Tỉnh/Phường) **XOR** **Distance** (1–20 km). Reuse matchmaking: `GET /geo/vn`, query `province` + `city` (Figma “Ward/Commune” = BE `city`). Distance: `lat` + `lng` + `radiusKm`. Search text + map toggle = FE (search BE post-merge). |
+| H23 | **Filter sheet** (`224:5828`): Sport tabs + **Location** (Tỉnh/Phường) **XOR** **Distance** (1–20 km). Reuse `GET /geo/vn`, `province` + `city`. Distance: `lat` + `lng` + `radiusKm`. Search `q=` trên board (tên/địa chỉ). Map toggle = FE. |
 | H24 | **Board card** (`224:3292`): search “Find courts”, filter icon, map toggle, heart, share/directions, rating, **Apply** (không “Book Field” / giá giờ — artefact player trong `224:5828`). |
 
 ### 2.3 Invitations
@@ -196,32 +226,51 @@ Invitations → tab Pending
 
 ---
 
-## 6. Backend — current vs required
+## 6. Backend — triển khai hiện tại
 
-### 6.1 Already merged ✅
+### 6.1 Đã implement ✅ (Aug 2026)
 
-- Role `REFEREE`, admin approve `PENDING` → `ACTIVE`
-- `POST /users/me/verification-documents` (multipart)
-- `POST /users/me/verification-requests` (single doc — **legacy**)
-- Admin `/admin/approvals/*`
+| Layer | Done |
+| :--- | :--- |
+| **Auth / onboarding** | Role `REFEREE`, `PENDING` block login; batch 3 docs; admin approve `{ certifiedSportTypes }` |
+| **Schema** | `schema_referee.*`, `bookings.hire_referee`, `referee_fee_vnd`, `referee_reviews`, rating jobs |
+| **Migrations** | `015`–`022` (admin, referee, rating notify, venue admin units, venue favourites) |
+| **Job Board** | `GET /referee/board` — sport, province/city, distance, `q`, `favorited`, pagination |
+| **Favourite** | `POST/DELETE /referee/venues/:id/favorite`, `isFavorited` on board |
+| **Venue pool** | register / cancel registration; ẩn sân đã apply khỏi board |
+| **Plan A pending** | `GET /referee/invitations?tab=pending` → `matchInvitations[]` + `myVenues[]` |
+| **Assignments** | accept (first wins TX), decline, detail, confirmed/completed tabs |
+| **Schedule / Earnings** | month query, chart points, history pagination |
+| **Fan-out** | Booking paid + `hireReferee` → assignments + `REFEREE_INVITATION` |
+| **Player rating** | `REFEREE_RATING_REQUEST` + `POST /reviews/referee` (0.5–5.0) |
+| **Dev / smoke** | `dev/mark-paid`, `dev/complete`, `npm run smoke:referee` |
 
-### 6.2 Gaps ❌
+### 6.2 Chưa có (post-MVP)
 
-| Gap | Action |
-|-----|--------|
-| No `document_kind` | Migration + batch submit |
-| One pending request per user | Allow multi-row per referee signup bundle |
-| No `schema_referee` | New migration `009_schema_referee.sql` |
-| No `hire_referee` on booking | Add `bookings.hire_referee BOOLEAN`, `referee_fee_vnd` or addon table |
-| No referee domain | `src/domains/referee/` |
-| No `referee_profiles.certified_sport_types` | Set by admin on approve |
-| No first-accept-wins TX | Assignment service with row lock |
+| Gap | Ghi chú |
+| :--- | :--- |
+| Payment IPN → auto PAID → fan-out | Test: `POST /bookings/:id/dev/mark-paid` |
+| FCM device push | In-app + email today |
+| Admin UI duyệt 3 docs + sport picker | BE `/admin/approvals/*` sẵn |
+| Venue Owner tạo sân qua API | Seed dev: `POST /users/me/schedule/dev/seed` |
+
+### 6.3 FE mobile — cần làm
+
+Xem **§0 BE vs FE** và [`API.md`](./API.md) §19 (contract đầy đủ).
+
+1. Shell `app/referee/(tabs)/` — tách khỏi player tabs  
+2. Onboarding pending + activated screens  
+3. Job Board + filter sheet `224:5828` + heart  
+4. Pending Plan A scroll (Queue + My venues)  
+5. Confirmed / Completed / Schedule / Earnings  
+6. Assignment detail `224:5703` (Zalo/Call UI — contact từ `GET /venues/:id`)  
+7. Player-side hire referee toggle trên booking (khi booking UI có)
 
 ---
 
 ## 7. Database schema (proposed)
 
-### 7.1 Migration `009_schema_referee.sql`
+### 7.1 Migration `016_schema_referee.sql`
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS schema_referee;
@@ -272,7 +321,7 @@ CREATE UNIQUE INDEX idx_one_accepted_referee_per_booking
   WHERE status = 'ACCEPTED';
 ```
 
-### 7.2 Verification extension (migration `010_verification_document_kind.sql`)
+### 7.2 Verification extension (migration `017_verification_document_kind.sql`)
 
 ```sql
 ALTER TABLE schema_auth.verification_requests
@@ -449,15 +498,19 @@ hoặc `["FOOTBALL", "BADMINTON"]` — admin chọn theo chứng chỉ.
 
 ---
 
-## 10. Backend implementation order
+## 10. Backend implementation order (historical — all done Aug 2026)
 
-1. `010_verification_document_kind.sql` + batch submit + admin `certifiedSportTypes`
-2. `009_schema_referee.sql` + booking hire_referee columns
-3. Referee domain: board, register, cancel registration
-4. Booking hook: fan-out assignments on PAID + hire_referee
-5. Accept/decline with first-accept-wins transaction
-6. Schedule + earnings queries
-7. Player review referee (post-MVP)
+1. ✅ `017_verification_document_kind.sql` + batch submit + admin `certifiedSportTypes`
+2. ✅ `016_schema_referee.sql` + booking `hire_referee` columns
+3. ✅ Referee domain: board, register, cancel registration
+4. ✅ Booking hook: fan-out on PAID + `hire_referee`
+5. ✅ Accept/decline first-accept-wins TX
+6. ✅ Schedule + earnings queries
+7. ✅ Player review referee + `REFEREE_RATING_REQUEST`
+8. ✅ `021_venue_admin_units` + board province/city filter
+9. ✅ `022_referee_venue_favorites` + favourite API + `q=` search
+
+**Next:** FE wire per §0 and [`API.md`](./API.md) §19.
 
 ---
 
@@ -483,13 +536,13 @@ hoặc `["FOOTBALL", "BADMINTON"]` — admin chọn theo chứng chỉ.
 
 ## 12. Open items
 
-### BE — next (đã chốt product Aug 2026)
+### BE — next
 
 | Item | Status | Notes |
 |------|--------|-------|
-| **Venue favourite** (H22) | Planned | Migration `referee_venue_favorites` (or shared `venue_favorites`); mirror matchmaking favorite API |
-| **Board filter province/city** (H23) | Planned | Reuse `GET /geo/vn` + `province`/`city` on `GET /referee/board`; Location XOR Distance |
-| **Board search `q=`** | Planned | Tên sân / địa chỉ — align sau khi merge matchmaking search patterns |
+| **Venue favourite** (H22) | **Done** | `022_referee_venue_favorites`; `POST/DELETE .../favorite`, `?favorited=true`, `isFavorited` |
+| **Board filter province/city** (H23) | **Done** | `021_venue_admin_units`; `GET /referee/board?province=&city=` XOR distance |
+| **Board search `q=`** | **Done** | Fuzzy name/address on Job Board |
 | Payment IPN → PAID fan-out | Post-MVP | Hiện `dev/mark-paid` |
 | FCM push | Post-MVP | In-app + email today |
 | Admin UI 3 docs + sport picker | Post-MVP | BE `/admin/approvals/*` ready |
@@ -497,7 +550,7 @@ hoặc `["FOOTBALL", "BADMINTON"]` — admin chọn theo chứng chỉ.
 ### FE
 
 - Wire Pending **Plan A** (My venues section)
-- Job Board filter sheet + favourite (sau BE)
+- Job Board filter sheet + favourite (BE ready)
 - Assignment detail theo Figma `224:5703` (Zalo/Call/breakdown)
 
 ---
@@ -505,5 +558,4 @@ hoặc `["FOOTBALL", "BADMINTON"]` — admin chọn theo chứng chỉ.
 ## 13. Recommended next step
 
 1. **FE:** Shell `app/referee/(tabs)/` + Pending tab Plan A + Board Apply flow
-2. **BE:** Favourite + province/city board filters (reuse matchmaking geo)
-3. **FE:** Filter sheet + heart sau BE merge geo/favorite
+2. **FE:** Filter sheet + heart (wire `GET /geo/vn`, board filters, favorite API)

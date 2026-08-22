@@ -66,6 +66,26 @@ export async function cancelVenueRegistration(req, res, next) {
   }
 }
 
+export async function favoriteVenue(req, res, next) {
+  try {
+    const { venueId } = parseVenueIdParam(req.params);
+    const result = await refereeService.favoriteVenue(req.user.userId, venueId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function unfavoriteVenue(req, res, next) {
+  try {
+    const { venueId } = parseVenueIdParam(req.params);
+    const result = await refereeService.unfavoriteVenue(req.user.userId, venueId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function listVenueRegistrations(req, res, next) {
   try {
     const result = await refereeService.listVenueRegistrations(req.user.userId);

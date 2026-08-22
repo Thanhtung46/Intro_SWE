@@ -103,11 +103,13 @@ export async function seedScheduleForUser(userId, input = {}) {
     const venue = await scheduleRepository.insertVenue(client, {
       ownerId: userId,
       name: `Smoke Venue ${Date.now()}`,
-      address: '123 Nguyen Trai, Dist 1, HCMC',
-      // Open all day so seeded venues are always bookable — this endpoint
-      // is the documented dev-only stand-in for POST /venues (out of scope).
+      address: '123 Nguyen Van Linh, Quan 7, HCMC',
       openingHours: '00:00',
       closingHours: '23:59',
+      province: '79',
+      city: '778',
+      latitude: 10.729,
+      longitude: 106.721,
     });
 
     // Sample gallery photos — placeholder images (Lorem Picsum), not real

@@ -32,6 +32,22 @@ export function errorHandler(err, req, res, next) {
     });
   }
 
+  const pgCode = err?.code;
+  if (
+    pgCode === '42P01' ||
+    pgCode === '42703' ||
+    (typeof err?.message === 'string' &&
+      (/relation .* does not exist/i.test(err.message) ||
+        /column .* does not exist/i.test(err.message)))
+  ) {
+    logger.error('Database schema mismatch', { err: err.message, code: pgCode });
+    return res.status(503).json({
+      message:
+        'Database schema is out of date. Run `npm run migrate` (migrations 015–024).',
+      ...(process.env.NODE_ENV !== 'production' ? { detail: err.message } : {}),
+    });
+  }
+
   if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
     return res.status(400).json({ message: 'Invalid JSON body' });
   }

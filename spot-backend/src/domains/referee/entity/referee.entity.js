@@ -32,11 +32,18 @@ export function toPublicBoardVenue(row) {
     venueId: row.venue_id,
     name: row.name,
     address: row.address,
+    province: row.province ?? null,
+    city: row.city ?? null,
+    provinceName: row.province_name ?? null,
+    cityName: row.city_name ?? null,
+    latitude: row.latitude != null ? Number(row.latitude) : undefined,
+    longitude: row.longitude != null ? Number(row.longitude) : undefined,
     ownerName: row.owner_name ?? null,
     sportType: row.sport_type,
     avgRating: Number(row.avg_rating),
     ratingCount: row.rating_count,
     distanceKm: row.distance_km != null ? Number(row.distance_km) : undefined,
+    isFavorited: Boolean(row.is_favorited),
   };
 }
 

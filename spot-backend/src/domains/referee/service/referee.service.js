@@ -25,6 +25,11 @@ import {
   toPublicEarningsHistoryItem,
   toPublicCertification,
 } from '../entity/referee.entity.js';
+import {
+  vnCityName,
+  vnProvinceName,
+} from '../../../shared/constants/vn-admin.js';
+import * as venueFavoriteRepository from '../repository/venue-favorite.repository.js';
 
 function monthWindow(monthStr) {
   const [year, month] = monthStr.split('-').map(Number);
@@ -111,6 +116,11 @@ export async function getBoard(userId, query) {
         lat: query.lat,
         long: query.lng,
         radiusKm: query.radiusKm,
+        province: query.province,
+        city: query.city,
+        q: query.q,
+        favorited: query.favorited,
+        refereeId: userId,
         excludeVenueIds,
         limit: query.limit,
         offset,
@@ -118,7 +128,13 @@ export async function getBoard(userId, query) {
     );
     return {
       sport: query.sport,
-      venues: rows.map(toPublicBoardVenue),
+      venues: rows.map((row) =>
+        toPublicBoardVenue({
+          ...row,
+          province_name: vnProvinceName(row.province),
+          city_name: vnCityName(row.province, row.city),
+        }),
+      ),
       page: query.page,
       limit: query.limit,
     };
@@ -204,6 +220,40 @@ export async function cancelVenueRegistration(userId, venueId, dto) {
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function favoriteVenue(userId, venueId) {
+  const client = await pool.connect();
+  try {
+    const venue = await venueRepository.findVenueById(client, venueId);
+    if (!venue) {
+      throw new AppError('Venue not found', 404);
+    }
+    await venueFavoriteRepository.add(client, userId, venueId);
+    return {
+      message: 'Venue favorited',
+      isFavorited: true,
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function unfavoriteVenue(userId, venueId) {
+  const client = await pool.connect();
+  try {
+    const venue = await venueRepository.findVenueById(client, venueId);
+    if (!venue) {
+      throw new AppError('Venue not found', 404);
+    }
+    await venueFavoriteRepository.remove(client, userId, venueId);
+    return {
+      message: 'Venue unfavorited',
+      isFavorited: false,
+    };
   } finally {
     client.release();
   }

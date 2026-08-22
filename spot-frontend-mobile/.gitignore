@@ -14,3 +14,13 @@ web-build/
 .claude/
 .specify/
 specs/
+
+# Personal dev cheat-sheet of clickable localhost routes — not project docs.
+local-routes.md
+
+# SPOT-76 Matches domain test files — kept local-only per user request
+# (still run fine with `npm test`, just not pushed/shared). Scoped to the
+# Matches feature only, not other domains' tests.
+src/screens/matches/*.test.tsx
+src/components/matches/*.test.tsx
+__tests__/matches-*.test.tsx

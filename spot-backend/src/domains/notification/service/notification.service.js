@@ -121,8 +121,15 @@ export async function createNotification({
     const isReminder = type === NOTIFICATION_TYPES.BOOKING_REMINDER;
     const allowEmail =
       sendEmail &&
-      (type === NOTIFICATION_TYPES.BOOKING_CREATED ||
+      (        type === NOTIFICATION_TYPES.BOOKING_CREATED ||
         type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
+        type === NOTIFICATION_TYPES.MATCH_EXPIRED_UNDERFILLED ||
+        type === NOTIFICATION_TYPES.MATCH_CANCELLED ||
+        type === NOTIFICATION_TYPES.GROUP_JOIN_REQUEST ||
+        type === NOTIFICATION_TYPES.GROUP_APPROVED ||
+        type === NOTIFICATION_TYPES.GROUP_REJECTED ||
+        type === NOTIFICATION_TYPES.GROUP_KICKED ||
+        type === NOTIFICATION_TYPES.GROUP_ADMIN_TRANSFERRED ||
         type === NOTIFICATION_TYPES.SYSTEM ||
         type === NOTIFICATION_TYPES.REFEREE_INVITATION ||
         type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) &&
