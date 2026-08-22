@@ -9,9 +9,11 @@ import {
   BOOKING_DEPOSIT_PERCENTAGE,
   EXCLUSION_VIOLATION_CODE,
 } from '../../../shared/constants/booking.js';
+import { DEFAULT_REFEREE_FEE_VND } from '../../../shared/constants/referee.js';
 import * as scheduleRepository from '../repository/schedule.repository.js';
 import * as bookingRepository from '../repository/booking.repository.js';
 import * as venueRepository from '../../venue/repository/venue.repository.js';
+import { fanOutRefereeInvitations, dispatchInvitationNotifications } from '../../referee/service/assignment-fanout.service.js';
 import {
   toPublicScheduleItem,
 } from '../entity/schedule.entity.js';
@@ -271,6 +273,10 @@ export async function createBooking(playerId, dto) {
         timeRange: { start: rangeStart, end: rangeEnd },
         totalAmount,
         depositAmount,
+        hireReferee: dto.hireReferee,
+        refereeFeeVnd: dto.hireReferee
+          ? (dto.refereeFeeVnd ?? DEFAULT_REFEREE_FEE_VND)
+          : null,
       });
     } catch (err) {
       if (err.code === EXCLUSION_VIOLATION_CODE) {
@@ -334,4 +340,50 @@ export async function createBookingsBulk(playerId, { bookings }) {
     created,
     failed,
   };
+}
+
+/** Dev/smoke: mark booking PAID and fan-out referee invitations if hire_referee. */
+export async function markBookingPaidDev(playerId, bookingId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const booking = await bookingRepository.markBookingPaid(
+      client,
+      bookingId,
+      playerId,
+    );
+    if (!booking) {
+      throw new AppError('Booking not found or not pending payment', 404);
+    }
+
+    let fanOut = { created: 0, notificationsSent: 0 };
+    if (booking.hire_referee) {
+      fanOut = await fanOutRefereeInvitations(bookingId, client);
+    }
+
+    await client.query('COMMIT');
+
+    if (booking.hire_referee && fanOut.invitations?.length) {
+      await dispatchInvitationNotifications(
+        fanOut.invitations,
+        fanOut.meta,
+        bookingId,
+      );
+      fanOut.notificationsSent = fanOut.invitations.length;
+    }
+
+    return {
+      message: 'Booking marked as PAID',
+      booking: toPublicBooking(booking),
+      refereeInvitations: {
+        created: fanOut.created,
+        notificationsSent: fanOut.notificationsSent ?? fanOut.invitations?.length ?? 0,
+      },
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

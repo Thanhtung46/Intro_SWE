@@ -73,6 +73,18 @@ function emailPayloadForType(type, { title, body, data = {} }) {
       text: body,
     };
   }
+  if (type === NOTIFICATION_TYPES.REFEREE_INVITATION) {
+    return {
+      subject: title || 'New referee match invitation',
+      text: body,
+    };
+  }
+  if (type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) {
+    return {
+      subject: title || 'Rate your referee',
+      text: body,
+    };
+  }
   return {
     subject: title || 'SPOT notification',
     text: body,
@@ -111,7 +123,9 @@ export async function createNotification({
       sendEmail &&
       (type === NOTIFICATION_TYPES.BOOKING_CREATED ||
         type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
-        type === NOTIFICATION_TYPES.SYSTEM) &&
+        type === NOTIFICATION_TYPES.SYSTEM ||
+        type === NOTIFICATION_TYPES.REFEREE_INVITATION ||
+        type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) &&
       (!isReminder || (await shouldSendReminderEmail(user)));
 
     if (allowEmail && user.email) {

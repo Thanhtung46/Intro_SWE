@@ -1,4 +1,4 @@
-import { parseListApprovalsDto, parseApprovalIdParam, parseRejectApprovalDto } from '../dto/list-approvals.dto.js';
+import { parseListApprovalsDto, parseApprovalIdParam, parseRejectApprovalDto, parseApproveApprovalDto } from '../dto/list-approvals.dto.js';
 import { parseListUsersDto, parseAdminUserIdParam, parseUpdateUserDto } from '../dto/list-users.dto.js';
 import { parseUpdateSettingsDto } from '../dto/update-settings.dto.js';
 import { parseDashboardQueryDto, parseListAuditLogDto } from '../dto/dashboard-query.dto.js';
@@ -37,7 +37,8 @@ export async function getApproval(req, res, next) {
 export async function approveApproval(req, res, next) {
   try {
     const { id } = parseApprovalIdParam(req.params);
-    const result = await adminService.approveRequest(req.user.userId, id);
+    const dto = parseApproveApprovalDto(req.body ?? {});
+    const result = await adminService.approveRequest(req.user.userId, id, dto);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

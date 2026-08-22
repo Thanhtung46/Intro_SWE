@@ -13,6 +13,7 @@ import reviewRoutes from './domains/review/routes.js';
 import venueRoutes from './domains/venue/routes.js';
 import bookingRoutes from './domains/booking/routes.js';
 import adminRoutes from './domains/admin/routes.js';
+import refereeRoutes from './domains/referee/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,8 @@ app.use('/bookings', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/referee', refereeRoutes);
+app.use('/api/referee', refereeRoutes);
 
 app.use(errorHandler);
 

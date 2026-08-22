@@ -7,6 +7,7 @@ import {
   REMINDER_WORKER_INTERVAL_MS,
 } from '../src/shared/constants/notification.js';
 import { processDueReminders } from '../src/domains/notification/service/notification.service.js';
+import { processDueRefereeRatingJobs } from '../src/domains/referee/service/referee-rating-schedule.service.js';
 import logger from '../src/shared/utils/logger.js';
 import pool from '../src/shared/database/pool.js';
 
@@ -17,8 +18,9 @@ async function tick() {
   ticking = true;
   try {
     const result = await processDueReminders({ limit: 50 });
-    if (result.processed > 0) {
-      logger.info('Reminder worker tick', result);
+    const ratingResult = await processDueRefereeRatingJobs({ limit: 50 });
+    if (result.processed > 0 || ratingResult.processed > 0) {
+      logger.info('Reminder worker tick', { reminders: result, refereeRatings: ratingResult });
     }
   } catch (err) {
     logger.error('Reminder worker failed', { error: err.message });

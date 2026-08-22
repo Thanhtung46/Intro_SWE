@@ -5,6 +5,7 @@ export function toVerificationRequestRow(row) {
     userId: row.user_id,
     requestType: row.request_type,
     documentUrl: row.document_url,
+    documentKind: row.document_kind ?? null,
     status: row.status,
     adminNotes: row.admin_notes ?? null,
     reviewedBy: row.reviewed_by ?? null,

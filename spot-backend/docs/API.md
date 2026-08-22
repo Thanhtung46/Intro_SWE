@@ -1443,9 +1443,56 @@ Alias `/api/notifications/*`. Tất cả route cần Bearer access.
 | `POST` | `/notifications/dev/seed` | Dev only — tạo inbox (+ optional `dueReminderNow` / schedule) |
 | `POST` | `/notifications/dev/process-due` | Dev only — chạy một tick reminder worker |
 
-Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `SYSTEM`.  
+Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `SYSTEM` \| `REFEREE_INVITATION` \| `REFEREE_RATING_REQUEST`.  
 Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`.  
 Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
+
+### 8.1 Player inbox — nhắc đánh giá (FE)
+
+Mọi thông báo nhắc player **đánh giá trọng tài** đều ghi vào **`GET /notifications`** (chuông inbox). FE **không** cần polling riêng — đọc inbox + badge `GET /notifications/unread-count`.
+
+| `type` | Ai nhận | Khi nào | `data` (deep link) | Màn hình / API sau tap |
+| :--- | :--- | :--- | :--- | :--- |
+| `REFEREE_RATING_REQUEST` | **Player** (người đặt sân) | Sau `endsAt`, booking `hireReferee=true`, trọng tài đã accept | `action`, `bookingId`, `refereeId`, `assignmentId`, `venueName`, `refereeName` | Màn half-star rating → `POST /reviews/referee` `{ bookingId, rating }` |
+
+**Ví dụ item inbox (`GET /notifications`):**
+
+```json
+{
+  "notificationId": 88,
+  "type": "REFEREE_RATING_REQUEST",
+  "title": "Rate your referee",
+  "body": "How was Nguyen Van A at Saigon FC Arena? Tap to leave a star rating (0.5–5.0).",
+  "data": {
+    "action": "REFEREE_RATING_REQUEST",
+    "assignmentId": 7,
+    "bookingId": 42,
+    "refereeId": 15,
+    "venueName": "Saigon FC Arena",
+    "refereeName": "Nguyen Van A"
+  },
+  "isRead": false,
+  "createdAt": "2026-08-22T20:00:00.000Z"
+}
+```
+
+**FE routing (gợi ý):**
+
+```typescript
+if (item.type === 'REFEREE_RATING_REQUEST' && item.data?.bookingId) {
+  router.push({
+    pathname: '/bookings/rate-referee',
+    params: {
+      bookingId: String(item.data.bookingId),
+      refereeId: String(item.data.refereeId),
+    },
+  });
+}
+```
+
+Sau khi `POST /reviews/referee` thành công → `PATCH /notifications/:id/read`.
+
+**Lưu ý:** Đánh giá **sân** (`POST /reviews`) hiện **chưa** có inbox prompt — player vào từ lịch/booking detail. Chỉ **trọng tài** có `REFEREE_RATING_REQUEST`.
 
 ```bash
 curl -s http://localhost:3000/notifications/unread-count \
@@ -1461,10 +1508,12 @@ Alias `/api/reviews/*`. Cần Bearer access.
 
 | Method | Path | Behavior |
 | :--- | :--- | :--- |
-| `POST` | `/reviews` | Player tạo review cho booking `COMPLETED` |
+| `POST` | `/reviews` | Player tạo review **venue** cho booking `COMPLETED` |
+| `POST` | `/reviews/referee` | Player review **trọng tài** sau trận có `hireReferee` |
 | `POST` | `/reviews/:id/reply` | Venue owner trả lời (1 reply / review) |
-| `GET` | `/reviews/venues/:venueId/rating` | Aggregate rating (DB + Redis cache `venue:rating:{id}`) |
-| `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review |
+| `GET` | `/reviews/venues/:venueId/rating` | Aggregate venue rating (DB + Redis cache) |
+| `GET` | `/reviews/referees/:refereeId/rating` | Aggregate referee rating từ `referee_reviews` |
+| `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review venue |
 
 **Rules**
 
@@ -1473,9 +1522,10 @@ Alias `/api/reviews/*`. Cần Bearer access.
 - Spam filter cơ bản (Zod): rating 1–5, text ≤ 2000, reject text “spammy”
 - Rate limit: tối đa 10 review / player / 24h → `429`
 - Reply: chỉ `venues.owner_id ===` user hiện tại; 1 reply / review
-- Sau create: cập nhật `venues.avg_rating` / `rating_count`, invalidate Redis cache
+- **Referee rating:** booking `hireReferee=true`, assignment `ACCEPTED`/`COMPLETED`, trận đã kết thúc; rating **0.5–5.0** (bước 0.5), **không text**; 1 rating / assignment
+- Sau create venue review: cập nhật `venues.avg_rating` / `rating_count`, invalidate Redis cache
 
-### 9.1 `POST /reviews`
+### 9.1 `POST /reviews` (venue)
 
 **Body**
 
@@ -1491,32 +1541,71 @@ Alias `/api/reviews/*`. Cần Bearer access.
 
 ```json
 {
-  "message": "Join request submitted",
-  "skillWarning": false,
-  "warning": null,
-  "request": {
-    "requestId": 1,
-    "matchId": 8,
-    "userId": 20,
-    "phoneNumber": "0912345678",
-    "status": "PENDING",
-    "skillWarning": false,
-    "heads": 3,
-    "shareAmount": null,
-    "paymentStatus": null,
-    "guests": [
-      { "guestId": 1, "name": "Minh", "skill": "REC_BASIC", "gender": "male", "phoneNumber": "0901111111" }
-    ]
+  "review": {
+    "reviewId": 1,
+    "bookingId": 1,
+    "venueId": 12,
+    "playerId": 5,
+    "rating": 5,
+    "reviewText": "Clean field and friendly staff",
+    "createdAt": "2026-08-22T10:00:00.000Z"
   },
-  "match": { "filledCount": 1, "spotsLeft": 13, "status": "OPEN" }
+  "venueRating": { "venueId": 12, "avgRating": 4.8, "ratingCount": 10 }
 }
 ```
 
-AUTO → `message: "Joined match"`, `request.status: "ACCEPTED"`, `shareAmount` = tổng share của joiner + guests.
+### 9.2 `POST /reviews/referee` (player → trọng tài)
 
-`GENDER_RANGE`: profile joiner phải `male`/`female` (guest cũng vậy). `SPLIT_EVENLY`: `shareAmount` = `(1 + guests.length) * ceil(priceMin / filledCountAfter)`.
+**Body** — **chỉ rating** (không có text review):
 
-**Errors**
+```json
+{
+  "bookingId": 42,
+  "rating": 4.5
+}
+```
+
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `bookingId` | int | Booking player đã thuê trọng tài |
+| `rating` | number | **0.5 → 5.0**, bước **0.5** (0.5, 1.0, 1.5, … 5.0) |
+
+**Rules**
+
+- Chỉ **player** đặt booking (`bookings.player_id`)
+- Booking có `hireReferee=true` và assignment đã **ACCEPTED/COMPLETED**
+- Trận **đã kết thúc** (`endsAt <= now`) — player chỉ đánh giá sau khi trải nghiệm xong
+- 1 rating / assignment (`409` nếu đã đánh giá)
+
+**Success `201`**
+
+```json
+{
+  "review": {
+    "reviewId": 3,
+    "assignmentId": 7,
+    "bookingId": 42,
+    "refereeId": 15,
+    "playerId": 5,
+    "rating": 4.5,
+    "createdAt": "2026-08-22T12:00:00.000Z"
+  },
+  "refereeRating": {
+    "refereeId": 15,
+    "avgRating": 4.75,
+    "ratingCount": 12,
+    "totalMatchesOfficiated": 20
+  }
+}
+```
+
+### 9.3 `GET /reviews/referees/:refereeId/rating`
+
+**Success `200`:** `{ "refereeRating": { "refereeId", "avgRating", "ratingCount", "totalMatchesOfficiated" } }`
+
+**Errors:** `404` referee profile không tồn tại
+
+**Errors (venue review)**
 
 | Status | Message |
 | :--- | :--- |
@@ -2258,6 +2347,170 @@ curl -s -X POST http://localhost:3000/bookings/bulk \
 
 ---
 
+## Referee endpoints
+
+Prefix `/referee` + `/api/referee`. Bearer + role `REFEREE` + `user.status = ACTIVE`.
+
+Chi tiết product + Figma map: [`docs/REFEREE_PLAN.md`](./REFEREE_PLAN.md).
+
+### Verification (onboarding)
+
+| Method | Path | Body / notes |
+| :--- | :--- | :--- |
+| `POST` | `/users/me/verification-documents` | multipart — upload từng file |
+| `POST` | `/users/me/verification-requests/batch` | `{ documents: [{ documentKind: ID_FRONT\|ID_BACK\|VFF_LICENSE, documentUrl }] }` |
+| `POST` | `/admin/approvals/:id/approve` | `{ certifiedSportTypes: ["football"] }` — 1–2 môn |
+
+### Referee operations
+
+| Method | Path | Ghi chú |
+| :--- | :--- | :--- |
+| `GET` | `/referee/me` | Profile + certified sports + stats |
+| `GET` | `/referee/me/certifications` | Docs đã upload |
+| `GET` | `/referee/board?sport=football` | Job Board — ẩn sân đã apply. Hiện tại: `sport`, `lat`, `lng`, `radiusKm`, `page`, `limit`. **Planned:** `province`, `city`, `favorited`, `q` (reuse matchmaking geo/favorite patterns). |
+| `POST` | `/referee/venues/:venueId/register` | `{ sportType }` — vào pool |
+| `DELETE` | `/referee/venues/:venueId/register` | `{ sportType }` — hủy pool (Plan A: từ section **My venues**) |
+| `POST` / `DELETE` | `/referee/venues/:venueId/favorite` | **Planned (MVP)** — tim sân Job Board |
+| `GET` | `/referee/invitations?tab=pending` | Xem **§ Pending tab (Plan A)** bên dưới |
+| `GET` | `/referee/invitations?tab=confirmed\|completed` | `{ assignments[] }` |
+| `GET` | `/referee/assignments/:id` | Detail assignment. FE tạm theo Figma `224:5703` (Zalo/Call/breakdown). Incoming: ưu tiên **playerName**; board/venue: **ownerName**. |
+| `POST` | `/referee/assignments/:id/accept` | First accept wins → `409 ASSIGNMENT_ALREADY_TAKEN` |
+| `POST` | `/referee/assignments/:id/decline` | `{ reason? }` |
+| `GET` | `/referee/schedule?month=YYYY-MM` | Calendar ACCEPTED |
+| `GET` | `/referee/earnings` | Sum COMPLETED trong tháng |
+| `GET` | `/referee/earnings/history` | Paginated history |
+
+### Booking + fan-out + notification
+
+| Method | Path | Ghi chú |
+| :--- | :--- | :--- |
+| `POST` | `/bookings` | `{ hireReferee: true, refereeFeeVnd?: 150000 }` |
+| `POST` | `/bookings/:id/dev/mark-paid` | **Non-prod** — PAID + fan-out invitations |
+
+Khi fan-out: mỗi trọng tài trong pool nhận assignment `PENDING` + **in-app notification** type `REFEREE_INVITATION` (email nếu user bật notifications).
+
+**Notification payload (`data`):**
+
+```json
+{
+  "action": "REFEREE_INVITATION",
+  "assignmentId": 7,
+  "bookingId": 42,
+  "venueName": "Saigon FC Arena",
+  "sportType": "Football",
+  "startsAt": "2026-08-25T18:00:00+07:00",
+  "feeVnd": 150000
+}
+```
+
+FE: tap notification → `/referee/invitations?tab=pending` hoặc `/referee/assignments/:assignmentId`.
+
+**Player rate referee (`REFEREE_RATING_REQUEST`):**
+
+- Gửi sau khi trận **kết thúc** (`endsAt`) nếu booking `hireReferee=true` và trọng tài đã accept.
+- Lên lịch lúc referee **accept**; worker `npm run worker:reminders` gửi đúng giờ. Dev/smoke: `dev/complete` gửi ngay.
+- Payload `data`:
+
+```json
+{
+  "action": "REFEREE_RATING_REQUEST",
+  "assignmentId": 7,
+  "bookingId": 42,
+  "refereeId": 15,
+  "venueName": "Saigon FC Arena",
+  "refereeName": "Nguyen Van A"
+}
+```
+
+FE: tap → màn rating → `POST /reviews/referee` `{ "bookingId": 42, "rating": 4.5 }`.
+
+### Player review referee
+
+Xem [§9.2 `POST /reviews/referee`](#92-post-reviewsreferee-player--trọng-tài).
+
+Dev complete assignment (non-prod smoke): `POST /referee/assignments/:id/dev/complete`.
+
+Smoke: `npm run smoke:referee`.
+
+### Pending tab — Plan A (FE contract)
+
+Tab **Pending** = **một màn**, scroll hai section (Figma `224:3113` + section **My venues** FE thêm **dưới** Pending Queue). **Không** tab con; **một** `GET` refresh cả hai.
+
+**Request**
+
+```http
+GET /referee/invitations?tab=pending
+Authorization: Bearer <accessToken>
+```
+
+**Success `200`**
+
+```json
+{
+  "tab": "pending",
+  "matchInvitations": [
+    {
+      "assignmentId": 7,
+      "bookingId": 42,
+      "venueId": 3,
+      "venueName": "Skyline Arena",
+      "playerName": "Sarah M.",
+      "sportType": "football",
+      "startsAt": "2026-10-12T08:00:00+07:00",
+      "endsAt": "2026-10-12T10:00:00+07:00",
+      "feeVnd": 250000,
+      "status": "PENDING"
+    }
+  ],
+  "myVenues": [
+    {
+      "registrationId": 12,
+      "venueId": 3,
+      "venueName": "Skyline Arena",
+      "venueAddress": "123 Sports Lane, District 1, HCMC",
+      "ownerName": "Venue Management",
+      "sportType": "football",
+      "status": "ACTIVE",
+      "registeredAt": "2026-10-01T10:00:00+07:00"
+    }
+  ]
+}
+```
+
+| Section | Source field | Actions |
+| :--- | :--- | :--- |
+| **Pending Queue** | `matchInvitations[]` | `POST /referee/assignments/:id/accept` · `POST .../decline` `{ reason? }` |
+| **My venues** | `myVenues[]` | `DELETE /referee/venues/:venueId/register` body `{ "sportType": "football" }` |
+
+**Cancel pool — hành vi BE**
+
+- Registration → `CANCELLED`; sân có thể hiện lại Job Board.
+- Assignment **PENDING** tại sân đó → auto cancelled.
+- Assignment **ACCEPTED** (trận đã nhận) → **giữ nguyên**.
+
+**FE copy gợi ý (confirm dialog):** *“Hủy đăng ký tại {venueName}? Bạn sẽ không nhận lời mời mới tại sân này. Trận đã xác nhận (nếu có) vẫn giữ.”*
+
+**Empty states:** Pending Queue trống + My venues trống độc lập; có thể CTA “Browse Job Board”.
+
+### Job Board — filter & favourite (planned MVP)
+
+Reuse contract matchmaking (sau merge code geo):
+
+| Figma | Query / API | Ghi chú |
+| :--- | :--- | :--- |
+| Sport tabs | `sport` (required) | Chỉ môn trong `certifiedSportTypes` |
+| Province/City + Ward | `province` + `city` | Codes từ `GET /geo/vn`. Figma “Ward/Commune” = BE `city`. |
+| Distance 1–20 km | `latitude`/`longitude`/`radiusKm` hoặc `lat`/`lng`/`radiusKm` | **Location XOR Distance** (giống `GET /matches`) |
+| Heart filter / card | `favorited=true`, `POST/DELETE .../favorite` | Riêng referee venue favourites |
+| Search bar | `q=` | Planned — tên sân / địa chỉ |
+
+**Hiện có trên board response:** `venueId`, `name`, `address`, `ownerName`, `sportType`, `avgRating`, `ratingCount`, `distanceKm` (khi có `lat`/`lng`).
+
+### Completed tab
+
+`GET /referee/invitations?tab=completed&since=30d&filter=all|completed|declined`
+
+---
 
 ## Liên kết
 

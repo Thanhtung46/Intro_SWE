@@ -14,6 +14,11 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `006_schema_matchmaking.sql` | pickup kèo: matches, courts, joins, guests, favorites, search fold + GIN, `province`/`city` | 001 |
 | `007_schema_venue_images.sql` | `venue_images` — venue photo gallery (URL-only, FE uploads to storage) | 001, 004 |
 | `008_schema_admin.sql` | `verification_requests`, `admin_audit_log`, `system_settings` + default policy seeds | 001 |
+| `009_schema_referee.sql` | `referee_profiles`, `referee_venue_registrations`, `referee_assignments`; `bookings.hire_referee` | 004, 008 |
+| `010_verification_document_kind.sql` | `verification_requests.document_kind` + partial unique index | 008 |
+| `011_referee_reviews_notification.sql` | `referee_reviews`; notification type `REFEREE_INVITATION` | 009, 005, 003 |
+| `012_referee_rating_half_steps.sql` | Referee rating `NUMERIC(2,1)` — 0.5–5.0 half-star steps | 011 |
+| `013_referee_rating_notification.sql` | `referee_rating_jobs`; type `REFEREE_RATING_REQUEST` | 011, 009, 003 |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

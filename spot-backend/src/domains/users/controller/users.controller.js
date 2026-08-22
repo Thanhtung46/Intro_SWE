@@ -16,6 +16,10 @@ import {
 import * as usersService from '../service/users.service.js';
 import * as adminService from '../../admin/service/admin.service.js';
 import { parseSubmitVerificationDto } from '../dto/submit-verification.dto.js';
+import {
+  parseSubmitVerificationBatchDto,
+  parseSubmitCertUpdateDto,
+} from '../dto/submit-verification-batch.dto.js';
 
 export async function me(req, res, next) {
   try {
@@ -102,6 +106,29 @@ export async function submitVerificationRequest(req, res, next) {
       req.user.userId,
       dto,
     );
+    return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function submitVerificationBatch(req, res, next) {
+  try {
+    const dto = parseSubmitVerificationBatchDto(req.body);
+    const result = await adminService.submitVerificationBatch(
+      req.user.userId,
+      dto,
+    );
+    return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function submitCertUpdate(req, res, next) {
+  try {
+    const dto = parseSubmitCertUpdateDto(req.body);
+    const result = await adminService.submitCertUpdate(req.user.userId, dto);
     return res.status(201).json(result);
   } catch (err) {
     return next(err);

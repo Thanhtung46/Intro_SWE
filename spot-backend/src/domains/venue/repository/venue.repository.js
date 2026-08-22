@@ -84,3 +84,61 @@ export async function listImagesByVenueId(client, venueId) {
   );
   return rows;
 }
+
+/** Job Board: venues with sport + optional geo, excluding referee active registrations. */
+export async function listBoardVenuesForReferee(
+  client,
+  sportType,
+  { lat, long, radiusKm, excludeVenueIds = [], limit, offset } = {},
+) {
+  const hasDistance = lat != null && long != null;
+  const values = [sportType];
+  let distanceSelect = '';
+  let distanceFilter = '';
+  let orderClause = 'ORDER BY v.avg_rating DESC';
+  let paramIdx = 2;
+
+  if (hasDistance) {
+    values.push(long, lat, radiusKm ?? 20);
+    distanceSelect = `,
+       ST_Distance(v.location, ST_MakePoint($2, $3)::geography) / 1000 AS distance_km`;
+    distanceFilter = `
+       AND v.location IS NOT NULL
+       AND ST_DWithin(v.location, ST_MakePoint($2, $3)::geography, $4 * 1000)`;
+    orderClause = 'ORDER BY distance_km ASC';
+    paramIdx = 5;
+  }
+
+  let excludeClause = '';
+  if (excludeVenueIds.length > 0) {
+    values.push(excludeVenueIds);
+    excludeClause = ` AND v.venue_id <> ALL($${paramIdx}::int[])`;
+    paramIdx += 1;
+  }
+
+  values.push(limit ?? 20, offset ?? 0);
+
+  const { rows } = await client.query(
+    `SELECT
+       v.venue_id, v.name, v.address,
+       v.avg_rating, v.rating_count,
+       $1::varchar AS sport_type,
+       p.full_name AS owner_name
+       ${distanceSelect}
+     FROM schema_venue.venues v
+     JOIN schema_auth.users u ON u.user_id = v.owner_id
+     LEFT JOIN schema_auth.user_profiles p ON p.user_id = u.user_id
+     WHERE EXISTS (
+       SELECT 1 FROM schema_venue.fields f
+       WHERE f.venue_id = v.venue_id
+         AND f.sport_type = $1
+         AND f.status = 'ACTIVE'
+     )
+     ${distanceFilter}
+     ${excludeClause}
+     ${orderClause}
+     LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+    values,
+  );
+  return rows;
+}

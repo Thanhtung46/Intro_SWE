@@ -10,7 +10,7 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 Implemented so far:
 
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`, `/venues`+`/api/venues`, `/bookings`+`/api/bookings`, `/admin`+`/api/admin`, **`/referee`+`/api/referee`**.
 
 ## Status (done vs not)
 
@@ -60,8 +60,9 @@ Implemented so far:
 | Redis | Attempt counters + resend cooldown, keyed by `{email}:{purpose}` (soft-fail if Redis down) |
 | Auth middleware (`authenticate` / `requireRole`) | Done — use on protected routes; `requireRole(...roles)` after `authenticate` |
 | Refresh-token rotate / Redis JWT blacklist | **Not implemented yet** (refresh re-issues tokens; old refresh still valid until TTL) |
-| Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Done** — `/admin/*`, migration `008`, `npm run seed:admin`, `npm run smoke:admin-approvals` |
-| Other domains | `payment` still empty; `admin` implemented |
+| Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Done** — `/admin/*`, migrations `008`–`010`, `npm run smoke:admin-approvals` |
+| **Referee domain** | **Done** — migrations `009`–`013`, `/referee/*`, reviews, notifications, `npm run smoke:referee` |
+| Other domains | `payment` still empty; `admin` + `referee` implemented |
 
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
@@ -98,6 +99,7 @@ npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
 npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
+npm run smoke:referee          # referee batch → admin approve → board → booking hire → accept
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -628,6 +630,49 @@ Booking/Schedule tabs, **host rating/review** (keep `rating: null`), Geoapify
 Reset kèo data:
 `npm run reset:matches` (or `docker compose run --rm backend npm run reset:matches`).
 Windows bind-mount: after changing `src/`, `docker restart spot-backend`.
+
+## Referee (trọng tài)
+
+Product spec: [`docs/REFEREE_PLAN.md`](./docs/REFEREE_PLAN.md). Figma nodes `224:*`.
+
+**Two-layer model**
+
+1. **Job Board (venue pool)** — referee apply sân theo môn cert (`GET /referee/board?sport=`). `POST /referee/venues/:venueId/register` `{ sportType }`. Sân đã apply ẩn khỏi board. `DELETE` same path + body → hủy pool (giữ assignment ACCEPTED hiện tại).
+2. **Invitations (booking)** — player booking `hireReferee: true` + PAID → fan-out PENDING assignment cho mọi referee trong pool. **First accept wins** (`409` nếu muộn).
+
+**Pending tab — Plan A (Aug 2026):** `GET /referee/invitations?tab=pending` → `{ matchInvitations[], myVenues[] }`. FE một màn: **Pending Queue** (Figma `224:3113`) + section **My venues** scroll **dưới**; Cancel pool = `DELETE /referee/venues/:venueId/register`. Chi tiết: `docs/API.md` § Pending tab.
+
+**Planned MVP (chốt product, BE chưa merge):** venue **favourite** (`POST/DELETE .../favorite`, `?favorited=true`); board filter **province/city** reuse `GET /geo/vn` (Location XOR Distance). Assignment detail FE theo Figma `224:5703` (Zalo/Call/breakdown). Xem `REFEREE_PLAN.md` H22–H24.
+
+**Verification**
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `POST` | `/users/me/verification-requests/batch` | Referee signup: 3× `{ documentKind, documentUrl }` |
+| `POST` | `/users/me/verification-requests/cert-update` | Active referee thêm cert |
+| `POST` | `/admin/approvals/:id/approve` | Referee signup: body `{ certifiedSportTypes: ["football"] }` (1–2 sports) |
+
+**Referee API** (Bearer, role `REFEREE`, status `ACTIVE`)
+
+| Method | Path |
+| :--- | :--- |
+| `GET` | `/referee/me`, `/referee/me/certifications` |
+| `GET` | `/referee/board?sport=&lat=&lng=&radiusKm=` |
+| `GET` | `/referee/invitations?tab=pending\|confirmed\|completed&since=30d&filter=` |
+| `GET` | `/referee/assignments/:id` |
+| `POST` | `/referee/assignments/:id/accept`, `.../decline` |
+| `GET` | `/referee/venues/registrations` |
+| `POST` | `/referee/venues/:venueId/register` |
+| `DELETE` | `/referee/venues/:venueId/register` `{ sportType }` |
+| `GET` | `/referee/schedule?month=`, `/referee/earnings`, `/referee/earnings/history` |
+
+**Booking addon:** `POST /bookings` `{ hireReferee?: true, refereeFeeVnd?: number }` (default fee 150_000 VND). Payment gateway chưa có — test fan-out: `POST /bookings/:id/dev/mark-paid` (non-production).
+
+Schema: `schema_referee.referee_profiles`, `referee_venue_registrations`, `referee_assignments`; `bookings.hire_referee`, `bookings.referee_fee_vnd`.
+
+**Not yet:** Payment IPN → PAID tự fan-out; FCM push; **venue favourite + board province/city filter** (planned MVP); board search `q=`.
+
+**Reviews:** `POST /reviews/referee` — player rating trọng tài (0.5–5.0); notification `REFEREE_RATING_REQUEST` sau trận. Migrations `011`–`013`.
 
 ## Env / Supabase
 

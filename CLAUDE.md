@@ -119,8 +119,9 @@ Implemented under `spot-backend/` (do not re-document full API here):
 - **Contact change:** OTP-gated email/phone (FR-1.4) — not via plain PATCH
 - **Schedule / notifications / reviews:** personal schedule + seed; inbox + T-24h/T-2h reminders; venue reviews + reply
 - **Matchmaking (kèo):** Phases 1–5 — `POST/GET /matches`, join AUTO/APPROVAL, mine, my-join-requests, host profile `GET /users/:id`
-- **Migrations:** `001` auth → `002` skills → `003` notification → `004` venue/booking → `005` review → `006` kèo. Prefer `npm run migrate` after pull. `npm run migrate:reset` is destructive.
-- **Not yet:** JWT refresh rotate/blacklist; admin approve OWNER/REFEREE; booking CRUD UI / payment / S3 CDN
+- **Migrations:** `001` auth → … → `008` admin → **`009`–`013` referee** (profiles, reviews, rating jobs). Run `npm run migrate` after pull.
+- **Referee domain:** Job Board, invitations, hire-referee booking fan-out, inbox notifications, player rating — see **Referee (FE contract)** below.
+- **Not yet:** JWT refresh rotate/blacklist; booking **payment gateway** (non-prod: `POST /bookings/:id/dev/mark-paid`); FCM device push (in-app inbox + email only); Admin UI approvals.
 
 ## Common Commands
 
@@ -162,6 +163,8 @@ npm test
 npm run smoke:login      # OTP_DEBUG=true
 npm run smoke:profile
 npm run smoke:matches    # host / join / approve / kick / mine / cancel
+npm run smoke:referee    # OTP_DEBUG=true + seed:admin + migrate 009–013
+npm run worker:reminders # rating prompt + booking reminders (prod-like)
 ```
 Compose (from this repo root `Intro_SWE/`):
 ```bash
@@ -310,6 +313,83 @@ Full detail: [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md) section **Mana
 Do **not** mix with **Manage Group** (`101:2`) — Groups out of scope.
 
 Hide Groups / reviews / verified on profile; hide Booking chrome on filter sheet.
+
+### Referee (trọng tài) — BE done, FE to wire (Aug 2026)
+
+**Docs:** [`spot-backend/docs/REFEREE_PLAN.md`](./spot-backend/docs/REFEREE_PLAN.md) (product) · [`spot-backend/docs/API.md`](./spot-backend/docs/API.md) §8.1, §9.2, Referee endpoints · [`spot-backend/CLAUDE.md`](./spot-backend/CLAUDE.md).
+
+**Smoke (all referee routes):** `cd spot-backend && npm run smoke:referee` — requires server up, `OTP_DEBUG=true`, `npm run seed:admin`, migrations `009`–`013`.
+
+#### FE env (mobile)
+
+Copy `spot-frontend-mobile/.env.example` → `.env`. App resolves API base automatically via `src/config/env.ts`:
+
+| Context | Base URL |
+| :--- | :--- |
+| iOS Simulator / desktop web | `http://localhost:3000` |
+| Android emulator | `http://10.0.2.2:3000` |
+| Expo Go on phone | LAN IP of dev machine + port `3000` |
+
+All service calls use **`API_URL = {base}/api`** (e.g. `GET /api/referee/me`). Optional override: set `API_URL` in `.env` if you add explicit env read later.
+
+**Docker backend:** from repo root `Intro_SWE/` → `docker compose up -d redis backend`. Postman: `http://localhost:3000` (no `/api` prefix for raw paths; FE adds `/api`).
+
+#### App structure (mobile)
+
+| App area | Route group | Role / status |
+| :--- | :--- | :--- |
+| Player booking + rating | `(tabs)/` | `PLAYER` + `ACTIVE` |
+| Referee ops | `app/referee/(tabs)/` **separate** | `REFEREE` + `ACTIVE` |
+| Referee onboarding | pending screens | `REFEREE` + `PENDING` → batch docs → admin approve |
+
+Do **not** mount referee Job Board inside player tabs.
+
+#### Product flows (locked)
+
+| Layer | BE | FE |
+| :--- | :--- | :--- |
+| **Onboarding** | Register → role `REFEREE` → OTP → `POST /users/me/verification-requests/batch` (3 docs: `ID_FRONT`, `ID_BACK`, `VFF_LICENSE`) → admin `POST /admin/approvals/:id/approve` `{ certifiedSportTypes: ["football"] }` (1–2 sports) | Step tracker until `ACTIVE`; then `/referee/(tabs)` |
+| **Job Board** | `GET /referee/board?sport=football` · `POST /referee/venues/:venueId/register` `{ sportType }` | Hide sân đã apply; filter sheet Figma `224:5828` (sport + location/distance — **BE filter/favourite planned**) |
+| **Invitations — Plan A** | `GET /referee/invitations?tab=pending` → **`matchInvitations[]` + `myVenues[]`** (một API) · accept/decline · `DELETE .../register` cancel pool | **Một màn Pending scroll:** (1) Pending Queue Figma `224:3113` (2) **My venues** section **dưới** — sân đã Apply + Cancel. Không tab con riêng. |
+| **First accept wins** | Player `POST /bookings` `{ hireReferee: true, refereeFeeVnd?: 150000 }` → pay → fan-out · `POST /referee/assignments/:id/accept` | `409 ASSIGNMENT_ALREADY_TAKEN` |
+| **Schedule / Earnings** | `GET /referee/schedule?month=YYYY-MM` · `/earnings` · `/earnings/history` | Calendar dots = ACCEPTED |
+| **Player rate referee** | After `endsAt`: inbox **`REFEREE_RATING_REQUEST`** → `POST /reviews/referee` `{ bookingId, rating }` — rating **0.5–5.0** step 0.5, **no text** | Half-star UI; deep link from `notification.data.bookingId` |
+| **Auth** | `/referee/*` requires Bearer + `REFEREE` + **`ACTIVE`** | `PENDING` blocked at login |
+
+#### Locked Aug 2026 (Figma review + product chốt)
+
+| Topic | Decision | BE | FE |
+| :--- | :--- | :--- | :--- |
+| **My venues (Plan A)** | Cùng tab Pending, section dưới Pending Queue | `GET .../invitations?tab=pending` → `myVenues[]`; cancel `DELETE /referee/venues/:venueId/register` | Card + Cancel + confirm; empty state + CTA Board |
+| **Favourite sân** | MVP **có** — heart trên board card + filter sheet | **Planned** — `POST/DELETE /referee/venues/:id/favorite`, `?favorited=true`, `isFavorited` on board (≠ `match_favorites`) | Heart toggle; filter heart = favourites only |
+| **Filter Tỉnh/Phường** | MVP **có** — reuse matchmaking | **Planned** — `GET /geo/vn`; board `province` + `city` (Ward/Commune = `city` code); **Location XOR Distance** (`lat`/`lng`/`radiusKm` 1–20) | Sheet `224:5828`; bỏ “Book Field” / `$40/hr` (artefact player) |
+| **Assignment detail** | Tạm **theo Figma `224:5703`** | `GET /referee/assignments/:id` (fee snapshot); venue contact có thể reuse `GET /venues/:id` | Zalo, Call, Get Directions, Payment breakdown UI; Travel line = display (BE một `fee_vnd` today) |
+
+Chi tiết: [`spot-backend/docs/REFEREE_PLAN.md`](./spot-backend/docs/REFEREE_PLAN.md) §2.2 H22–H24, §5.1 Plan A.
+
+#### Notifications (inbox — both roles)
+
+Poll `GET /api/notifications` + badge `GET /api/notifications/unread-count`.
+
+| `type` | Recipient | When | `data` keys for navigation |
+| :--- | :--- | :--- | :--- |
+| `REFEREE_INVITATION` | Referee | Booking paid + fan-out | `assignmentId`, `bookingId`, `venueName`, `feeVnd` → `/referee/invitations?tab=pending` |
+| `REFEREE_RATING_REQUEST` | **Player** | Match ended + referee accepted | `bookingId`, `refereeId`, `assignmentId` → rate screen → `POST /reviews/referee` |
+
+Production: run `npm run worker:reminders` beside API (schedules rating prompt at `endsAt`). Dev: `POST /referee/assignments/:id/dev/complete` sends rating prompt immediately.
+
+#### Player booking addon
+
+```json
+POST /api/bookings
+{ "fieldId": 1, "bookingDate": "2026-08-25", "startTime": "19:00", "endTime": "20:00", "hireReferee": true }
+```
+
+Non-prod pay + fan-out: `POST /api/bookings/:id/dev/mark-paid`.
+
+#### FE status
+
+Referee screens **not implemented** on mobile yet — wire against live API per Figma map in `REFEREE_PLAN.md` §4. Admin console approvals UI **not implemented** (BE `/admin/approvals/*` ready).
 
 **Figma Host form (`99:2`) — product locked (BE + FE contract)**
 

@@ -37,3 +37,15 @@ export const rejectApprovalSchema = z.object({
 export function parseRejectApprovalDto(body) {
   return rejectApprovalSchema.parse(body ?? {});
 }
+
+export const approveApprovalSchema = z.object({
+  certifiedSportTypes: z
+    .array(z.enum(['football', 'badminton', 'Football', 'Badminton']))
+    .min(1)
+    .max(2)
+    .optional(),
+});
+
+export function parseApproveApprovalDto(body) {
+  return approveApprovalSchema.parse(body ?? {});
+}

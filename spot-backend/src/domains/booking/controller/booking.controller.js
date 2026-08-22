@@ -2,6 +2,7 @@ import { parseFieldAvailabilityQuery } from '../dto/availability.dto.js';
 import { parseCreateBookingDto } from '../dto/create-booking.dto.js';
 import { parseCreateBookingBulkDto } from '../dto/create-booking-bulk.dto.js';
 import * as bookingService from '../service/booking.service.js';
+import config from '../../../shared/config/env.js';
 
 export async function availability(req, res, next) {
   try {
@@ -33,6 +34,22 @@ export async function createBulk(req, res, next) {
     const dto = parseCreateBookingBulkDto(req.body);
     const result = await bookingService.createBookingsBulk(req.user.userId, dto);
     return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function markPaidDev(req, res, next) {
+  try {
+    const bookingId = Number(req.params.id);
+    if (!Number.isInteger(bookingId) || bookingId < 1) {
+      return res.status(400).json({ message: 'Invalid booking id' });
+    }
+    const result = await bookingService.markBookingPaidDev(
+      req.user.userId,
+      bookingId,
+    );
+    return res.status(200).json(result);
   } catch (err) {
     return next(err);
   }
