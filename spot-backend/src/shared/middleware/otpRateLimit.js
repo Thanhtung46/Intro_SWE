@@ -34,3 +34,24 @@ export function createLoginRateLimiter(options = {}) {
     ...options,
   });
 }
+
+/**
+ * Per-authenticated-player rate limiter (must run after `authenticate`).
+ * Reused as-is for the assistant conversation endpoints — see
+ * specs/003-nlp-assistant/research.md decision 6.
+ */
+export function createPlayerRateLimiter({
+  windowMs = 60 * 1000,
+  max = 20,
+  message = 'Too many requests. Please try again later.',
+} = {}) {
+  return rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${req.ip}:${req.user?.userId || 'anon'}`,
+    message: { message },
+    validate: false,
+  });
+}

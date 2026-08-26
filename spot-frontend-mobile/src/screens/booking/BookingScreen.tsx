@@ -67,7 +67,11 @@ export default function BookingScreen({ onAvatarPress, avatarInitial }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* Header - Top Navigation Shell (Figma node 79:1521) */}
-      <AppHeader onAvatarPress={onAvatarPress} avatarInitial={avatarInitial} />
+      <AppHeader
+        onAvatarPress={onAvatarPress}
+        avatarInitial={avatarInitial}
+        onAssistantPress={() => router.push(ROUTES.ASSISTANT)}
+      />
 
       {/* Sport toggle (Figma node 79:1392) */}
       <View style={styles.sportToggleOuter}>

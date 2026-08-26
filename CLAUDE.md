@@ -102,12 +102,12 @@ Tech stack per component:
 | `spot-frontend-mobile/` | Expo 49, React Native 0.72, expo-router, Zustand, Axios | Scaffolded. `npm install` **fails** on a peer-dependency conflict (`react-test-renderer@19.x` vs `@testing-library/react-native` wanting React ^16–18) unless run with `--legacy-peer-deps`. |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so). |
 | `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service), ESM, Node ≥ 18 | **Runnable** (local or Docker). Auth + **matchmaking (kèo) Phases 1–5 done** (list/filter/detail/join/host-profile). Default DB is **Supabase Postgres** (Session pooler), not the optional compose `postgres` profile. See `spot-backend/CLAUDE.md`. |
-| `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
+| `spot-ai-services/{recommendation,nlp-assistant}/` | Python/FastAPI | **Implemented** — real app code, `requirements.txt`, `Dockerfile`, tests. `noshow-prediction/` is still an **empty folder scaffold** (`app/`, `models/`, `services/`, `data/` — no code). See `spot-ai-services/CLAUDE.md`. |
 | Infra | PostgreSQL 15-alpine (optional profile), Redis 7-alpine, Docker Compose | Default backend uses **Supabase** + Redis. `admin-console` docker build verified. AI images still missing Dockerfiles. |
 | `spot-frontend-mobile/` | Expo, React Native, expo-router, Zustand, Axios — `package.json` currently pins Expo `^57`/React Native `^0.86`/React `19.2.8` (not Expo 49/RN 0.72 as this line used to say; version drifts fast here, so check `package.json` directly). See `spot-frontend-mobile/CLAUDE.md` for current status — it has a real, mostly-wired auth/onboarding/home flow, not an empty scaffold, and plain `npm install` works (no `--legacy-peer-deps` needed anymore). |
 | `spot-admin-console/` | Vite, React 18, TypeScript, React Router, Recharts, ESLint | Scaffolded, runnable — `docker build` verified working end-to-end. `npm run lint` fails today (no `.eslintrc*` committed, despite `eslint`/`@typescript-eslint/*` in `devDependencies`; there is **no oxlint** here despite older docs claiming so — a leftover `.oxlintrc.json` file exists but isn't wired to anything). |
 | `spot-backend/` | Node.js/Express, domain-driven (controller/dto/entity/repository/service) | **Has a `package.json` and is installable/runnable** — the `auth` domain (register/role/OTP/login/refresh/forgot-password/reset-password) is fully implemented; other domains are still empty scaffolds. See `spot-backend/CLAUDE.md`/`README.md` for the full API. |
-| `spot-ai-services/{recommendation,noshow-prediction,nlp-assistant}/` | Python/FastAPI (planned) | **Empty folder scaffolds only** (`app/`, `models/`, `services/`, `data/`) — no code, no `requirements.txt`, no `Dockerfile` |
+| `spot-ai-services/{recommendation,nlp-assistant}/` | Python/FastAPI | **Implemented** — real app code, `requirements.txt`, `Dockerfile`, tests. `noshow-prediction/` is still an **empty folder scaffold** (`app/`, `models/`, `services/`, `data/` — no code). See `spot-ai-services/CLAUDE.md`. |
 | Infra | PostgreSQL 15-alpine, Redis 7-alpine, Docker Compose | `postgres`/`redis`/`admin-console` verified; **backend** builds with `env_file: spot-backend/.env` + `REDIS_HOST=redis`. Default backend DB is **Supabase**, not compose postgres. |
 
 ### Backend snapshot (auth + profile + matchmaking)
@@ -171,8 +171,11 @@ docker restart spot-backend   # Windows: after changing bind-mounted src/
 ```
 Do not run `docker compose` from inside `spot-backend/` (no compose file there).
 
-**AI services (`spot-ai-services/*/`):** not runnable yet — no application
-code or `requirements.txt` exists.
+**AI services (`spot-ai-services/*/`):** `recommendation/` and
+`nlp-assistant/` are runnable (`cd` into either, `pip install -r
+requirements-dev.txt`, `uvicorn app.main:app --reload --port 5001` /
+`5003`). `noshow-prediction/` is not — no application code or
+`requirements.txt` exists yet.
 
 **Docker (repo root `Intro_SWE/`):**
 ```bash
@@ -203,11 +206,13 @@ app directory. Status:
   `next build`: `src/app/globals.css` doesn't exist, and `tsconfig.json`/
   `next.config.js`/`tailwind.config.js`/`postcss.config.js` are all missing
   too. This is an app-scaffold gap, not a Docker problem.
-- `recommendation`/`noshow`/`nlp` — still fail immediately: no `Dockerfile`
-  exists under `spot-ai-services/*/` at all (empty scaffolds).
+- `recommendation`/`nlp` — have a `Dockerfile` and real app code now, but
+  their `docker-compose.yml` service blocks are still commented out
+  (uncommenting + verifying against live Supabase/Gemini is a separate,
+  not-yet-done step). `noshow` still fails immediately: no `Dockerfile`
+  exists under `spot-ai-services/noshow-prediction/` at all (empty scaffold).
 - `backend` — **builds** when `package.json`/`package-lock.json` present; runtime DB defaults to Supabase via `spot-backend/.env`.
 - `frontend-web` — gets past `npm ci` but fails at `next build` (missing `globals.css` + Next/Tailwind configs).
-- `recommendation`/`noshow`/`nlp` — no `Dockerfile` under `spot-ai-services/*/` yet.
 
 `docker-compose.production.yml` uses `${DB_USER}`/`${DB_PASSWORD}`/
 `${JWT_SECRET}`/etc. with **no defaults**. Compose only auto-loads a file
@@ -230,7 +235,7 @@ See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
 ├── spot-frontend-mobile/    # Expo mobile app
 ├── spot-admin-console/      # Vite admin dashboard
 ├── spot-backend/            # Express API — domain-driven src/domains/{auth,booking,venue,payment,matchmaking,referee,review,notification,admin}/
-├── spot-ai-services/        # 3 planned FastAPI microservices (empty scaffolds)
+├── spot-ai-services/        # 3 FastAPI microservices — recommendation/ and nlp-assistant/ implemented; noshow-prediction/ still an empty scaffold
 ├── docker-compose.yml               # dev stack — each service builds from its own app's Dockerfile
 ├── docker-compose.production.yml    # prod stack
 ├── .env.development / .env.production   # compose env files (gitignored, contain placeholders)
@@ -241,9 +246,15 @@ See `DOCKER.md` for the full guide (ports, health checks, backup/restore).
 **Data flow (current):**
 `spot-frontend-web` / `spot-frontend-mobile` / `spot-admin-console` →
 `spot-backend` REST (`:3000`) → Supabase Postgres + Redis (`:6379`).
-Auth + matchmaking (kèo) are implemented. AI microservices (recommendation
-5001, noshow 5002, nlp 5003) are still empty scaffolds — do not call them
-from matchmaking.
+Auth + matchmaking (kèo) are implemented. `spot-backend` also proxies to
+`nlp-assistant` (`:5003`) via its `assistant` domain (`/assistant` +
+`/api/assistant`) for the conversational search/join assistant — see
+`specs/003-nlp-assistant/`. `spot-backend` also proxies to `recommendation`
+(`:5001`) via its `recommendation` domain (`/recommendations` +
+`/api/recommendations`), and `spot-frontend-mobile` now consumes both (a
+"Suggested for you" Home section + an AI assistant chat screen) — see
+`specs/004-ai-features-frontend-integration/`. `noshow-prediction` (`:5002`)
+is still an empty scaffold — do not call it from matchmaking.
 
 ### Matchmaking (kèo) — implemented
 
@@ -334,7 +345,7 @@ Reference UX: [Vmito create session](https://vmito.com/vi/sessions/new) (recurri
 **Do not confuse with Homepage search:** `GET /matches?location=` = find **joinable kèo** (browse pool). `GET /matches/venue-suggestions` = reuse **venues** for Host (wider DB pool).
 
 Smoke (server up, `OTP_DEBUG=true`): `cd spot-backend && npm run smoke:matches`.
-**Data flow:** frontends → `spot-backend` (REST `:3000`) → Supabase Postgres + Redis. Planned: backend → AI services recommendation (5001), noshow (5002), nlp (5003) — AI not implemented yet.
+**Data flow:** frontends → `spot-backend` (REST `:3000`) → Supabase Postgres + Redis. `spot-backend` → `nlp-assistant` (5003) is implemented (`assistant` domain, forwards the player's own access token). `spot-backend` → `recommendation` (5001) is implemented (`recommendation` domain, `userId` derived server-side from the JWT, never client-supplied). `spot-frontend-mobile` consumes both (see `specs/004-ai-features-frontend-integration/`). `noshow-prediction` (5002) is still an empty scaffold.
 
 ## Code Style & Conventions
 
@@ -360,7 +371,7 @@ committed yet so it currently fails to run):
 - **Polyrepo, not monorepo**: `spot-frontend-web`, `spot-frontend-mobile`, and `spot-admin-console` each contain their own `.git` — independent repos, not submodules. Root `git commit` does **not** track changes inside them. `spot-backend/` **is** tracked by this repo.
 - **`spot-backend` is runnable** — use `spot-backend/CLAUDE.md` + `docs/API.md`. Do not revive old “no package.json / no user_profiles” assumptions.
 - **`schema_auth` split:** `users` = auth identity; `user_profiles` = display + Settings prefs; view `user_prefs`. Prefs sync = same DB row (no Redis profile cache).
-- **`spot-ai-services/*` are empty scaffolds** — check for `requirements.txt`/app code before assuming a service exists.
+- **`spot-ai-services/*`**: `recommendation/` and `nlp-assistant/` are implemented (real app code, `requirements.txt`, `Dockerfile`, tests); `noshow-prediction/` is still an empty scaffold. Check for `requirements.txt`/app code before assuming a given service exists — don't assume all three are scaffolds.
 - **Env files**: root `.env.development` / `.env.production` are gitignored. Backend secrets live in `spot-backend/.env` (also gitignored). Compose production needs `--env-file .env.production`.
 - **`Docs/` and `PA/`** — course materials only, not app code.
 - Each `spot-*/CLAUDE.md` is the source of truth for that app’s status — read it before editing.

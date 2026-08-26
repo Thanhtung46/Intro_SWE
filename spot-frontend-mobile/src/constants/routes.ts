@@ -10,6 +10,7 @@ export const ROUTES = {
   PENDING: '/pending',
   PROFILE: '/profile',
   PROFILE_EDIT: '/profile/edit',
+  ASSISTANT: '/assistant',
   AUTH_LOGIN: '/auth/login',
   AUTH_REGISTER: '/auth/register',
   AUTH_OTP: '/auth/otp',

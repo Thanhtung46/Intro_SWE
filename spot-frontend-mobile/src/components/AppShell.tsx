@@ -6,6 +6,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
+import { ROUTES } from '@/constants/routes';
 import BottomNavItem from '@/components/navigation/BottomNavItem';
 import { showAlert } from '@/utils/showAlert';
 import { useUser } from '../context/UserContext';
@@ -57,7 +58,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => comingSoon('AI Assistant')}
+            onPress={() => router.push(ROUTES.ASSISTANT)}
             accessibilityRole="button"
             accessibilityLabel="AI Assistant"
           >

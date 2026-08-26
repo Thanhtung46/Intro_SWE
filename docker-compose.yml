@@ -121,75 +121,32 @@ services:
     restart: unless-stopped
 
   # ==================== AI SERVICES ====================
-#   recommendation:
-#     build:
-#       context: ./spot-ai-services/recommendation
-#       dockerfile: Dockerfile
-#     container_name: spot-recommendation
-#     environment:
-#       API_PORT: 5001
-#       BACKEND_URL: http://backend:3000
-#       DB_HOST: ${DB_HOST:-}
-#       DB_PORT: ${DB_PORT:-5432}
-#       DB_NAME: ${DB_NAME:-}
-#       DB_USER: ${DB_USER:-}
-#       DB_PASSWORD: ${DB_PASSWORD:-}
-#       REDIS_HOST: redis
-#       REDIS_PORT: 6379
-#     ports:
-#       - "5001:5001"
-#     depends_on:
-#       - backend
-#     volumes:
-#       - ./spot-ai-services/recommendation:/app
-#     networks:
-#       - spot-network
-#     restart: unless-stopped
-
-#   noshow:
-#     build:
-#       context: ./spot-ai-services/noshow-prediction
-#       dockerfile: Dockerfile
-#     container_name: spot-noshow
-#     environment:
-#       API_PORT: 5002
-#       BACKEND_URL: http://backend:3000
-#       DB_HOST: ${DB_HOST:-}
-#       DB_PORT: ${DB_PORT:-5432}
-#       DB_NAME: ${DB_NAME:-}
-#       DB_USER: ${DB_USER:-}
-#       DB_PASSWORD: ${DB_PASSWORD:-}
-#       REDIS_HOST: redis
-#       REDIS_PORT: 6379
-#     ports:
-#       - "5002:5002"
-#     depends_on:
-#       - backend
-#     volumes:
-#       - ./spot-ai-services/noshow-prediction:/app
-#     networks:
-#       - spot-network
-#     restart: unless-stopped
-
-#   nlp:
-#     build:
-#       context: ./spot-ai-services/nlp-assistant
-#       dockerfile: Dockerfile
-#     container_name: spot-nlp
-#     environment:
-#       API_PORT: 5003
-#       BACKEND_URL: http://backend:3000
-#       GEMINI_API_KEY: ${GEMINI_API_KEY:-your-key}
-#       OPENAI_API_KEY: ${OPENAI_API_KEY:-your-key}
-#     ports:
-#       - "5003:5003"
-#     depends_on:
-#       - backend
-#     volumes:
-#       - ./spot-ai-services/nlp-assistant:/app
-#     networks:
-#       - spot-network
-#     restart: unless-stopped
+  nlp:
+    build:
+      context: ./spot-ai-services/nlp-assistant
+      dockerfile: Dockerfile
+    container_name: spot-nlp
+    environment:
+      PORT: 5003
+      BACKEND_URL: http://backend:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-your-key}
+      REDIS_URL: redis://redis:6379/0
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-change-me}
+      # gemini-2.5-flash is noticeably slower than the now-retired
+      # gemini-1.5-flash this was originally tuned for (~5s for a trivial
+      # reply) — 4s was cutting it off mid-response. spot-backend's own
+      # REQUEST_TIMEOUT_MS is 20s so it never cuts this off first.
+      LLM_TIMEOUT_SECONDS: 15
+    ports:
+      - "5003:5003"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./spot-ai-services/nlp-assistant:/app
+    networks:
+      - spot-network
+    restart: unless-stopped
 
 networks:
   spot-network:
