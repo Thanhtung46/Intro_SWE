@@ -25,12 +25,14 @@ current for either.
 
 `docker compose build noshow` still fails immediately (`failed to read
 dockerfile: open Dockerfile: no such file or directory`) — nothing to
-build yet there. `docker compose build recommendation` / `nlp` now have a
-`Dockerfile` to build from, though neither compose service block is
-uncommented yet (`docker-compose.yml`'s `recommendation`/`noshow`/`nlp`
-entries are all still commented out — uncommenting is a separate,
-not-yet-done step; not verified end-to-end against live Supabase/Gemini/
-Redis in this environment — see Known Limitations below).
+build yet there. `nlp` now has a `docker-compose.yml` service block that
+is uncommented and live (`docker compose up -d --build redis nlp`
+builds), though not verified end-to-end against live Redis/Gemini in
+this environment. `recommendation` has a `Dockerfile` and real app code
+to build from, but `docker-compose.yml` has no `recommendation` service
+block at all yet (never added — not the same as commented out; see
+Known Limitations below). `noshow` has neither a `Dockerfile` nor a
+compose service block.
 
 ## Common Commands
 

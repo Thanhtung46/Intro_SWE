@@ -189,7 +189,8 @@ docker compose up -d postgres redis          # always works (local postgres opti
 docker compose up -d --build admin-console   # verified end-to-end
 docker compose up -d --build redis backend   # uses spot-backend/.env; REDIS_HOST=redis
 docker compose run --rm backend npm run migrate
-docker compose build frontend-web recommendation noshow nlp  # still fail — see below
+docker compose build frontend-web recommendation noshow  # still fail — see below
+docker compose up -d --build redis nlp        # nlp-assistant now wired into docker-compose.yml
 docker compose logs -f <service>
 docker compose down [-v]
 docker compose -f docker-compose.production.yml --env-file .env.production up -d   # --env-file required
@@ -206,11 +207,17 @@ app directory. Status:
   `next build`: `src/app/globals.css` doesn't exist, and `tsconfig.json`/
   `next.config.js`/`tailwind.config.js`/`postcss.config.js` are all missing
   too. This is an app-scaffold gap, not a Docker problem.
-- `recommendation`/`nlp` — have a `Dockerfile` and real app code now, but
-  their `docker-compose.yml` service blocks are still commented out
-  (uncommenting + verifying against live Supabase/Gemini is a separate,
-  not-yet-done step). `noshow` still fails immediately: no `Dockerfile`
-  exists under `spot-ai-services/noshow-prediction/` at all (empty scaffold).
+- `nlp` — has a `Dockerfile`, real app code, and its `docker-compose.yml`
+  service block is now uncommented/live (`docker compose up -d --build redis nlp`
+  builds); not yet verified end-to-end against live Redis/Gemini in this
+  environment.
+- `recommendation` — has a `Dockerfile` and real app code, but there is
+  still no `recommendation` service block in `docker-compose.yml` at all
+  (not commented out — just never added; adding one plus verifying against
+  live Supabase is a separate, not-yet-done step).
+- `noshow` still fails immediately: no `Dockerfile` exists under
+  `spot-ai-services/noshow-prediction/` at all (empty scaffold), and there
+  is no `noshow` service block in `docker-compose.yml` either.
 - `backend` — **builds** when `package.json`/`package-lock.json` present; runtime DB defaults to Supabase via `spot-backend/.env`.
 - `frontend-web` — gets past `npm ci` but fails at `next build` (missing `globals.css` + Next/Tailwind configs).
 
