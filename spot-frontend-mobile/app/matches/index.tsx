@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { Alert } from 'react-native';
 import { AppShell } from '@/components/AppShell';
 import MatchesHomepageScreen from '@/screens/matches/MatchesHomepageScreen';
 
@@ -7,10 +6,10 @@ import MatchesHomepageScreen from '@/screens/matches/MatchesHomepageScreen';
 // MatchesHomepageScreen owns the UI. Header/bottom nav/ProfileMenu/
 // NotificationMenu now live in AppShell (shared with Home/Schedule/
 // Settings), same as app/home/index.tsx. Filters are handled internally by
-// the screen (self-contained Modal — no destination to route to).
+// the screen (self-contained Modal — no destination to route to). Groups
+// sub-tab callbacks (Groups implementation plan) mirror the Matches ones.
 export default function MatchesHomepageRoute() {
   const router = useRouter();
-  const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
 
   return (
     <AppShell activeTab="matches">
@@ -19,6 +18,9 @@ export default function MatchesHomepageRoute() {
         onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)}
         onHostMatch={(sport) => router.push({ pathname: '/matches/host-form', params: { sport } })}
         onManageMatches={() => router.push('/matches/mine')}
+        onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
+        onCreateGroup={(sport) => router.push({ pathname: '/groups/create', params: { sport } })}
+        onManageGroups={() => router.push('/groups/mine')}
       />
     </AppShell>
   );

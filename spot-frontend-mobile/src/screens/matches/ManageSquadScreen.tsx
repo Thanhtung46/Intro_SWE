@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -11,6 +12,7 @@ import {
   acceptJoinRequest,
   getErrorMessage,
   getMatchDetail,
+  kickParticipant,
   listMatchRequests,
   rejectJoinRequest,
 } from '@/services/matchService';
@@ -37,6 +39,8 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [actingRequestId, setActingRequestId] = useState<number | null>(null);
+  const [kickTarget, setKickTarget] = useState<Participant | null>(null);
+  const [kicking, setKicking] = useState(false);
 
   const fetchData = useCallback(async () => {
     setStatus('loading');
@@ -77,6 +81,21 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
       setErrorMessage(getErrorMessage(err));
     } finally {
       setActingRequestId(null);
+    }
+  };
+
+  const handleKick = async () => {
+    if (!kickTarget) return;
+    setKicking(true);
+    try {
+      await kickParticipant(matchId, kickTarget.userId);
+      setKickTarget(null);
+      await fetchData();
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err));
+      setKickTarget(null);
+    } finally {
+      setKicking(false);
     }
   };
 
@@ -185,14 +204,33 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
                   <Text style={styles.hostTagText}>HOST</Text>
                 </View>
               ) : (
-                participant.paymentStatus === 'SUCCESS' && (
-                  <Text style={styles.paidText}>Paid: {formatVnd(participant.shareAmount)}</Text>
-                )
+                <>
+                  {participant.paymentStatus === 'SUCCESS' && (
+                    <Text style={styles.paidText}>Paid: {formatVnd(participant.shareAmount)}</Text>
+                  )}
+                  <TouchableOpacity
+                    testID={`kick-participant-${participant.userId}`}
+                    style={styles.kickButton}
+                    onPress={() => setKickTarget(participant)}
+                  >
+                    <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           ))}
         </ScrollView>
       )}
+
+      <ConfirmDialog
+        visible={kickTarget != null}
+        title="Kick this player?"
+        message={`${kickTarget?.fullName ?? 'This player'} will be removed from the squad and won't be able to rejoin this match.`}
+        confirmLabel={kicking ? 'Kicking…' : 'Kick'}
+        destructive
+        onConfirm={kicking ? () => {} : handleKick}
+        onCancel={() => setKickTarget(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -278,4 +316,5 @@ const styles = StyleSheet.create({
   hostTag: { backgroundColor: colors.primaryDark, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   hostTagText: { fontSize: 10, fontWeight: '700', color: colors.white },
   paidText: { fontSize: 12, fontWeight: '700', color: colors.priceText },
+  kickButton: { padding: spacing.xxs },
 });

@@ -19,7 +19,13 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SPOT uses your location to find groups and matches near you."
+        }
+      ]
     ],
     "platforms": [
       "ios",

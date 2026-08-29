@@ -21,9 +21,13 @@ import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
+import { listGroups } from '@/services/groupService';
 import { openVenueDirections } from '@/utils/directions';
 import type { Match, MatchSuggestion, Sport } from '@/types/match';
 import { EMPTY_MATCH_FILTERS, type MatchFilters } from '@/types/matchFilters';
+import { EMPTY_GROUP_FILTERS, type GroupFilters } from '@/types/groupFilters';
+import type { GroupSuggestion } from '@/types/group';
+import GroupsBrowseScreen from '@/screens/groups/GroupsBrowseScreen';
 
 type SubTab = 'matches' | 'groups' | 'tournaments';
 
@@ -34,14 +38,17 @@ type Props = {
   onOpenMatch: (matchId: number) => void;
   onHostMatch: (sport: Sport) => void;
   onManageMatches: () => void;
+  onOpenGroup: (groupId: number) => void;
+  onCreateGroup: (sport: Sport) => void;
+  onManageGroups: () => void;
 };
 
 type FabAction = { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void };
 
-// Groups/Tournaments actions just show a locked message (note #1) — they
-// don't route through props.onHostMatch/onManageMatches (those are reserved
-// for the real Matches-tab actions once built), so the alert text always
-// matches what was actually tapped.
+// Tournaments actions still show a locked message — Groups is real now
+// (Groups implementation plan), routed through its own onCreateGroup/
+// onManageGroups props rather than reusing onHostMatch/onManageMatches
+// (those are Matches-tab-specific).
 function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (feature: string) => void): FabAction[] {
   if (subTab === 'matches') {
     return [
@@ -51,8 +58,8 @@ function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (
   }
   if (subTab === 'groups') {
     return [
-      { icon: 'add-circle-outline', label: 'Create a Group', onPress: () => comingSoon('Groups') },
-      { icon: 'people-outline', label: 'Manage Groups', onPress: () => comingSoon('Groups') },
+      { icon: 'add-circle-outline', label: 'Create a Group', onPress: () => props.onCreateGroup(sport) },
+      { icon: 'people-outline', label: 'Manage Groups', onPress: props.onManageGroups },
     ];
   }
   return [
@@ -115,7 +122,9 @@ export default function MatchesHomepageScreen(props: Props) {
   );
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
-  const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
+  const [groupFilterVisible, setGroupFilterVisible] = useState(false);
+  const [groupFilters, setGroupFilters] = useState<GroupFilters>(EMPTY_GROUP_FILTERS);
+  const [suggestions, setSuggestions] = useState<MatchSuggestion[] | GroupSuggestion[]>([]);
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
@@ -155,6 +164,8 @@ export default function MatchesHomepageScreen(props: Props) {
   // Search-as-you-type dropdown — separate from `appliedLocation`/`fetchMatches`
   // above so the visible match list only changes on submit/tap, not on every
   // keystroke (spot-backend/CLAUDE.md "Homepage search": debounce ~300ms).
+  // Shared search bar branches which list API it hits based on `subTab`
+  // (Groups implementation plan — no separate search UI for Groups).
   useEffect(() => {
     const trimmed = searchText.trim();
     if (!trimmed) {
@@ -164,8 +175,13 @@ export default function MatchesHomepageScreen(props: Props) {
     setSuggestionsLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const result = await listMatches({ sport, location: trimmed });
-        setSuggestions(result.suggestions ?? []);
+        if (subTab === 'groups') {
+          const result = await listGroups({ sport, location: trimmed });
+          setSuggestions(result.suggestions ?? []);
+        } else {
+          const result = await listMatches({ sport, location: trimmed });
+          setSuggestions(result.suggestions ?? []);
+        }
       } catch {
         setSuggestions([]);
       } finally {
@@ -173,16 +189,16 @@ export default function MatchesHomepageScreen(props: Props) {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchText, sport]);
+  }, [searchText, sport, subTab]);
 
-  const applySuggestion = (suggestion: MatchSuggestion) => {
+  const applySuggestion = (suggestion: MatchSuggestion | GroupSuggestion) => {
     setSearchText(suggestion.text);
     setAppliedLocation(suggestion.text);
     setSuggestionsVisible(false);
   };
 
-  const suggestionIcon = (kind: MatchSuggestion['kind']): keyof typeof Ionicons.glyphMap => {
-    if (kind === 'venueName') return 'storefront-outline';
+  const suggestionIcon = (kind: string): keyof typeof Ionicons.glyphMap => {
+    if (kind === 'venueName' || kind === 'name') return 'storefront-outline';
     if (kind === 'venueAddress') return 'location-outline';
     return 'pricetag-outline';
   };
@@ -202,8 +218,8 @@ export default function MatchesHomepageScreen(props: Props) {
 
   const handleSubTabPress = (tab: SubTab) => {
     setSubTab(tab);
-    if (tab !== 'matches') {
-      Alert.alert('Coming soon', `${tab === 'groups' ? 'Groups' : 'Tournaments'} is not available yet.`);
+    if (tab === 'tournaments') {
+      Alert.alert('Coming soon', 'Tournaments is not available yet.');
     }
   };
 
@@ -252,7 +268,11 @@ export default function MatchesHomepageScreen(props: Props) {
             }}
             returnKeyType="search"
           />
-          <TouchableOpacity testID="matches-filter-button" onPress={() => setFilterVisible(true)} hitSlop={8}>
+          <TouchableOpacity
+            testID="matches-filter-button"
+            onPress={() => (subTab === 'groups' ? setGroupFilterVisible(true) : setFilterVisible(true))}
+            hitSlop={8}
+          >
             <Ionicons name="options-outline" size={18} color={colors.bodyText} />
           </TouchableOpacity>
         </View>
@@ -303,39 +323,51 @@ export default function MatchesHomepageScreen(props: Props) {
         })}
       </View>
 
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} />}
-      >
-        {subTab !== 'matches' ? (
+      {subTab === 'groups' ? (
+        <GroupsBrowseScreen
+          sport={sport}
+          appliedLocation={appliedLocation}
+          filters={groupFilters}
+          filterVisible={groupFilterVisible}
+          onCloseFilter={() => setGroupFilterVisible(false)}
+          onApplyFilters={setGroupFilters}
+          onOpenGroup={props.onOpenGroup}
+        />
+      ) : subTab === 'tournaments' ? (
+        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
           <View style={styles.emptyState}>
             <Ionicons name="lock-closed-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>
-              {subTab === 'groups' ? 'Groups' : 'Tournaments'} isn't available yet.
-            </Text>
+            <Text style={styles.emptyStateText}>Tournaments isn't available yet.</Text>
           </View>
-        ) : status === 'loading' ? (
-          <ActivityIndicator style={styles.spinner} color={colors.primary} />
-        ) : status === 'error' ? (
-          <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
-        ) : matches.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
-          </View>
-        ) : (
-          matches.map((match) => (
-            <MatchCard
-              key={match.matchId}
-              match={match}
-              onPress={() => props.onOpenMatch(match.matchId)}
-              onToggleFavorite={() => handleToggleFavorite(match)}
-              onDirections={() => openVenueDirections(router, match)}
-            />
-          ))
-        )}
-      </ScrollView>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} />}
+        >
+          {status === 'loading' ? (
+            <ActivityIndicator style={styles.spinner} color={colors.primary} />
+          ) : status === 'error' ? (
+            <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
+          ) : matches.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={28} color={colors.outline} />
+              <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
+            </View>
+          ) : (
+            matches.map((match) => (
+              <MatchCard
+                key={match.matchId}
+                match={match}
+                onPress={() => props.onOpenMatch(match.matchId)}
+                onToggleFavorite={() => handleToggleFavorite(match)}
+                onDirections={() => openVenueDirections(router, match)}
+              />
+            ))
+          )}
+        </ScrollView>
+      )}
 
       <Animated.View
         pointerEvents={fabOpen ? 'auto' : 'none'}

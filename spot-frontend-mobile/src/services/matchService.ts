@@ -1,5 +1,5 @@
-import { AxiosError } from 'axios';
 import apiClient from './apiClient';
+import { getErrorMessage, throwFromAxiosError } from './apiErrors';
 import type {
   CreateMatchBulkPayload,
   CreateMatchPayload,
@@ -35,26 +35,10 @@ import type { VnAdminTree } from '@/types/geo';
 // does. Fixed by switching to apiClient; paths below are relative
 // (apiClient already carries `baseURL: API_URL`).
 
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return 'Something went wrong. Please try again.';
-}
-
-interface ApiErrorBody {
-  message?: string;
-}
-
-/** Maps an AxiosError to a thrown Error with spot-backend's message when available — screens already catch + call getErrorMessage(err). */
-function throwFromAxiosError(err: unknown, fallback: string): never {
-  const error = err as AxiosError<ApiErrorBody>;
-  if (error?.response) {
-    throw new Error(error.response.data?.message || fallback);
-  }
-  if (error?.request) {
-    throw new Error('Network error. Please check your connection and try again.');
-  }
-  throw new Error(fallback);
-}
+// getErrorMessage/throwFromAxiosError now live in ./apiErrors.ts (shared
+// with groupService.ts) — re-exported here so existing call sites
+// (`import { getErrorMessage } from '@/services/matchService'`) keep working.
+export { getErrorMessage };
 
 /**
  * GET /matches — Matches Homepage (`95:2417`) + Filter sheet (`87:1903`).
@@ -135,6 +119,15 @@ export async function rejectJoinRequest(matchId: number, requestId: number): Pro
     await apiClient.post(`/matches/${matchId}/requests/${requestId}/reject`);
   } catch (err) {
     throwFromAxiosError(err, "Couldn't decline this request. Check your network and try again.");
+  }
+}
+
+/** POST /matches/:id/participants/:userId/kick — Manage Squad "Kick" (host-only, ACCEPTED joiners + their guests; kicked user can't rejoin this kèo). */
+export async function kickParticipant(matchId: number, userId: number): Promise<void> {
+  try {
+    await apiClient.post(`/matches/${matchId}/participants/${userId}/kick`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't kick this player. Check your network and try again.");
   }
 }
 

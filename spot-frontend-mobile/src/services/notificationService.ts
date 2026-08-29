@@ -1,7 +1,15 @@
 import { AxiosError } from 'axios';
 import apiClient from './apiClient';
 
-export type NotificationType = 'BOOKING_CREATED' | 'BOOKING_REMINDER' | 'SYSTEM';
+export type NotificationType =
+  | 'BOOKING_CREATED'
+  | 'BOOKING_REMINDER'
+  | 'SYSTEM'
+  | 'GROUP_JOIN_REQUEST'
+  | 'GROUP_APPROVED'
+  | 'GROUP_REJECTED'
+  | 'GROUP_KICKED'
+  | 'GROUP_ADMIN_TRANSFERRED';
 
 export interface NotificationItem {
   notificationId: number;
