@@ -29,3 +29,10 @@ __tests__/matches-*.test.tsx
 src/services/geoapifyService.test.ts
 src/utils/vnAdminMatch.test.ts
 src/utils/directions.test.ts
+
+# SPOT-76 Tournament domain test files — same local-only convention.
+src/schemas/createTournamentSchema.test.ts
+src/schemas/joinTournamentSchema.test.ts
+src/screens/tournaments/*.test.tsx
+src/components/tournaments/*.test.tsx
+__tests__/tournaments-*.test.tsx

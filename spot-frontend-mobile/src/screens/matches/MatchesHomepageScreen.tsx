@@ -22,12 +22,16 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
 import { listGroups } from '@/services/groupService';
+import { listTournaments } from '@/services/tournamentService';
 import { openVenueDirections } from '@/utils/directions';
 import type { Match, MatchSuggestion, Sport } from '@/types/match';
 import { EMPTY_MATCH_FILTERS, type MatchFilters } from '@/types/matchFilters';
 import { EMPTY_GROUP_FILTERS, type GroupFilters } from '@/types/groupFilters';
+import { EMPTY_TOURNAMENT_FILTERS, type TournamentFilters } from '@/types/tournamentFilters';
 import type { GroupSuggestion } from '@/types/group';
+import type { TournamentSuggestion } from '@/types/tournament';
 import GroupsBrowseScreen from '@/screens/groups/GroupsBrowseScreen';
+import TournamentsBrowseScreen from '@/screens/tournaments/TournamentsBrowseScreen';
 
 type SubTab = 'matches' | 'groups' | 'tournaments';
 
@@ -41,14 +45,16 @@ type Props = {
   onOpenGroup: (groupId: number) => void;
   onCreateGroup: (sport: Sport) => void;
   onManageGroups: () => void;
+  onOpenTournament: (tournamentId: number) => void;
+  onCreateTournament: (sport: Sport) => void;
+  onManageTournaments: () => void;
 };
 
 type FabAction = { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void };
 
-// Tournaments actions still show a locked message — Groups is real now
-// (Groups implementation plan), routed through its own onCreateGroup/
-// onManageGroups props rather than reusing onHostMatch/onManageMatches
-// (those are Matches-tab-specific).
+// Each sub-tab routes through its own props (onCreateGroup/onManageGroups,
+// onCreateTournament/onManageTournaments) rather than reusing the
+// Matches-tab-specific onHostMatch/onManageMatches.
 function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (feature: string) => void): FabAction[] {
   if (subTab === 'matches') {
     return [
@@ -63,8 +69,8 @@ function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (
     ];
   }
   return [
-    { icon: 'add-circle-outline', label: 'Create a Tournament', onPress: () => comingSoon('Tournaments') },
-    { icon: 'people-outline', label: 'Manage Tournaments', onPress: () => comingSoon('Tournaments') },
+    { icon: 'add-circle-outline', label: 'Create a Tournament', onPress: () => props.onCreateTournament(sport) },
+    { icon: 'people-outline', label: 'Manage Tournaments', onPress: props.onManageTournaments },
   ];
 }
 
@@ -92,8 +98,8 @@ const MAP_BUTTON_SIZE = 44;
  * ProfileMenu.tsx) so rendering it here isn't a routing decision by this
  * screen — Filter has no destination to navigate to.
  *
- * Groups sub-tab + its FAB actions are wired (GroupsBrowseScreen, /groups/*).
- * Tournaments sub-tab stays locked ("Coming soon") — see SPOT-76 plan mục 2.5.
+ * Groups and Tournaments sub-tabs + their FAB actions are wired
+ * (GroupsBrowseScreen / TournamentsBrowseScreen, /groups/* and /tournaments/*).
  */
 export default function MatchesHomepageScreen(props: Props) {
   const router = useRouter();
@@ -124,7 +130,9 @@ export default function MatchesHomepageScreen(props: Props) {
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
   const [groupFilterVisible, setGroupFilterVisible] = useState(false);
   const [groupFilters, setGroupFilters] = useState<GroupFilters>(EMPTY_GROUP_FILTERS);
-  const [suggestions, setSuggestions] = useState<MatchSuggestion[] | GroupSuggestion[]>([]);
+  const [tournamentFilterVisible, setTournamentFilterVisible] = useState(false);
+  const [tournamentFilters, setTournamentFilters] = useState<TournamentFilters>(EMPTY_TOURNAMENT_FILTERS);
+  const [suggestions, setSuggestions] = useState<MatchSuggestion[] | GroupSuggestion[] | TournamentSuggestion[]>([]);
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
@@ -178,6 +186,9 @@ export default function MatchesHomepageScreen(props: Props) {
         if (subTab === 'groups') {
           const result = await listGroups({ sport, location: trimmed });
           setSuggestions(result.suggestions ?? []);
+        } else if (subTab === 'tournaments') {
+          const result = await listTournaments({ sport, location: trimmed });
+          setSuggestions(result.suggestions ?? []);
         } else {
           const result = await listMatches({ sport, location: trimmed });
           setSuggestions(result.suggestions ?? []);
@@ -191,7 +202,7 @@ export default function MatchesHomepageScreen(props: Props) {
     return () => clearTimeout(timer);
   }, [searchText, sport, subTab]);
 
-  const applySuggestion = (suggestion: MatchSuggestion | GroupSuggestion) => {
+  const applySuggestion = (suggestion: MatchSuggestion | GroupSuggestion | TournamentSuggestion) => {
     setSearchText(suggestion.text);
     setAppliedLocation(suggestion.text);
     setSuggestionsVisible(false);
@@ -218,9 +229,6 @@ export default function MatchesHomepageScreen(props: Props) {
 
   const handleSubTabPress = (tab: SubTab) => {
     setSubTab(tab);
-    if (tab === 'tournaments') {
-      Alert.alert('Coming soon', 'Tournaments is not available yet.');
-    }
   };
 
   const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
@@ -293,7 +301,13 @@ export default function MatchesHomepageScreen(props: Props) {
           )}
           <TouchableOpacity
             testID="matches-filter-button"
-            onPress={() => (subTab === 'groups' ? setGroupFilterVisible(true) : setFilterVisible(true))}
+            onPress={() =>
+              subTab === 'groups'
+                ? setGroupFilterVisible(true)
+                : subTab === 'tournaments'
+                  ? setTournamentFilterVisible(true)
+                  : setFilterVisible(true)
+            }
             hitSlop={8}
           >
             <View>
@@ -360,12 +374,15 @@ export default function MatchesHomepageScreen(props: Props) {
           onOpenGroup={props.onOpenGroup}
         />
       ) : subTab === 'tournaments' ? (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          <View style={styles.emptyState}>
-            <Ionicons name="lock-closed-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>Tournaments isn't available yet.</Text>
-          </View>
-        </ScrollView>
+        <TournamentsBrowseScreen
+          sport={sport}
+          appliedLocation={appliedLocation}
+          filters={tournamentFilters}
+          filterVisible={tournamentFilterVisible}
+          onCloseFilter={() => setTournamentFilterVisible(false)}
+          onApplyFilters={setTournamentFilters}
+          onOpenTournament={props.onOpenTournament}
+        />
       ) : (
         <ScrollView
           style={styles.list}

@@ -21,6 +21,9 @@ export default function MatchesHomepageRoute() {
         onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
         onCreateGroup={(sport) => router.push({ pathname: '/groups/create', params: { sport } })}
         onManageGroups={() => router.push('/groups/mine')}
+        onOpenTournament={(tournamentId) => router.push(`/tournaments/${tournamentId}`)}
+        onCreateTournament={(sport) => router.push({ pathname: '/tournaments/create', params: { sport } })}
+        onManageTournaments={() => router.push('/tournaments/mine')}
       />
     </AppShell>
   );
