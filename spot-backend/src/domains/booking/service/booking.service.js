@@ -12,6 +12,8 @@ import {
 import * as scheduleRepository from '../repository/schedule.repository.js';
 import * as bookingRepository from '../repository/booking.repository.js';
 import * as venueRepository from '../../venue/repository/venue.repository.js';
+import * as notificationService from '../../notification/service/notification.service.js';
+import { NOTIFICATION_TYPES } from '../../../shared/constants/notification.js';
 import {
   toPublicScheduleItem,
 } from '../entity/schedule.entity.js';
@@ -280,6 +282,19 @@ export async function createBooking(playerId, dto) {
         );
       }
       throw err;
+    }
+
+    try {
+      await notificationService.createNotification({
+        userId: field.venue_owner_id,
+        type: NOTIFICATION_TYPES.OWNER_NEW_BOOKING,
+        title: `New booking at ${field.venue_name}`,
+        body: `${field.field_name} booked for ${dto.bookingDate}, ${dto.startTime}-${dto.endTime}.`,
+        data: { bookingId: booking.booking_id, fieldId: dto.fieldId, venueId: field.venue_id },
+        sendEmail: false,
+      });
+    } catch (err) {
+      // Non-fatal: booking succeeded, notification is best-effort.
     }
 
     return toPublicBooking(booking);

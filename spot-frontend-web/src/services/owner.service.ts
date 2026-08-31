@@ -5,8 +5,10 @@ import type {
   CreateVenuePayload,
   DashboardQueryParams,
   DashboardSummaryResponse,
+  ListNotificationsParams,
   ListOwnerReviewsParams,
   OwnerField,
+  OwnerNotification,
   OwnerReviewDetail,
   OwnerReviewListItem,
   OwnerVenueDetail,
@@ -131,5 +133,29 @@ export async function replaceVenueImages(
   payload: ReplaceVenueImagesPayload
 ): Promise<{ message: string; images: OwnerVenueImage[] }> {
   const { data } = await apiClient.put(`/owner/facilities/venues/${venueId}/images`, payload)
+  return data
+}
+
+export async function listNotifications(
+  params: ListNotificationsParams
+): Promise<{ items: OwnerNotification[]; nextCursor: number | null }> {
+  const { data } = await apiClient.get('/notifications', { params })
+  return data
+}
+
+export async function getUnreadNotificationCount(): Promise<{ count: number }> {
+  const { data } = await apiClient.get('/notifications/unread-count')
+  return data
+}
+
+export async function markNotificationRead(
+  notificationId: number
+): Promise<{ notification: OwnerNotification }> {
+  const { data } = await apiClient.patch(`/notifications/${notificationId}/read`)
+  return data
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  const { data } = await apiClient.post('/notifications/read-all')
   return data
 }

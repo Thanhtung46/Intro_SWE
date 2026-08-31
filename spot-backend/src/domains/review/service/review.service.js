@@ -14,6 +14,8 @@ import {
   toPublicVenueRating,
 } from '../entity/review.entity.js';
 import * as bookingService from '../../booking/service/booking.service.js';
+import * as notificationService from '../../notification/service/notification.service.js';
+import { NOTIFICATION_TYPES } from '../../../shared/constants/notification.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') return;
@@ -106,6 +108,21 @@ export async function createReview(userId, dto) {
       booking.venue_id,
     );
     await client.query('COMMIT');
+
+    try {
+      await notificationService.createNotification({
+        userId: booking.venue_owner_id,
+        type: NOTIFICATION_TYPES.OWNER_NEW_REVIEW,
+        title: `New ${dto.rating}-star review`,
+        body: dto.reviewText
+          ? dto.reviewText.slice(0, 140)
+          : `A customer left a ${dto.rating}-star review.`,
+        data: { reviewId: review.review_id, venueId: booking.venue_id },
+        sendEmail: false,
+      });
+    } catch (err) {
+      // Non-fatal: review succeeded, notification is best-effort.
+    }
 
     await invalidateVenueRatingCache(booking.venue_id);
     await cacheVenueRating(venueRating);

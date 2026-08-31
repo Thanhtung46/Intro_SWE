@@ -15,6 +15,7 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `007_schema_venue_images.sql` | `venue_images` — venue photo gallery (URL-only, FE uploads to storage) | 001, 004 |
 | `008_schema_admin.sql` | `verification_requests`, `admin_audit_log`, `system_settings` + default policy seeds | 001 |
 | `009_schema_owner_ops.sql` | peak/off-peak field pricing, maintenance notes, owner revenue/review indexes | 004, 005, 007 |
+| `010_notification_owner_types.sql` | mở rộng CHECK constraint `notifications.type` cho `OWNER_NEW_BOOKING`/`OWNER_NEW_REVIEW` (viết dạng superset của constraint thật trên DB — DB đã có sẵn nhiều type khác từ nhánh matchmaking/groups/tournaments/referee, xem comment trong file) | 003 |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

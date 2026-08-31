@@ -246,3 +246,21 @@ export interface VenueImageInput {
 export interface ReplaceVenueImagesPayload {
   images: VenueImageInput[]
 }
+
+export interface OwnerNotification {
+  notificationId: number
+  type: string
+  title: string
+  body: string
+  data: Record<string, unknown>
+  channel: string
+  isRead: boolean
+  readAt: string | null
+  createdAt: string
+}
+
+export interface ListNotificationsParams {
+  limit?: number
+  beforeId?: number
+  unreadOnly?: boolean
+}
