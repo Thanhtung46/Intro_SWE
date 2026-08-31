@@ -66,7 +66,13 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
     reset({ message: '', phoneNumber: '', guests: [] });
     setProfileLoading(true);
     getMe({ fullName: user?.fullName, phoneNumber: user?.phoneNumber })
-      .then((result) => setProfile(result))
+      .then((result) => {
+        setProfile(result);
+        // Prefill the contact field with the account phone so a straight
+        // "Send Request" works without retyping it (still editable for a
+        // per-join override).
+        if (result.phoneNumber) reset({ message: '', phoneNumber: result.phoneNumber, guests: [] });
+      })
       .catch(() => setProfile(null))
       .finally(() => setProfileLoading(false));
   }, [visible, user?.fullName, user?.phoneNumber, reset]);

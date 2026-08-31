@@ -226,6 +226,24 @@ export default function MatchesHomepageScreen(props: Props) {
   const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
   const fabActions = getFabActions(subTab, sport, props, comingSoon);
 
+  const matchFiltersActive =
+    filters.skill.length > 0 ||
+    !!filters.date ||
+    !!filters.timeFrom ||
+    !!filters.timeTo ||
+    filters.priceMin != null ||
+    filters.priceMax != null ||
+    !!filters.province ||
+    !!filters.city ||
+    !!filters.favorited;
+  const filterActive = subTab === 'matches' && matchFiltersActive;
+
+  const clearSearch = () => {
+    setSearchText('');
+    setAppliedLocation('');
+    setSuggestionsVisible(false);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <View style={styles.sportToggle}>
@@ -268,12 +286,20 @@ export default function MatchesHomepageScreen(props: Props) {
             }}
             returnKeyType="search"
           />
+          {searchText.length > 0 && (
+            <TouchableOpacity testID="matches-search-clear" onPress={clearSearch} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={colors.outline} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             testID="matches-filter-button"
             onPress={() => (subTab === 'groups' ? setGroupFilterVisible(true) : setFilterVisible(true))}
             hitSlop={8}
           >
-            <Ionicons name="options-outline" size={18} color={colors.bodyText} />
+            <View>
+              <Ionicons name="options-outline" size={18} color={colors.bodyText} />
+              {filterActive && <View style={styles.filterDot} />}
+            </View>
           </TouchableOpacity>
         </View>
         <TouchableOpacity testID="matches-map-button" style={styles.mapButton} onPress={props.onOpenMap}>
@@ -474,6 +500,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.headingText },
+  filterDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
   // White bg + blue icon while idle, not filled blue — pencil node
   // 95:2417's sgHdE (map button next to the search bar). Sized up past
   // the pencil-node 40x40, matching the header buttons' bump.

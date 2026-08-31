@@ -19,10 +19,22 @@ type Props = {
   visible: boolean;
   initialLatitude: number | null;
   initialLongitude: number | null;
+  /** Text already typed in the caller's Venue-name (or Address) field — seeds the search box so the host doesn't retype it. */
+  seedQuery?: string;
+  /** Venue name the caller already has — kept as the returned name unless the host picks a new search result here. */
+  seedVenueName?: string;
   /** GET /geo/vn tree — passed down so the final pin can be matched to a Province/Ward code (see vnAdminMatch.ts). */
   provinces: VnProvince[];
   onCancel: () => void;
-  onConfirm: (result: { latitude: number; longitude: number; address: string; province?: string; city?: string }) => void;
+  onConfirm: (result: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    /** Prefill for the caller's venue-name field — '' when nothing could be derived. */
+    venueName: string;
+    province?: string;
+    city?: string;
+  }) => void;
 };
 
 /**
@@ -38,10 +50,23 @@ type Props = {
  * (`locationLocked` stays false) — a wrong/missing match just means the
  * host corrects it by hand, never a silently-wrong locked value.
  */
-export default function PinDropModal({ visible, initialLatitude, initialLongitude, provinces, onCancel, onConfirm }: Props) {
+export default function PinDropModal({
+  visible,
+  initialLatitude,
+  initialLongitude,
+  seedQuery,
+  seedVenueName,
+  provinces,
+  onCancel,
+  onConfirm,
+}: Props) {
   const [latitude, setLatitude] = useState(initialLatitude ?? DEFAULT_LATITUDE);
   const [longitude, setLongitude] = useState(initialLongitude ?? DEFAULT_LONGITUDE);
   const [searchText, setSearchText] = useState('');
+  // The name we'll hand back on confirm. Seeded from what the caller already
+  // has, then overwritten only when the host picks a search result here — so
+  // dragging the pin without picking never clobbers a name they typed.
+  const [venueName, setVenueName] = useState('');
   const [results, setResults] = useState<GeoapifyPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
@@ -59,21 +84,43 @@ export default function PinDropModal({ visible, initialLatitude, initialLongitud
   // stale one instead.
   const [openId, setOpenId] = useState(0);
   const jumpToken = useRef(0);
+  // The last place the host picked from search — its admin fields are often
+  // cleaner than a reverse-geocode of the final pin, so keep it as a fallback
+  // for the Province/Ward match. Cleared once the pin is dragged off it.
+  const pickedPlace = useRef<GeoapifyPlace | null>(null);
 
-  // Reset per-open state each time the modal opens.
+  // Reset per-open state each time the modal opens. Driven off a `visible`
+  // effect rather than <Modal onShow> — the latter doesn't fire reliably on
+  // react-native-web, which would leave stale search text from a prior open.
   const handleShow = () => {
+    const seed = (seedQuery ?? '').trim();
+    const hasInitialPin = initialLatitude != null && initialLongitude != null;
     setLatitude(initialLatitude ?? DEFAULT_LATITUDE);
     setLongitude(initialLongitude ?? DEFAULT_LONGITUDE);
-    setSearchText('');
+    setVenueName(seedVenueName ?? '');
+    setSearchText(seed);
     setResults([]);
-    setResultsVisible(false);
+    pickedPlace.current = null;
+    // Show suggestions for the seeded text only when there's no pin to fine-tune
+    // yet — an already-placed pin (e.g. from a DB venue suggestion) means the
+    // host just wants to nudge it, not re-search over the map.
+    setResultsVisible(seed.length >= 3 && !hasInitialPin);
     setJumpTo(null);
     setOpenId((id) => id + 1);
   };
 
   useEffect(() => {
+    if (visible) handleShow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  useEffect(() => {
     const query = searchText.trim();
-    if (query.length < 3) {
+    // `resultsVisible` gates the fetch too: it's true whenever the user is
+    // typing/focused (onChangeText/onFocus) and when handleShow decides the
+    // seeded query should show suggestions — but false when the modal opened
+    // only to fine-tune an existing pin, so we don't spend a geocode call.
+    if (query.length < 3 || !resultsVisible) {
       setResults([]);
       return;
     }
@@ -85,29 +132,58 @@ export default function PinDropModal({ visible, initialLatitude, initialLongitud
         .finally(() => setSearching(false));
     }, 300);
     return () => clearTimeout(handle);
-  }, [searchText]);
+  }, [searchText, resultsVisible]);
 
-  function selectResult(place: GeoapifyPlace) {
+  // Set the pin from a picked place. Owns the coordinate update itself
+  // (rather than only bumping `jumpTo`) so it also works on web, where
+  // PinDropMap is a stub that never calls `onMove` back.
+  function applyPlace(place: GeoapifyPlace) {
+    pickedPlace.current = place;
+    setLatitude(place.latitude);
+    setLongitude(place.longitude);
+    setVenueName(place.name || place.addressLine1 || place.formatted);
     jumpToken.current += 1;
     setJumpTo({ latitude: place.latitude, longitude: place.longitude, token: jumpToken.current });
+  }
+
+  function selectResult(place: GeoapifyPlace) {
+    applyPlace(place);
     setSearchText(place.formatted);
     setResultsVisible(false);
+  }
+
+  function handleMove(lat: number, lng: number) {
+    // Pin dragged/tapped away from the picked result → its admin data no
+    // longer describes this spot.
+    if (pickedPlace.current) {
+      const moved =
+        Math.abs(pickedPlace.current.latitude - lat) > 1e-5 ||
+        Math.abs(pickedPlace.current.longitude - lng) > 1e-5;
+      if (moved) pickedPlace.current = null;
+    }
+    setLatitude(lat);
+    setLongitude(lng);
   }
 
   async function handleConfirm() {
     setConfirming(true);
     try {
       const place = await reverseGeocode(latitude, longitude);
-      const address = place?.formatted || searchText.trim();
-      const { province, city } = place ? matchVnAdmin(provinces, place) : {};
-      onConfirm({ latitude, longitude, address, province, city });
+      const picked = pickedPlace.current;
+      const address = place?.formatted || picked?.formatted || searchText.trim();
+      const resolvedName = venueName.trim() || place?.name || place?.addressLine1 || '';
+      // Prefer the reverse-geocode of the actual pin; fall back to the picked
+      // search result's admin fields when reverse-geocode can't place it.
+      let admin = place ? matchVnAdmin(provinces, place) : {};
+      if (!admin.province && picked) admin = matchVnAdmin(provinces, picked);
+      onConfirm({ latitude, longitude, address, venueName: resolvedName, province: admin.province, city: admin.city });
     } finally {
       setConfirming(false);
     }
   }
 
   return (
-    <Modal visible={visible} animationType="slide" onShow={handleShow} onRequestClose={onCancel}>
+    <Modal testID="pin-drop-modal" visible={visible} animationType="slide" onRequestClose={onCancel}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <TouchableOpacity testID="pin-drop-cancel" style={styles.headerButton} onPress={onCancel}>
@@ -158,7 +234,7 @@ export default function PinDropModal({ visible, initialLatitude, initialLongitud
             initialLatitude={latitude}
             initialLongitude={longitude}
             jumpTo={jumpTo}
-            onMove={(lat, lng) => { setLatitude(lat); setLongitude(lng); }}
+            onMove={handleMove}
           />
         </View>
         <TouchableOpacity

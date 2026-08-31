@@ -27,9 +27,14 @@ const guestSchema = z.object({
 export const joinMatchSchema = z.object({
   message: z.string().trim().max(500, 'Message must be at most 500 characters').optional(),
   // Per-join contact override — distinct from the profile's phone, see
-  // SPOT-76 plan mục 2.2. Optional because "You" can join without
-  // overriding it.
-  phoneNumber: phoneNumber.optional(),
+  // SPOT-76 plan mục 2.2. Optional: an empty field means "use my account
+  // phone" (the backend falls back to it), so accept '' and normalise it to
+  // undefined rather than running it through the VN-phone regex — otherwise
+  // hitting "Send Request" without touching the field 400s on a blank string.
+  phoneNumber: z
+    .union([phoneNumber, z.literal('')])
+    .optional()
+    .transform((value) => value || undefined),
   guests: z.array(guestSchema).max(10, 'At most 10 guests').default([]),
 });
 

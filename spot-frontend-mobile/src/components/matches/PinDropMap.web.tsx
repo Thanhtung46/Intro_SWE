@@ -20,7 +20,7 @@ export default function PinDropMap(_props: Props) {
   return (
     <View style={styles.wrap}>
       <Ionicons name="map-outline" size={28} color={colors.outline} />
-      <Text style={styles.text}>Map picker isn't available on web — enter Address/Province/Ward manually below.</Text>
+      <Text style={styles.text}>Map picker isn't available on web — pick a search result above to set the location, or enter the fields manually.</Text>
     </View>
   );
 }

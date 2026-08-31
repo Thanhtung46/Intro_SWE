@@ -416,13 +416,13 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
             />
           </Field>
 
-          <Field label="Location" error={fieldErrors.venueName}>
+          <Field label="Venue name" error={fieldErrors.venueName}>
             <View style={styles.locationFieldWrap}>
               <View style={styles.pickerField} onLayout={(e) => setLocationFieldHeight(e.nativeEvent.layout.height)}>
                 <TextInput
                   testID="host-match-venue-name"
                   style={styles.locationInput}
-                  placeholder="Select venue..."
+                  placeholder="Search or enter venue name"
                   placeholderTextColor={colors.outline}
                   value={venueName}
                   onChangeText={(t) => {
@@ -845,16 +845,20 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         visible={pinPickerVisible}
         initialLatitude={latitude}
         initialLongitude={longitude}
+        seedQuery={venueName.trim() || venueAddress.trim()}
+        seedVenueName={venueName}
         provinces={provinces}
         onCancel={() => setPinPickerVisible(false)}
-        onConfirm={({ latitude: lat, longitude: lng, address, province: matchedProvince, city: matchedCity }) => {
+        onConfirm={({ latitude: lat, longitude: lng, address, venueName: pickedName, province: matchedProvince, city: matchedCity }) => {
           setLatitude(lat);
           setLongitude(lng);
+          if (pickedName) setVenueName(pickedName);
           if (address) setVenueAddress(address);
           if (matchedProvince) {
             setProvince(matchedProvince);
             setCity(matchedCity ?? ''); // clear stale city — it may belong to the previous province
           }
+          setVenueSuggestionsVisible(false); // picked on the map — hide the DB venue-name dropdown
           setLocationLocked(false);
           setPinPickerVisible(false);
         }}

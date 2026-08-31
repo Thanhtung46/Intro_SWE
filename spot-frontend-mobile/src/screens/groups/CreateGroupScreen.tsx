@@ -581,11 +581,14 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         visible={pinPickerVisible}
         initialLatitude={latitude}
         initialLongitude={longitude}
+        seedQuery={venueName.trim() || venueAddress.trim()}
+        seedVenueName={venueName}
         provinces={provinces}
         onCancel={() => setPinPickerVisible(false)}
-        onConfirm={({ latitude: lat, longitude: lng, address, province: matchedProvince, city: matchedCity }) => {
+        onConfirm={({ latitude: lat, longitude: lng, address, venueName: pickedName, province: matchedProvince, city: matchedCity }) => {
           setLatitude(lat);
           setLongitude(lng);
+          if (pickedName) setVenueName(pickedName);
           if (address) setVenueAddress(address);
           if (matchedProvince) {
             setProvince(matchedProvince);

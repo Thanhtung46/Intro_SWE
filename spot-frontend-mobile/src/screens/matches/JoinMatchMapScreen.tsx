@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -16,7 +16,6 @@ import type { Match, Sport } from '@/types/match';
 
 type Status = 'loading' | 'ready' | 'error';
 type Category = 'ALL' | Sport;
-type ViewMode = 'map' | 'list';
 
 type Props = {
   onBack: () => void;
@@ -69,9 +68,9 @@ function spreadOverlappingMarkers(
  * Join Match - Map (Figma node 426:2, SPOT-76 task #6). Real map now — see
  * src/components/common/AppMap.tsx for the WebView + Leaflet + Geoapify
  * wiring (no Google Maps API key needed). Matches without lat/lng (optional
- * field) can't get a pin, so they're filtered out of the map but still show
- * in List view. Map is the default view with a List toggle, not the other
- * way around, matching the Figma frame's own name.
+ * field) can't get a pin, so they're filtered out of the map. This screen
+ * is map-only — the scrollable match list already lives on the Homepage
+ * (95:2417), so duplicating it here added nothing.
  */
 export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
   const router = useRouter();
@@ -81,7 +80,6 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
 
   const fetchMatches = useCallback(async () => {
@@ -146,13 +144,6 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
             returnKeyType="search"
           />
         </View>
-        <TouchableOpacity
-          testID="join-map-view-toggle"
-          style={styles.viewToggleButton}
-          onPress={() => setViewMode((v) => (v === 'map' ? 'list' : 'map'))}
-        >
-          <Ionicons name={viewMode === 'map' ? 'list' : 'map-outline'} size={18} color={colors.white} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.categoryRow}>
@@ -177,64 +168,41 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
 
       {status === 'error' && <ErrorBanner message={errorMessage} onRetry={fetchMatches} />}
 
-      {viewMode === 'map' ? (
-        <View style={styles.mapArea}>
-          {status === 'loading' ? (
-            <ActivityIndicator style={styles.spinner} color={colors.primary} />
-          ) : (
-            <>
-              <AppMap
-                markers={markers}
-                onSelectMarker={(id) => setSelectedMatchId(Number(id))}
-                initialRegion={initialRegion}
-              />
-              {matches.length > 0 && mappableMatches.length === 0 && (
-                <View style={styles.noPinsNotice}>
-                  <Text style={styles.noPinsNoticeText}>None of these matches have a map location yet — switch to List.</Text>
-                </View>
-              )}
-              {selectedMatch && (
-                <View style={styles.popupWrap}>
-                  <TouchableOpacity
-                    testID="join-map-popup-close"
-                    style={styles.popupCloseButton}
-                    onPress={() => setSelectedMatchId(null)}
-                  >
-                    <Ionicons name="close" size={16} color={colors.headingText} />
-                  </TouchableOpacity>
-                  <MatchCard
-                    match={selectedMatch}
-                    onPress={() => onOpenMatch(selectedMatch.matchId)}
-                    onToggleFavorite={() => handleToggleFavorite(selectedMatch)}
-                    onDirections={() => openVenueDirections(router, selectedMatch)}
-                  />
-                </View>
-              )}
-            </>
-          )}
-        </View>
-      ) : (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-          {status === 'loading' ? (
-            <ActivityIndicator style={styles.spinner} color={colors.primary} />
-          ) : matches.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-              <Text style={styles.emptyStateText}>No matches found nearby.</Text>
-            </View>
-          ) : (
-            matches.map((match) => (
-              <MatchCard
-                key={match.matchId}
-                match={match}
-                onPress={() => onOpenMatch(match.matchId)}
-                onToggleFavorite={() => handleToggleFavorite(match)}
-                onDirections={() => openVenueDirections(router, match)}
-              />
-            ))
-          )}
-        </ScrollView>
-      )}
+      <View style={styles.mapArea}>
+        {status === 'loading' ? (
+          <ActivityIndicator style={styles.spinner} color={colors.primary} />
+        ) : (
+          <>
+            <AppMap
+              markers={markers}
+              onSelectMarker={(id) => setSelectedMatchId(Number(id))}
+              initialRegion={initialRegion}
+            />
+            {matches.length > 0 && mappableMatches.length === 0 && (
+              <View style={styles.noPinsNotice}>
+                <Text style={styles.noPinsNoticeText}>None of these matches have a map location yet.</Text>
+              </View>
+            )}
+            {selectedMatch && (
+              <View style={styles.popupWrap}>
+                <TouchableOpacity
+                  testID="join-map-popup-close"
+                  style={styles.popupCloseButton}
+                  onPress={() => setSelectedMatchId(null)}
+                >
+                  <Ionicons name="close" size={16} color={colors.headingText} />
+                </TouchableOpacity>
+                <MatchCard
+                  match={selectedMatch}
+                  onPress={() => onOpenMatch(selectedMatch.matchId)}
+                  onToggleFavorite={() => handleToggleFavorite(selectedMatch)}
+                  onDirections={() => openVenueDirections(router, selectedMatch)}
+                />
+              </View>
+            )}
+          </>
+        )}
+      </View>
 
       <BottomNavBar active="matches" />
     </SafeAreaView>
@@ -264,14 +232,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.headingText },
-  viewToggleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   categoryRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   categoryChip: {
@@ -318,9 +278,5 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
-  list: { flex: 1 },
-  listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
   spinner: { marginTop: spacing.xl },
-  emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
 });
