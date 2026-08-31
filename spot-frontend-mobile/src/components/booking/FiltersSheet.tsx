@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
 import { comingSoon } from '@/utils/comingSoon';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import RangeSlider from '@/components/booking/RangeSlider';
 import DatePickerModal from '@/components/booking/DatePickerModal';
 
@@ -23,6 +25,9 @@ type Props = {
 
 /** Booking Field search filters — Figma node 72:239 ("Book field - Filter 1"). */
 export default function FiltersSheet({ visible, onClose }: Props) {
+  const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
   const [mode, setMode] = useState<LocationMode>('location');
   const [price, setPrice] = useState<[number, number]>(DEFAULT_PRICE);
   const [distance, setDistance] = useState<[number, number]>(DEFAULT_DISTANCE);
@@ -44,60 +49,60 @@ export default function FiltersSheet({ visible, onClose }: Props) {
 
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text style={styles.title}>Filters</Text>
+          <Text style={styles.title}>{t('filters.title')}</Text>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Close filters"
+            accessibilityLabel={t('filters.closeLabel')}
           >
-            <Ionicons name="close" size={18} color={colors.headingText} />
+            <Ionicons name="close" size={18} color={c.venueCardHeadingText} />
           </TouchableOpacity>
         </View>
 
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           {/* Date */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Date</Text>
+            <Text style={styles.sectionLabel}>{t('filters.dateSection')}</Text>
             <TouchableOpacity
               style={styles.fieldRow}
               onPress={() => setDatePickerVisible(true)}
               accessibilityRole="button"
-              accessibilityLabel="Select date"
+              accessibilityLabel={t('filters.datePlaceholder')}
             >
               <Text style={date ? styles.fieldValue : styles.fieldPlaceholder}>
-                {date ? formatDate(date) : 'Select date'}
+                {date ? formatDate(date) : t('filters.datePlaceholder')}
               </Text>
-              <Ionicons name="calendar-outline" size={18} color={colors.bodyText} />
+              <Ionicons name="calendar-outline" size={18} color={c.textSecondaryAlt} />
             </TouchableOpacity>
           </View>
 
           {/* Time Range */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Time Range</Text>
+            <Text style={styles.sectionLabel}>{t('filters.timeRangeSection')}</Text>
             <View style={styles.timeRow}>
               <View style={styles.timeField}>
-                <Text style={styles.fieldLabel}>From</Text>
+                <Text style={styles.fieldLabel}>{t('filters.fromLabel')}</Text>
                 <TouchableOpacity
                   style={styles.fieldRow}
                   onPress={() => comingSoon('Time picker')}
                   accessibilityRole="button"
                   accessibilityLabel="Select start time"
                 >
-                  <Text style={styles.fieldPlaceholder}>--:--</Text>
-                  <Ionicons name="time-outline" size={18} color={colors.bodyText} />
+                  <Text style={styles.fieldPlaceholder}>{t('filters.timePlaceholder')}</Text>
+                  <Ionicons name="time-outline" size={18} color={c.textSecondaryAlt} />
                 </TouchableOpacity>
               </View>
               <View style={styles.timeField}>
-                <Text style={styles.fieldLabel}>To</Text>
+                <Text style={styles.fieldLabel}>{t('filters.toLabel')}</Text>
                 <TouchableOpacity
                   style={styles.fieldRow}
                   onPress={() => comingSoon('Time picker')}
                   accessibilityRole="button"
                   accessibilityLabel="Select end time"
                 >
-                  <Text style={styles.fieldPlaceholder}>--:--</Text>
-                  <Ionicons name="time-outline" size={18} color={colors.bodyText} />
+                  <Text style={styles.fieldPlaceholder}>{t('filters.timePlaceholder')}</Text>
+                  <Ionicons name="time-outline" size={18} color={c.textSecondaryAlt} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -114,7 +119,7 @@ export default function FiltersSheet({ visible, onClose }: Props) {
               <View style={[styles.radioOuter, mode === 'location' && styles.radioOuterActive]}>
                 {mode === 'location' && <View style={styles.radioInner} />}
               </View>
-              <Text style={styles.sectionLabel}>Location</Text>
+              <Text style={styles.sectionLabel}>{t('filters.locationSection')}</Text>
             </TouchableOpacity>
             <View style={[styles.locationRow, mode !== 'location' && styles.disabled]}>
               <TouchableOpacity
@@ -124,8 +129,8 @@ export default function FiltersSheet({ visible, onClose }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Select province or city"
               >
-                <Text style={styles.dropdownText}>Province/City</Text>
-                <Ionicons name="chevron-down" size={14} color={colors.bodyText} />
+                <Text style={styles.dropdownText}>{t('filters.provinceCityDropdown')}</Text>
+                <Ionicons name="chevron-down" size={14} color={c.textSecondaryAlt} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dropdown}
@@ -134,8 +139,8 @@ export default function FiltersSheet({ visible, onClose }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Select ward or commune"
               >
-                <Text style={styles.dropdownText}>Ward/Commune</Text>
-                <Ionicons name="chevron-down" size={14} color={colors.bodyText} />
+                <Text style={styles.dropdownText}>{t('filters.wardCommuneDropdown')}</Text>
+                <Ionicons name="chevron-down" size={14} color={c.textSecondaryAlt} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.favoriteButton}
@@ -144,7 +149,7 @@ export default function FiltersSheet({ visible, onClose }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Saved locations"
               >
-                <Ionicons name="heart-outline" size={18} color={colors.primaryDark} />
+                <Ionicons name="heart-outline" size={18} color={c.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -160,7 +165,7 @@ export default function FiltersSheet({ visible, onClose }: Props) {
               <View style={[styles.radioOuter, mode === 'distance' && styles.radioOuterActive]}>
                 {mode === 'distance' && <View style={styles.radioInner} />}
               </View>
-              <Text style={styles.sectionLabel}>Distance</Text>
+              <Text style={styles.sectionLabel}>{t('filters.distanceSection')}</Text>
             </TouchableOpacity>
             <View style={styles.sliderBlock}>
               <RangeSlider min={1} max={20} step={1} value={distance} onChange={setDistance} disabled={mode !== 'distance'} />
@@ -174,7 +179,7 @@ export default function FiltersSheet({ visible, onClose }: Props) {
           {/* Price Range */}
           <View style={styles.section}>
             <View style={styles.priceHeader}>
-              <Text style={styles.sectionLabel}>Price Range</Text>
+              <Text style={styles.sectionLabel}>{t('filters.priceRangeSection')}</Text>
               <Text style={styles.priceValue}>
                 ${price[0]} - ${price[1]}
               </Text>
@@ -191,10 +196,10 @@ export default function FiltersSheet({ visible, onClose }: Props) {
 
         <View style={styles.footer}>
           <TouchableOpacity style={styles.resetButton} onPress={reset} accessibilityRole="button">
-            <Text style={styles.resetButtonText}>Reset</Text>
+            <Text style={styles.resetButtonText}>{t('filters.resetButton')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.applyButton} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.applyButtonText}>Apply Filters</Text>
+            <Text style={styles.applyButtonText}>{t('filters.applyButton')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -207,209 +212,212 @@ export default function FiltersSheet({ visible, onClose }: Props) {
           setDate(picked);
           setDatePickerVisible(false);
         }}
+        themeColors={c}
       />
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '85%',
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 17,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(211, 228, 254, 0.5)',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.headingText,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: {
-    padding: 16,
-    gap: 24,
-  },
-  section: {
-    gap: 12,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    color: colors.headingText,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: colors.white,
-  },
-  fieldPlaceholder: {
-    fontSize: 14,
-    color: colors.placeholder,
-  },
-  fieldValue: {
-    fontSize: 14,
-    color: colors.primaryDark,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.bodyText,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  timeField: {
-    flex: 1,
-    gap: 4,
-  },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.outline,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterActive: {
-    borderColor: colors.primaryDark,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primaryDark,
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dropdown: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: colors.white,
-  },
-  dropdownText: {
-    fontSize: 14,
-    color: colors.headingText,
-  },
-  favoriteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  sliderBlock: {
-    paddingHorizontal: 4,
-    gap: 8,
-  },
-  rangeLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  rangeLabelText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  priceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 17,
-    paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(211, 228, 254, 0.5)',
-  },
-  resetButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.outline,
-  },
-  resetButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.headingText,
-  },
-  applyButton: {
-    flex: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: colors.primaryDark,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    },
+    sheet: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      maxHeight: '85%',
+      backgroundColor: c.surface,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 15,
+      elevation: 10,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 17,
+      borderBottomWidth: 1,
+      borderBottomColor: c.bookingSubtleBorder,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: c.venueCardHeadingText,
+    },
+    closeButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    body: {
+      padding: 16,
+      gap: 24,
+    },
+    section: {
+      gap: 12,
+    },
+    sectionLabel: {
+      fontSize: 16,
+      color: c.venueCardHeadingText,
+    },
+    fieldRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 13,
+      paddingVertical: 11,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+      backgroundColor: c.inputBg,
+    },
+    fieldPlaceholder: {
+      fontSize: 14,
+      color: c.textMuted,
+    },
+    fieldValue: {
+      fontSize: 14,
+      color: c.primary,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textSecondaryAlt,
+    },
+    timeRow: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    timeField: {
+      flex: 1,
+      gap: 4,
+    },
+    radioRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    radioOuter: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: c.outlineMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioOuterActive: {
+      borderColor: c.primary,
+    },
+    radioInner: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.primary,
+    },
+    disabled: {
+      opacity: 0.4,
+    },
+    locationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    dropdown: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 13,
+      paddingVertical: 11,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+      backgroundColor: c.inputBg,
+    },
+    dropdownText: {
+      fontSize: 14,
+      color: c.venueCardHeadingText,
+    },
+    favoriteButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+    },
+    sliderBlock: {
+      paddingHorizontal: 4,
+      gap: 8,
+    },
+    rangeLabels: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    rangeLabelText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.rangeLabelText,
+    },
+    priceHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    priceValue: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.primary,
+    },
+    footer: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 17,
+      paddingBottom: 16,
+      borderTopWidth: 1,
+      borderTopColor: c.bookingSubtleBorder,
+    },
+    resetButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.outlineMuted,
+    },
+    resetButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.venueCardHeadingText,
+    },
+    applyButton: {
+      flex: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 13,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    applyButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.white,
+    },
+  });
+}

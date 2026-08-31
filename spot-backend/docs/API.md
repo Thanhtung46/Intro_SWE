@@ -24,6 +24,7 @@ Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups
 | **Groups G2–G3** | `PATCH /groups/:id` (+ courts replace, `joinMode`→`AUTO` flush); members, schedule matrix, gallery CRUD | — |
 | **Groups G4** | Docs + `npm run smoke:groups` | — |
 | **Groups G5** | Inbox: `GROUP_JOIN_REQUEST`, `GROUP_APPROVED`, `GROUP_REJECTED`, `GROUP_KICKED`, `GROUP_ADMIN_TRANSFERRED` | `011_notification_group_types.sql` |
+| **Referee** — Job Board, invitations Plan A, hire-referee fan-out, rating, **board filter + favourite** | Done (`015`–`022`) — [`REFEREE_PLAN.md`](./REFEREE_PLAN.md) |
 | **Tournaments T0–T5** | Full giải đấu: create/browse/join/manage/matches/standings/PATCH/complete | `012`–`014`, `npm run worker:tournament-lifecycle`, `npm run smoke:tournaments` |
 
 Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì** + **Groups (hội)** + **Tournaments (giải đấu)**. Figma kèo: Manage `101:98`. Figma groups: Manage `101:2`, detail `810:*`. Figma tournaments: browse `880:404`, detail `880:282`.
@@ -48,6 +49,9 @@ Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì** + **
 14. [Checklist test](#14-checklist-test)
 15. [Smoke scripts](#15-smoke-scripts)
 16. [Chưa có / sắp làm](#16-chưa-có--sắp-làm)
+17. [Admin Console endpoints](#17-admin-console-endpoints)
+18. [Venues & Booking endpoints](#18-venues--booking-endpoints)
+19. [Referee endpoints](#19-referee-endpoints)
 
 ---
 
@@ -1715,6 +1719,60 @@ Types: `BOOKING_CREATED` \| `BOOKING_REMINDER` \| `MATCH_CANCELLED` \| `MATCH_EX
 Match cancel/expiry: `MATCH_CANCELLED` với `data.reason` = `HOST_CANCEL` \| `EXPIRED_UNDERFILLED` (host cancel không notify chính host).  
 Group join/manage: xem [§8.16 Group notifications](#816-group-notifications-inbox).
 Reminder T-24h / T-2h: service `scheduleBookingReminders` + Redis ZSET `notif:reminders` + DB `reminder_jobs`. Worker: `npm run worker:reminders`. Match expiry: `npm run worker:match-expiry`.  
+### 8.1 Player inbox — nhắc đánh giá (FE)
+
+Mọi thông báo nhắc player **đánh giá trọng tài** đều ghi vào **`GET /notifications`** (chuông inbox). FE **không** cần polling riêng — đọc inbox + badge `GET /notifications/unread-count`.
+
+| `type` | Ai nhận | Khi nào | `data` (deep link) | Màn hình / API sau tap |
+| :--- | :--- | :--- | :--- | :--- |
+| `REFEREE_RATING_REQUEST` | **Player** (người đặt sân) | Sau `endsAt`, booking `hireReferee=true`, trọng tài đã accept | `action`, `bookingId`, `refereeId`, `assignmentId`, `venueName`, `refereeName` | Màn half-star rating → `POST /reviews/referee` `{ bookingId, rating }` |
+
+**Ví dụ item inbox (`GET /notifications`):**
+
+```json
+{
+  "notificationId": 88,
+  "type": "REFEREE_RATING_REQUEST",
+  "title": "Rate your referee",
+  "body": "How was Nguyen Van A at Saigon FC Arena? Tap to leave a star rating (0.5–5.0).",
+  "data": {
+    "action": "REFEREE_RATING_REQUEST",
+    "assignmentId": 7,
+    "bookingId": 42,
+    "refereeId": 15,
+    "venueName": "Saigon FC Arena",
+    "refereeName": "Nguyen Van A"
+  },
+  "isRead": false,
+  "createdAt": "2026-08-22T20:00:00.000Z"
+}
+```
+
+**FE routing (gợi ý):**
+
+```typescript
+if (item.type === 'REFEREE_RATING_REQUEST' && item.data?.bookingId) {
+  router.push({
+    pathname: '/bookings/rate-referee',
+    params: {
+      bookingId: String(item.data.bookingId),
+      refereeId: String(item.data.refereeId),
+    },
+  });
+}
+```
+
+Sau khi `POST /reviews/referee` thành công → `PATCH /notifications/:id/read`.
+
+**Lưu ý:** Đánh giá **sân** (`POST /reviews`) hiện **chưa** có inbox prompt — player vào từ lịch/booking detail. Chỉ **trọng tài** có `REFEREE_RATING_REQUEST`.
+
+```bash
+curl -s http://localhost:3000/notifications/unread-count \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
 Opt-out (`pushNotificationsEnabled: false`): vẫn ghi inbox; **không** gửi email cho `BOOKING_REMINDER`.
 
 ```bash
@@ -1732,7 +1790,9 @@ Alias `/api/reviews/*`. Cần Bearer access.
 | Method | Path | Behavior |
 | :--- | :--- | :--- |
 | `GET` | `/reviews/hosts/:userId/reviews` | Pickup kèo — reviews host nhận từ participants (`limit`, `offset`) |
-| `POST` | `/reviews` | Player tạo review cho booking `COMPLETED` |
+| `GET` | `/reviews/hosts/:userId/reviews` | Pickup kèo — reviews host nhận từ participants (`limit`, `offset`) |
+| `POST` | `/reviews` | Player tạo review **venue** cho booking `COMPLETED` |
+| `POST` | `/reviews/referee` | Player review **trọng tài** sau trận có `hireReferee` |
 | `POST` | `/reviews/:id/reply` | Venue owner trả lời (1 reply / review) |
 | `GET` | `/reviews/venues/:venueId/rating` | Aggregate rating (DB + Redis cache `venue:rating:{id}`) |
 | `POST` | `/reviews/dev/seed-booking` | Dev only — tạo booking `COMPLETED` để test review |
@@ -1804,6 +1864,57 @@ Alias `/api/reviews/*`. Cần Bearer access.
 ```
 
 `source` là `cache` hoặc `db`.
+
+### 9.2 `POST /reviews/referee` (player → trọng tài)
+
+**Body** — **chỉ rating** (không có text review):
+
+```json
+{
+  "bookingId": 42,
+  "rating": 4.5
+}
+```
+
+| Field | Type | Rules |
+| :--- | :--- | :--- |
+| `bookingId` | int | Booking player đã thuê trọng tài |
+| `rating` | number | **0.5 → 5.0**, bước **0.5** (0.5, 1.0, 1.5, … 5.0) |
+
+**Rules**
+
+- Chỉ **player** đặt booking (`bookings.player_id`)
+- Booking có `hireReferee=true` và assignment đã **ACCEPTED/COMPLETED**
+- Trận **đã kết thúc** (`endsAt <= now`) — player chỉ đánh giá sau khi trải nghiệm xong
+- 1 rating / assignment (`409` nếu đã đánh giá)
+
+**Success `201`**
+
+```json
+{
+  "review": {
+    "reviewId": 3,
+    "assignmentId": 7,
+    "bookingId": 42,
+    "refereeId": 15,
+    "playerId": 5,
+    "rating": 4.5,
+    "createdAt": "2026-08-22T12:00:00.000Z"
+  },
+  "refereeRating": {
+    "refereeId": 15,
+    "avgRating": 4.75,
+    "ratingCount": 12,
+    "totalMatchesOfficiated": 20
+  }
+}
+```
+
+### 9.3 `GET /reviews/referees/:refereeId/rating`
+
+**Success `200`:** `{ "refereeRating": { "refereeId", "avgRating", "ratingCount", "totalMatchesOfficiated" } }`
+
+**Errors:** `404` referee profile không tồn tại
 
 ```bash
 curl -s -X POST http://localhost:3000/reviews \
@@ -2018,6 +2129,12 @@ npm run smoke:groups   # create / join / PATCH flush / members / schedule / gall
 npm run smoke:tournaments  # eligibility seed / create / join / approve / match / standings / PATCH / complete
 npm run smoke:notifications  # inbox + mark read + due reminder
 npm run smoke:schedule       # seed schedule → GET /users/me/schedule
+npm run smoke:venues         # dev-seed → list/detail/availability
+npm run smoke:booking        # dev-seed → create → 409 conflict → schedule
+npm run seed:admin           # upsert ADMIN user (ADMIN_SEED_* env)
+npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve
+npm run smoke:referee        # referee batch → board → booking hire → accept
+
 npm run smoke:reviews        # seed COMPLETED booking → review → reply
 npm run worker:reminders     # background T-24h/T-2h processor
 npm run worker:match-expiry  # đủ người → COMPLETED; thiếu người → CANCELLED + notify
@@ -2057,14 +2174,951 @@ npm test
 | FCM / device tokens | Chưa |
 | Booking create/pay/cancel, payment gateway | Chưa (schedule read + reviews only) |
 | **Groups G0–G5** — full groups + inbox notifications | Done (`010`, `011`) — [`GROUP_PLAN.md`](./GROUP_PLAN.md) |
+| **Referee** — Job Board, invitations Plan A, hire-referee fan-out, rating, **board filter + favourite** | Done (`015`–`022`) — [`REFEREE_PLAN.md`](./REFEREE_PLAN.md) |
 | **Tournaments T0–T5** — full giải đấu + inbox notifications | Done (`012`–`014`, `013`) — [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md) |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 
 ---
 
+---
+
+## 17. Admin Console endpoints
+
+Prefix `/admin` + `/api/admin`. Mọi route cần `Authorization: Bearer` với `role = ADMIN`. Seed admin: `npm run seed:admin` (`ADMIN_SEED_EMAIL`, `ADMIN_SEED_PASSWORD`).
+
+### Applicant verification (Owner / Referee — trước khi admin duyệt)
+
+Sau `POST /auth/otp/verify`, user `PENDING` + `OWNER`/`REFEREE` nhận thêm `accessToken` (`nextStep: SUBMIT_VERIFICATION`) để gửi giấy tờ **trước khi** login được.
+
+| Method | Path | Body / query | Response |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/users/me/verification-documents` | multipart `document` (PDF/JPG/PNG, max 5MB) | `{ documentUrl }` |
+| `POST` | `/users/me/verification-requests` | `{ documentUrl, requestType: OWNER_LICENSE \| REFEREE_CREDENTIAL }` | `201` `{ request }` |
+
+Reject → user vẫn `PENDING`; gửi lại document → reset request `REJECTED` → `PENDING`.
+
+### Dashboard (Figma `224:3615` / TC_ADMIN_01)
+
+| Method | Path | Query | Response |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/admin/dashboard/summary` | `registrationDays` (7–90, default 30), `role?` | `{ summary: { totalUsers, pendingApprovals, revenueTotal, revenueCurrency, revenueBreakdown, revenueSource }, userRegistrations: [{ day, count }] }` |
+
+`revenueTotal` = booking `PAID`/`CHECKED_IN`/`COMPLETED` + match join `payment_status=SUCCESS`. Nếu cả hai = 0 → `revenueSource: "stub"`.
+
+### Pending Approvals (Figma `224:4314` / TC_ADMIN_02)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/admin/approvals` | `status` (default `PENDING`), `role`, `limit`, `offset` |
+| `GET` | `/admin/approvals/:id` | Chi tiết + `documentUrl` |
+| `POST` | `/admin/approvals/:id/approve` | `users.status` → `ACTIVE`; email notify; audit log |
+| `POST` | `/admin/approvals/:id/reject` | `{ reason? }`; request → `REJECTED`; user giữ `PENDING` |
+
+### User Management (Figma `224:3879` / TC_ADMIN_03)
+
+| Method | Path | Body |
+| :--- | :--- | :--- |
+| `GET` | `/admin/users` | `role`, `status`, `q`, `limit`, `offset` |
+| `GET` | `/admin/users/:id` | — |
+| `PATCH` | `/admin/users/:id` | `{ role?, status? }` — không gán `ADMIN` qua API |
+
+Suspend = `status: LOCKED` → login `403`.
+
+### System Settings (Figma `224:4128` / TC_ADMIN_04)
+
+| Method | Path | Body |
+| :--- | :--- | :--- |
+| `GET` | `/admin/settings` | — |
+| `PATCH` | `/admin/settings` | Partial: `commissionRatePercent` (0–100), `paymentGateways.momo/vnpay.enabled`, `otpExpirySeconds`, `defaultCancellationWindowHours` |
+
+Redis cache key `admin:settings:all` (TTL 60s); invalidate on PATCH.
+
+### Audit log
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/admin/audit-log` | `limit`, `offset` — mọi approve/reject/user/settings |
+
+Schema: migration `008_schema_admin.sql` — `verification_requests`, `admin_audit_log`, `system_settings`.
+
+---
+
+---
+
+## 18. Venues & Booking endpoints
+
+Browse real venues + book a field (Home dashboard, SPOT `001-home-booking-api`). Schema: `schema_venue.venues`/`fields`/`venue_images`, `schema_booking.bookings` (`004`, `007`). Alias `/api/venues/*`, `/api/bookings/*`. Cần Bearer access.
+
+| Method | Path | Behavior |
+| :--- | :--- | :--- |
+| `GET` | `/venues` | List venues có field `ACTIVE` của `sport`; optional `lat`/`long`/`radiusKm` để lọc/sort theo khoảng cách (PostGIS) |
+| `GET` | `/venues/:venueId` | Venue detail + toàn bộ field (mọi status) |
+| `GET` | `/venues/:venueId/images` | Gallery ảnh venue (`display_order` tăng dần) |
+| `GET` | `/venues/:venueId/fields/:fieldId/availability` | Lưới slot 1 giờ trong `date`, `available:false` nếu trùng booking |
+| `POST` | `/bookings` | Player tạo booking cho 1 field/khung giờ — `PENDING_PAYMENT` |
+| `POST` | `/bookings/bulk` | Tạo nhiều booking cùng lúc (nhiều khung giờ và/hoặc nhiều sân) — mỗi item độc lập, partial success OK |
+
+**Rules**
+
+- `GET /venues` chỉ trả venue có ≥1 field `status = ACTIVE` khớp `sport`
+- `lat`/`long` phải đi cùng nhau (chỉ 1 trong 2 → `400`); venue chưa có `location` bị loại khỏi kết quả lọc khoảng cách
+- Availability tính từ `venue.opening_hours` → `closing_hours`, bước 1 giờ; `date` không được ở quá khứ
+- Booking: field phải `ACTIVE`, khung giờ phải nằm trong `opening_hours`/`closing_hours`, không được ở quá khứ
+- Chống trùng lịch: DB `EXCLUDE USING gist` trên `(field_id, booking_time_range)` → `23P01` → `409` (không lock ứng dụng)
+- `venue_images.image_url` là URL-only (FE upload lên Supabase Storage rồi gửi URL), giống convention `coverUrl`/`avatarUrl` — chưa có BE upload endpoint
+- Chưa có `POST /venues` / `POST /venues/:venueId/images` (Venue Owner tạo venue/ảnh) — venue/field/ảnh dữ liệu test dùng `POST /users/me/schedule/dev/seed` (non-production, seed sẵn 2 ảnh placeholder picsum.photos)
+
+### `GET /venues`
+
+**Query params**
+
+| Param | Bắt buộc | Ghi chú |
+| :--- | :--- | :--- |
+| `sport` | Có | `football` \| `badminton` (không phân biệt hoa/thường) |
+| `lat` | Không | `-90..90`; phải đi cùng `long` |
+| `long` | Không | `-180..180`; phải đi cùng `lat` |
+| `radiusKm` | Không | Chỉ có nghĩa khi có `lat`+`long`; mặc định `20` |
+
+**Success `200`**
+
+```json
+{
+  "venues": [
+    {
+      "venueId": 12,
+      "name": "Skyline Arena",
+      "address": "123 Sports Lane, District 1, HCMC",
+      "amenities": "Parking, Wifi",
+      "openingHours": "06:00",
+      "closingHours": "23:00",
+      "latitude": 10.776889,
+      "longitude": 106.700897,
+      "avgRating": 4.8,
+      "ratingCount": 120,
+      "distanceKm": 2.4
+    }
+  ]
+}
+```
+
+`distanceKm` chỉ xuất hiện khi request có `lat`+`long`. Không có `lat`/`long` → sort theo `avgRating` desc.
+
+**Errors:** `400` thiếu/sai `sport`, hoặc chỉ có 1 trong `lat`/`long` · `401`
+
+**curl**
+
+```bash
+curl -s "http://localhost:3000/venues?sport=football" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### `GET /venues/:venueId`
+
+**Success `200`**
+
+```json
+{
+  "venue": {
+    "venueId": 12, "name": "Skyline Arena", "address": "123 Sports Lane, District 1, HCMC",
+    "amenities": null, "openingHours": "06:00", "closingHours": "23:00",
+    "latitude": null, "longitude": null, "avgRating": 0, "ratingCount": 0
+  },
+  "fields": [
+    { "fieldId": 45, "venueId": 12, "name": "Pitch A", "sportType": "Football", "pricePerHour": 250000, "capacity": 14, "status": "ACTIVE" }
+  ]
+}
+```
+
+**Errors:** `404` venue không tồn tại
+
+---
+
+### `GET /venues/:venueId/images`
+
+**Success `200`**
+
+```json
+{
+  "images": [
+    { "imageId": 1, "venueId": 12, "imageUrl": "https://cdn.example.com/venues/12/1.jpg", "displayOrder": 0 },
+    { "imageId": 2, "venueId": 12, "imageUrl": "https://cdn.example.com/venues/12/2.jpg", "displayOrder": 1 }
+  ]
+}
+```
+
+**Errors:** `404` venue không tồn tại
+
+**curl**
+
+```bash
+curl -s "http://localhost:3000/venues/12/images" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### `GET /venues/:venueId/fields/:fieldId/availability`
+
+**Query params:** `date` (`YYYY-MM-DD`, bắt buộc, không quá khứ)
+
+**Success `200`**
+
+```json
+{
+  "fieldId": 45,
+  "date": "2026-08-20",
+  "slots": [
+    { "startTime": "18:00", "endTime": "19:00", "available": true },
+    { "startTime": "19:00", "endTime": "20:00", "available": false }
+  ]
+}
+```
+
+**Errors:** `400` thiếu/sai/quá khứ `date` · `404` field/venue không tồn tại hoặc field không thuộc venue
+
+---
+
+### `POST /bookings`
+
+**Body**
+
+```json
+{ "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00" }
+```
+
+**Success `201`**
+
+```json
+{
+  "booking": {
+    "bookingId": 501,
+    "fieldId": 45,
+    "bookingDate": "2026-08-20",
+    "startTime": "19:00",
+    "endTime": "20:00",
+    "totalAmount": 250000,
+    "depositAmount": 75000,
+    "status": "PENDING_PAYMENT"
+  }
+}
+```
+
+**Errors**
+
+| Status | Message |
+| :--- | :--- |
+| `400` | Validation failed (thiếu field, `endTime <= startTime`, ngày/giờ quá khứ) |
+| `404` | Field not found |
+| `409` | Field is not available for booking / Requested time is outside the venue's opening hours / This field is already booked for the requested time |
+
+**curl**
+
+```bash
+curl -s -X POST http://localhost:3000/bookings \
+  -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" \
+  -d '{"fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00"}'
+```
+
+---
+
+### `POST /bookings/bulk`
+
+Đặt nhiều khung giờ và/hoặc nhiều sân trong 1 request (VD: chọn nhiều ô trên lưới Select Pitch & Time). Mỗi item xử lý độc lập — 1 item trùng lịch không làm rollback các item khác (giống `POST /matches/bulk`). Max 20 item/request.
+
+**Body**
+
+```json
+{
+  "bookings": [
+    { "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00" },
+    { "fieldId": 46, "bookingDate": "2026-08-20", "startTime": "10:00", "endTime": "11:00" }
+  ]
+}
+```
+
+**Success `201`** (toàn bộ hoặc một phần thành công)
+
+```json
+{
+  "message": "Bookings created",
+  "totalRequested": 2,
+  "totalCreated": 2,
+  "created": [
+    { "bookingId": 501, "fieldId": 45, "bookingDate": "2026-08-20", "startTime": "19:00", "endTime": "20:00", "totalAmount": 250000, "depositAmount": 75000, "status": "PENDING_PAYMENT" },
+    { "bookingId": 502, "fieldId": 46, "bookingDate": "2026-08-20", "startTime": "10:00", "endTime": "11:00", "totalAmount": 200000, "depositAmount": 60000, "status": "PENDING_PAYMENT" }
+  ],
+  "failed": []
+}
+```
+
+`message: "Some bookings were created"` khi chỉ một phần thành công — `failed[]` liệt kê item lỗi kèm `message` cụ thể.
+
+**Errors**
+
+| Status | Ghi chú |
+| :--- | :--- |
+| `400` | `bookings` rỗng, quá 20 item, hoặc 1 item sai format (thiếu field, ngày/giờ quá khứ, `endTime <= startTime`) |
+| `409` | **Toàn bộ** item đều lỗi — body có `details: { failed, totalRequested, totalCreated: 0 }` |
+
+**curl**
+
+```bash
+curl -s -X POST http://localhost:3000/bookings/bulk \
+  -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" \
+  -d '{"bookings":[{"fieldId":45,"bookingDate":"2026-08-20","startTime":"19:00","endTime":"20:00"},{"fieldId":46,"bookingDate":"2026-08-20","startTime":"10:00","endTime":"11:00"}]}'
+```
+
+---
+
+## 19. Referee endpoints
+
+Base: `/referee` hoặc `/api/referee`.  
+**Auth:** Bearer + `requireRole('REFEREE')` + `user.status = ACTIVE`. Referee `PENDING` → login trả `403` — không gọi được các route dưới.
+
+Product + Figma map: [`docs/REFEREE_PLAN.md`](./REFEREE_PLAN.md) (kèm **§0 BE vs FE**).  
+Geo dropdown (filter sheet): [`GET /geo/vn`](#get-geovn) — reuse matchmaking.
+
+**Hai tầng nghiệp vụ**
+
+| Tầng | Màn FE | BE |
+| :--- | :--- | :--- |
+| **Venue pool** | Job Board | Apply sân theo môn cert; sân đã apply ẩn khỏi board |
+| **Match assignment** | Invitations | Booking `hireReferee` + PAID → fan-out; **accept trước thắng** |
+
+**Trạng thái triển khai (Aug 2026)**
+
+| | BE | FE mobile |
+| :--- | :---: | :---: |
+| Core `/referee/*` | ✅ | ❌ chưa wire |
+| Board filter + favourite (H22–H23) | ✅ | ❌ |
+| Plan A pending (`myVenues` + Queue) | ✅ | ❌ |
+| Payment IPN / FCM | ❌ | ❌ |
+
+---
+
+### 19.0 Onboarding & verification (cross-ref)
+
+Trước khi gọi `/referee/*`, referee phải `ACTIVE` sau admin duyệt.
+
+| Bước | API | Ghi chú |
+| :--- | :--- | :--- |
+| Register + role | `POST /auth/register` → `POST /auth/role` `{ role: "REFEREE" }` | `status = PENDING` |
+| OTP | `POST /auth/otp/verify` | |
+| Upload 3 docs | `POST /users/me/verification-requests/batch` | `ID_FRONT`, `ID_BACK`, `VFF_LICENSE` |
+| Admin duyệt | `POST /admin/approvals/:id/approve` | `{ certifiedSportTypes: ["football"] }` — **1–2 môn** |
+| Login | `POST /auth/login` | Chỉ khi `status = ACTIVE` |
+
+Chi tiết auth: [§6 Auth endpoints](#6-auth-endpoints). Admin: [§17 Admin Console](#17-admin-console-endpoints).
+
+---
+
+### 19.1 `GET /referee/me`
+
+Profile trọng tài + chứng chỉ admin đã gán.
+
+**Headers:** `Authorization: Bearer <accessToken>`
+
+**Success `200`**
+
+```json
+{
+  "profile": {
+    "userId": 15,
+    "fullName": "Nguyen Van A",
+    "avatarUrl": null,
+    "certifiedSportTypes": ["Football"],
+    "totalMatchesOfficiated": 12,
+    "avgRating": 4.5,
+    "ratingCount": 8,
+    "createdAt": "2026-08-01T10:00:00.000Z",
+    "updatedAt": "2026-08-20T08:00:00.000Z"
+  }
+}
+```
+
+**Errors:** `401` · `403` (không phải REFEREE / PENDING) · `404` Referee profile not found
+
+**FE notes**
+
+- Dùng `certifiedSportTypes` render **sport tabs** trên Job Board — chỉ hiện môn được cert.
+- `avgRating` / `ratingCount` = aggregate từ player reviews (`POST /reviews/referee`).
+
+---
+
+### 19.2 `GET /referee/me/certifications`
+
+Danh sách giấy tờ verification đã submit (mọi trạng thái).
+
+**Success `200`**
+
+```json
+{
+  "certifications": [
+    {
+      "verificationReqId": 42,
+      "documentKind": "VFF_LICENSE",
+      "documentUrl": "https://storage.example.com/vff.pdf",
+      "status": "APPROVED",
+      "adminNotes": null,
+      "reviewedAt": "2026-08-05T12:00:00.000Z",
+      "createdAt": "2026-08-04T09:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Errors:** `401` · `403`
+
+---
+
+### 19.3 `GET /referee/board`
+
+**Job Board** — sân có ≥1 field `ACTIVE` khớp `sport`, **ẩn** sân referee đã apply (registration `ACTIVE`).
+
+**Query params**
+
+| Param | Bắt buộc | Ghi chú |
+| :--- | :--- | :--- |
+| `sport` | ✓ | `football` \| `badminton` (normalize → `Football` / `Badminton`). Phải nằm trong `certifiedSportTypes` |
+| `province` | | Mã tỉnh pre-2025 (`GET /geo/vn`). **XOR** với distance |
+| `city` | | Mã quận/huyện; **cần** `province` |
+| `lat` | | `-90..90`; alias `latitude`. Phải đi cùng `lng` |
+| `lng` | | `-180..180`; alias `longitude` |
+| `radiusKm` | | `1`–`20`; default **`20`** khi có `lat`+`lng` |
+| `favorited` | | `true` — chỉ sân đã heart |
+| `q` | | Tìm **tên sân** / **địa chỉ** (fold + fuzzy ≥3 ký tự) |
+| `page` | | Default `1` |
+| `limit` | | Default `20`, max `50` |
+
+**Rules filter**
+
+- **Location XOR Distance:** gửi `province`/`city` **hoặc** `lat`/`lng`/`radiusKm` — không gửi cả hai → `400`.
+- `city` không thuộc `province` → `400`.
+- Không cert môn `sport` → `403` + `details.certifiedSportTypes`.
+- Venue không có `location` bị loại khi lọc distance.
+
+**Success `200`**
+
+```json
+{
+  "sport": "Football",
+  "page": 1,
+  "limit": 20,
+  "venues": [
+    {
+      "venueId": 12,
+      "name": "Skyline Arena",
+      "address": "123 Nguyen Van Linh, Quan 7, HCMC",
+      "province": "79",
+      "city": "778",
+      "provinceName": "Thành phố Hồ Chí Minh",
+      "cityName": "Quận 7",
+      "latitude": 10.729,
+      "longitude": 106.721,
+      "ownerName": "Venue Owner Co.",
+      "sportType": "Football",
+      "avgRating": 4.8,
+      "ratingCount": 120,
+      "distanceKm": 2.4,
+      "isFavorited": false
+    }
+  ]
+}
+```
+
+`distanceKm` chỉ có khi request dùng distance filter. Sort: distance ↑ hoặc `avgRating` ↓.
+
+**Errors**
+
+| Status | Message (ví dụ) |
+| :--- | :--- |
+| `400` | Validation — lat/lng pair, province/city XOR distance, invalid admin codes |
+| `401` | |
+| `403` | Not certified for sport |
+
+**curl**
+
+```bash
+# Location filter (filter sheet Tỉnh/Phường)
+curl -s "http://localhost:3000/referee/board?sport=football&province=79&city=778" \
+  -H "Authorization: Bearer <accessToken>"
+
+# Distance + favourites
+curl -s "http://localhost:3000/referee/board?sport=football&lat=10.77&lng=106.70&radiusKm=10&favorited=true" \
+  -H "Authorization: Bearer <accessToken>"
+
+# Search
+curl -s "http://localhost:3000/referee/board?sport=football&q=skyline" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+**FE notes (Figma `224:5828`, `224:3292`)**
+
+- Dropdown Tỉnh/Phường: `GET /geo/vn` — Figma “Ward/Commune” = BE `city`.
+- Heart trên card: `POST/DELETE .../favorite`; filter sheet heart → `favorited=true`.
+- **Không** hiển thị “Book Field” / giá giờ — artefact player.
+- Map toggle / directions: dùng `latitude`/`longitude` + Geoapify trên FE.
+- Sau **Apply** → venue biến mất khỏi board; xuất hiện trong `myVenues` (Plan A).
+
+---
+
+### 19.4 `POST /referee/venues/:venueId/favorite`
+
+Tim sân trên Job Board. **Khác** `match_favorites` (kèo player).
+
+**Path:** `venueId` — integer.
+
+**Body:** không cần.
+
+**Success `200`**
+
+```json
+{
+  "message": "Venue favorited",
+  "isFavorited": true
+}
+```
+
+**Errors:** `401` · `403` · `404` Venue not found
+
+**curl**
+
+```bash
+curl -s -X POST "http://localhost:3000/referee/venues/12/favorite" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### 19.5 `DELETE /referee/venues/:venueId/favorite`
+
+Bỏ tim.
+
+**Success `200`**
+
+```json
+{
+  "message": "Venue unfavorited",
+  "isFavorited": false
+}
+```
+
+**Errors:** `401` · `403` · `404` Venue not found
+
+---
+
+### 19.6 `POST /referee/venues/:venueId/register`
+
+Apply vào **pool sân** — auto active, không chờ chủ sân duyệt.
+
+**Body**
+
+| Field | Type | Required | Notes |
+| :--- | :--- | :--- | :--- |
+| `sportType` | string | ✓ | `football` \| `badminton` — phải cert + venue có field ACTIVE |
+
+**Success `201`**
+
+```json
+{
+  "message": "Venue registration successful",
+  "registration": {
+    "registrationId": 12,
+    "venueId": 3,
+    "venueName": "Skyline Arena",
+    "venueAddress": "123 Sports Lane",
+    "ownerName": "Owner Name",
+    "sportType": "Football",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-01T10:00:00.000Z"
+  }
+}
+```
+
+**Errors**
+
+| Status | Message |
+| :--- | :--- |
+| `403` | Not certified for sport |
+| `404` | Venue not found |
+| `409` | Already registered / Venue has no active field for this sport |
+
+**curl**
+
+```bash
+curl -s -X POST "http://localhost:3000/referee/venues/12/register" \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d "{\"sportType\": \"football\"}"
+```
+
+**FE notes:** Sau success → refresh board (venue ẩn) + pending tab (`myVenues`).
+
+---
+
+### 19.7 `DELETE /referee/venues/:venueId/register`
+
+Hủy pool sân (**Plan A — My venues**).
+
+**Body**
+
+| Field | Type | Required |
+| :--- | :--- | :--- |
+| `sportType` | string | ✓ |
+
+**Success `200`**
+
+```json
+{
+  "message": "Venue registration cancelled",
+  "registration": {
+    "registrationId": 12,
+    "venueId": 3,
+    "venueName": "Skyline Arena",
+    "sportType": "Football",
+    "status": "CANCELLED",
+    "registeredAt": "2026-10-01T10:00:00.000Z"
+  }
+}
+```
+
+**Hành vi BE khi cancel**
+
+- Registration → `CANCELLED`; sân có thể hiện lại Job Board.
+- Assignment **PENDING** tại sân đó → auto `CANCELLED`.
+- Assignment **ACCEPTED** → **giữ nguyên**.
+
+**Errors:** `404` Active venue registration not found
+
+**FE copy (confirm dialog):** *“Hủy đăng ký tại {venueName}? Bạn sẽ không nhận lời mời mới tại sân này. Trận đã xác nhận (nếu có) vẫn giữ.”*
+
+---
+
+### 19.8 `GET /referee/venues/registrations`
+
+Legacy/list helper — danh sách registration `ACTIVE` (không gộp Plan A pending). Plan A ưu tiên `GET .../invitations?tab=pending` → `myVenues[]`.
+
+**Success `200`:** `{ "registrations": [ … ] }` — shape giống `registration` ở trên.
+
+---
+
+### 19.9 `GET /referee/invitations`
+
+Tabs Invitations. Query `tab` mặc định `pending`.
+
+**Query**
+
+| Param | Default | Ghi chú |
+| :--- | :--- | :--- |
+| `tab` | `pending` | `pending` \| `confirmed` \| `completed` |
+| `since` | `30d` | Chỉ `tab=completed` — ví dụ `30d` |
+| `filter` | `all` | `completed` tab: `all` \| `completed` \| `declined` |
+
+#### 19.9a `tab=pending` — **Plan A**
+
+**Một màn scroll:** (1) Pending Queue Figma `224:3113`; (2) **My venues** section **dưới**. **Một API** refresh cả hai.
+
+**Success `200`**
+
+```json
+{
+  "tab": "pending",
+  "matchInvitations": [
+    {
+      "assignmentId": 7,
+      "bookingId": 42,
+      "venueId": 3,
+      "venueName": "Skyline Arena",
+      "playerName": "Sarah M.",
+      "sportType": "Football",
+      "startsAt": "2026-10-12T08:00:00+07:00",
+      "endsAt": "2026-10-12T10:00:00+07:00",
+      "feeVnd": 250000,
+      "status": "PENDING"
+    }
+  ],
+  "myVenues": [
+    {
+      "registrationId": 12,
+      "venueId": 3,
+      "venueName": "Skyline Arena",
+      "venueAddress": "123 Sports Lane, District 1, HCMC",
+      "ownerName": "Venue Management",
+      "sportType": "Football",
+      "status": "ACTIVE",
+      "registeredAt": "2026-10-01T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+| Section UI | Field | Actions |
+| :--- | :--- | :--- |
+| Pending Queue | `matchInvitations[]` | Accept / Decline → §19.11 |
+| My venues | `myVenues[]` | Cancel pool → §19.7 |
+
+**Empty states:** hai section độc lập; CTA “Browse Job Board” khi trống.
+
+#### 19.9b `tab=confirmed`
+
+Chỉ assignment `ACCEPTED` chưa tới giờ.
+
+**Success `200`:** `{ "tab": "confirmed", "assignments": [ … ] }` — item shape giống `matchInvitations`.
+
+#### 19.9c `tab=completed`
+
+Trận đã xong trong cửa sổ `since` (default 30 ngày).
+
+**Success `200`:** `{ "tab": "completed", "since": "30d", "filter": "all", "assignments": [ … ] }`
+
+**curl**
+
+```bash
+curl -s "http://localhost:3000/referee/invitations?tab=pending" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+---
+
+### 19.10 `GET /referee/assignments/:id`
+
+Chi tiết assignment. FE tạm theo Figma `224:5703` (Zalo, Call, breakdown).
+
+**Success `200`**
+
+```json
+{
+  "assignment": {
+    "assignmentId": 7,
+    "bookingId": 42,
+    "venueId": 3,
+    "venueName": "Skyline Arena",
+    "venueAddress": "123 Sports Lane",
+    "playerName": "Sarah M.",
+    "ownerName": "Venue Owner Co.",
+    "sportType": "Football",
+    "startsAt": "2026-10-12T08:00:00+07:00",
+    "endsAt": "2026-10-12T10:00:00+07:00",
+    "feeVnd": 250000,
+    "status": "PENDING",
+    "source": "HIRE_REFEREE",
+    "acceptedAt": null,
+    "completedAt": null,
+    "declineReason": null,
+    "createdAt": "2026-10-10T12:00:00.000Z"
+  }
+}
+```
+
+**Quy ước hiển thị**
+
+- Invitation / incoming: ưu tiên **`playerName`** (người đặt booking).
+- Board / venue context: ưu tiên **`ownerName`**.
+
+**FE notes:** BE không trả phone/Zalo trên assignment — reuse **`GET /venues/:venueId`** (§18) cho contact + directions. Payment breakdown UI: hiện một `feeVnd` (chưa tách Travel line).
+
+**Errors:** `404` Assignment not found
+
+---
+
+### 19.11 `POST /referee/assignments/:id/accept`
+
+**First accept wins** — referee khác accept cùng booking → thua cuộc.
+
+**Body:** không cần.
+
+**Success `200`**
+
+```json
+{
+  "message": "Assignment accepted",
+  "assignment": { "assignmentId": 7, "status": "ACCEPTED", "acceptedAt": "…", … }
+}
+```
+
+**Errors**
+
+| Status | Message / code |
+| :--- | :--- |
+| `404` | Assignment not found |
+| `409` | Assignment is not pending |
+| `409` | `details.code = ASSIGNMENT_ALREADY_TAKEN` — referee khác đã accept |
+
+**Side effects:** Các assignment `PENDING` khác cùng `bookingId` → `CANCELLED`. Lên lịch `REFEREE_RATING_REQUEST` lúc `endsAt`.
+
+---
+
+### 19.12 `POST /referee/assignments/:id/decline`
+
+**Body**
+
+| Field | Type | Required |
+| :--- | :--- | :--- |
+| `reason` | string | | max 500 |
+
+**Success `200`:** `{ "message": "Assignment declined", "assignment": { …, "status": "DECLINED" } }`
+
+**Errors:** `404` Pending assignment not found
+
+---
+
+### 19.13 `GET /referee/schedule`
+
+Calendar tháng — dots = ngày có assignment **ACCEPTED**.
+
+**Query:** `month=YYYY-MM` (optional, default tháng hiện tại +07).
+
+**Success `200`**
+
+```json
+{
+  "month": "2026-10",
+  "timezone": "Asia/Bangkok",
+  "confirmedDates": ["2026-10-12", "2026-10-15"],
+  "items": [
+    {
+      "assignmentId": 7,
+      "bookingId": 42,
+      "venueId": 3,
+      "venueName": "Skyline Arena",
+      "sportType": "Football",
+      "playerName": "Sarah M.",
+      "bookingDate": "2026-10-12",
+      "startsAt": "2026-10-12T08:00:00+07:00",
+      "endsAt": "2026-10-12T10:00:00+07:00",
+      "feeVnd": 250000,
+      "status": "ACCEPTED",
+      "isUpcoming": true
+    }
+  ]
+}
+```
+
+Card **upcoming** (`isUpcoming: true`) → style muted/read-only trên Schedule (không phải invitation pending).
+
+---
+
+### 19.14 `GET /referee/earnings`
+
+Tổng thu nhập tháng + chart points (data thật từ assignment `COMPLETED`).
+
+**Query:** `month=YYYY-MM` (optional).
+
+**Success `200`**
+
+```json
+{
+  "month": "2026-10",
+  "currency": "VND",
+  "totalFeeVnd": 750000,
+  "matchCount": 3,
+  "chartPoints": [
+    { "day": "2026-10-05", "amountVnd": 250000 },
+    { "day": "2026-10-12", "amountVnd": 500000 }
+  ]
+}
+```
+
+---
+
+### 19.15 `GET /referee/earnings/history`
+
+Lịch sử paginated.
+
+**Query:** `limit` (default 20, max 50), `offset` (default 0).
+
+**Success `200`**
+
+```json
+{
+  "items": [
+    {
+      "index": 1,
+      "assignmentId": 7,
+      "bookingId": 42,
+      "venueName": "Skyline Arena",
+      "sportType": "Football",
+      "playerName": "Sarah M.",
+      "startsAt": "2026-10-12T08:00:00+07:00",
+      "feeVnd": 250000,
+      "completedAt": "2026-10-12T10:30:00+07:00"
+    }
+  ],
+  "total": 12,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+---
+
+### 19.16 Booking hire-referee + fan-out (player-side)
+
+Referee nhận invitation khi player booking field có addon hire referee và booking **PAID**.
+
+| Method | Path | Body / ghi chú |
+| :--- | :--- | :--- |
+| `POST` | `/bookings` | `{ fieldId, bookingDate, startTime, endTime, hireReferee: true, refereeFeeVnd?: 150000 }` |
+| `POST` | `/bookings/:id/dev/mark-paid` | **Non-prod** — set PAID + fan-out |
+
+Default `refereeFeeVnd` = **150_000 VND** nếu omit. Chi tiết booking: [§18 Venues & Booking](#18-venues--booking-endpoints).
+
+**Fan-out:** Mỗi referee trong pool sân (`referee_venue_registrations` ACTIVE) nhận assignment `PENDING` + notification `REFEREE_INVITATION`.
+
+**Notification `data`:**
+
+```json
+{
+  "action": "REFEREE_INVITATION",
+  "assignmentId": 7,
+  "bookingId": 42,
+  "venueName": "Saigon FC Arena",
+  "sportType": "Football",
+  "startsAt": "2026-08-25T18:00:00+07:00",
+  "feeVnd": 150000
+}
+```
+
+FE referee: tap → `/referee/invitations?tab=pending` hoặc `/referee/assignments/:assignmentId`.
+
+---
+
+### 19.17 Player rating referee (cross-ref)
+
+Sau `endsAt`, player nhận `REFEREE_RATING_REQUEST` → `POST /reviews/referee` `{ bookingId, rating }` — rating **0.5–5.0** step 0.5, **không text**.
+
+Chi tiết: [§12 — `POST /reviews/referee`](#92-post-reviewsreferee-player--trọng-tài).
+
+**Notification `data`:**
+
+```json
+{
+  "action": "REFEREE_RATING_REQUEST",
+  "assignmentId": 7,
+  "bookingId": 42,
+  "refereeId": 15,
+  "venueName": "Saigon FC Arena",
+  "refereeName": "Nguyen Van A"
+}
+```
+
+---
+
+### 19.18 Dev-only (non-production)
+
+| Method | Path | Ghi chú |
+| :--- | :--- | :--- |
+| `POST` | `/referee/assignments/:id/dev/complete` | Mark completed + gửi rating prompt ngay |
+| `POST` | `/bookings/:id/dev/mark-paid` | Trigger fan-out (player token) |
+
+**Smoke:** `npm run smoke:referee` — full flow onboarding → board filter/favourite → apply → hire → accept.
+
+---
+
 ## Liên kết
 
-- Setup & Docker: [`README.md`](./README.md)
-- Ghi chú agent / schema: [`CLAUDE.md`](./CLAUDE.md)
-- Bản copy trong `docs/`: [`docs/API.md`](./docs/API.md) (cùng nội dung)
+- Setup & Docker: [`README.md`](../README.md)
+- Ghi chú agent / schema: [`CLAUDE.md`](../CLAUDE.md)

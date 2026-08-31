@@ -31,3 +31,26 @@ export function toPublicVenueRating(row) {
     ratingCount: Number(row.rating_count),
   };
 }
+
+export function toPublicRefereeReview(row) {
+  if (!row) return null;
+  return {
+    reviewId: row.review_id,
+    assignmentId: row.assignment_id,
+    bookingId: row.booking_id,
+    refereeId: row.referee_id,
+    playerId: row.player_id,
+    rating: Number(row.rating),
+    createdAt: row.created_at,
+  };
+}
+
+export function toPublicRefereeRating(row) {
+  if (!row) return null;
+  return {
+    refereeId: row.user_id,
+    avgRating: Number(row.avg_rating),
+    ratingCount: Number(row.rating_count),
+    totalMatchesOfficiated: row.total_matches_officiated,
+  };
+}

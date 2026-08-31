@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   NativeScrollEvent,
@@ -16,12 +16,13 @@ import { useRouter } from 'expo-router';
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 import VenueCard, { Venue } from '@/components/home/VenueCard';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import { listVenues, PublicVenue } from '@/services/venueService';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
-
-const HEADING_TEXT = '#020617';
 
 const CAROUSEL_IMAGES = [
   require('../../../assets/home/carousel-football.png'),
@@ -73,6 +74,9 @@ type Props = {
 /** SPOT home dashboard — Figma node 8:2 ("Football Dashboard"). */
 export default function HomeScreen({ onNavigateSchedule }: Props) {
   const router = useRouter();
+  const { t } = useLanguage();
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
@@ -87,7 +91,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         setVenuesError(null);
       } else {
         setVenues([]);
-        setVenuesError(result.message ?? 'Something went wrong. Please try again.');
+        setVenuesError(result.message ?? t('common.genericError'));
       }
     });
   }, [sport]);
@@ -110,17 +114,23 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         {/* Search bar */}
         <View style={styles.searchBarOuter}>
           <View style={styles.searchBarInner}>
-            <MaterialCommunityIcons name="creation" size={18} color={colors.primaryDark} />
-            <Text style={styles.searchPlaceholder}>Tell me what you need...</Text>
+            <MaterialCommunityIcons name="creation" size={18} color={themeColors.primary} />
+            <Text style={styles.searchPlaceholder}>{t('home.searchPlaceholder')}</Text>
             <TouchableOpacity onPress={() => comingSoon('Voice search')} accessibilityRole="button" accessibilityLabel="Voice search">
-              <Ionicons name="mic-outline" size={18} color={colors.primaryDark} />
+              <Ionicons name="mic-outline" size={18} color={themeColors.primary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Sport toggle */}
         <View style={styles.sportToggleWrap}>
-          <SportSegmentedToggle value={sport} onChange={setSport} inactiveColor={colors.primaryDark} size="sm" />
+          <SportSegmentedToggle
+            value={sport}
+            onChange={setSport}
+            inactiveColor={colors.primaryDark}
+            size="sm"
+            themeColors={themeColors}
+          />
         </View>
 
         {/* Photo carousel */}
@@ -153,16 +163,19 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         {/* Quick actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.BOOKING)}>
-            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(37, 99, 235, 0.2)' }]}>
-              <Ionicons name="ticket-outline" size={22} color={colors.primary} />
+            <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionPrimaryBg }]}>
+              <Ionicons name="ticket-outline" size={22} color={themeColors.quickActionPrimaryIcon} />
             </View>
-            <Text style={styles.quickActionLabel}>Book Field</Text>
+            <Text style={styles.quickActionLabel}>{t('home.bookField')}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon(t('home.findMatch'))}>
+            <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionSecondaryBg }]}>
+              <Ionicons name="trophy-outline" size={22} color={themeColors.quickActionSecondaryIcon} />
           <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
             <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 112, 228, 0.2)' }]}>
               <Ionicons name="trophy-outline" size={22} color="#2170E4" />
             </View>
-            <Text style={styles.quickActionLabel}>Find Match</Text>
+            <Text style={styles.quickActionLabel}>{t('home.findMatch')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -176,23 +189,23 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
           <View style={styles.upcomingOverlay} />
           <View style={styles.upcomingContent}>
             <View style={styles.upcomingTop}>
-              <Text style={styles.upcomingHeading}>Upcoming Match</Text>
+              <Text style={styles.upcomingHeading}>{t('home.upcomingMatchHeading')}</Text>
               <TouchableOpacity style={styles.viewScheduleButton} onPress={onNavigateSchedule}>
-                <Text style={styles.viewScheduleText}>View Schedule</Text>
+                <Text style={styles.viewScheduleText}>{t('home.viewSchedule')}</Text>
               </TouchableOpacity>
             </View>
             {upcomingBooking ? (
               <View>
                 <Text style={styles.upcomingTime}>{formatUpcomingTime(upcomingBooking.startsAt)}</Text>
                 <View style={styles.upcomingLocationRow}>
-                  <Ionicons name="location" size={13} color={HEADING_TEXT} />
+                  <Ionicons name="location" size={13} color={themeColors.textSecondaryAlt} />
                   <Text style={styles.upcomingLocation}>
                     {upcomingBooking.fieldName} @ {upcomingBooking.venueName}
                   </Text>
                 </View>
               </View>
             ) : (
-              <Text style={styles.upcomingTime}>No upcoming booking yet</Text>
+              <Text style={styles.upcomingTime}>{t('home.upcomingMatchEmpty')}</Text>
             )}
           </View>
         </View>
@@ -200,15 +213,15 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         {/* Recommended venues */}
         <View style={styles.venuesSection}>
           <View style={styles.venuesHeader}>
-            <Text style={styles.venuesHeading}>Recommended Venues</Text>
-            <TouchableOpacity onPress={() => comingSoon('Explore All')}>
-              <Text style={styles.exploreAll}>Explore All</Text>
+            <Text style={styles.venuesHeading}>{t('home.venuesHeading')}</Text>
+            <TouchableOpacity onPress={() => comingSoon(t('home.exploreAll'))}>
+              <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
             </TouchableOpacity>
           </View>
           {venuesError ? (
             <Text style={styles.venuesEmptyText}>{venuesError}</Text>
           ) : venues.length === 0 ? (
-            <Text style={styles.venuesEmptyText}>No venues found for this sport yet.</Text>
+            <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
           ) : (
             <ScrollView
               horizontal
@@ -226,10 +239,11 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: c.screenBackgroundAlt,
   },
   scrollContent: {
     paddingTop: 16,
@@ -241,8 +255,10 @@ const styles = StyleSheet.create({
     padding: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.cardBorder,
+    borderColor: c.surfaceBorder,
+    backgroundColor: c.searchOuterBg,
+    // Shadow tint left as the original light-only accent — a subtle iOS
+    // polish detail with no equivalent field sourced from Figma dark yet.
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
@@ -257,14 +273,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.ringBorder,
-    backgroundColor: colors.glassBackground,
+    borderColor: c.divider,
+    backgroundColor: c.searchInnerBg,
   },
   searchPlaceholder: {
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: 'rgba(51, 65, 85, 0.8)',
+    color: c.searchPlaceholderText,
   },
   sportToggleWrap: {
     marginHorizontal: 20,
@@ -273,7 +289,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     aspectRatio: 16 / 9,
     borderRadius: 20,
-    borderWidth: 1,
+    // Unchanged in dark per Figma (node 198:2470's border is the same
+    // rgba(255,255,255,0.4)) — a "chip/border floating on a photo" style
+    // that doesn't theme, same rule as the carousel dots below.
     borderColor: colors.cardBorder,
     overflow: 'hidden',
   },
@@ -308,8 +326,8 @@ const styles = StyleSheet.create({
     padding: 17,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.glassBackground,
+    borderColor: c.surfaceBorder,
+    backgroundColor: c.glassCardBg,
   },
   quickActionIcon: {
     width: 48,
@@ -321,14 +339,14 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: 18,
     fontWeight: '900',
-    color: HEADING_TEXT,
+    color: c.homeHeadingText,
   },
   upcomingCard: {
     marginHorizontal: 20,
     height: 224,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: c.surfaceBorder,
     overflow: 'hidden',
   },
   upcomingOverlay: {
@@ -337,7 +355,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: c.upcomingOverlayBg,
   },
   upcomingContent: {
     flex: 1,
@@ -352,23 +370,25 @@ const styles = StyleSheet.create({
   upcomingHeading: {
     fontSize: 18,
     fontWeight: '900',
-    color: HEADING_TEXT,
+    color: c.homeHeadingText,
   },
   viewScheduleButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: c.scheduleAccentBg,
     borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: c.scheduleAccentBorder,
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
   viewScheduleText: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.primaryDark,
+    color: c.accentGold,
   },
   upcomingTime: {
     fontSize: 24,
     fontWeight: '900',
-    color: HEADING_TEXT,
+    color: c.homeHeadingText,
   },
   upcomingLocationRow: {
     flexDirection: 'row',
@@ -379,7 +399,7 @@ const styles = StyleSheet.create({
   upcomingLocation: {
     fontSize: 14,
     fontWeight: '700',
-    color: HEADING_TEXT,
+    color: c.homeLocationText,
   },
   venuesSection: {
     gap: 8,
@@ -393,12 +413,12 @@ const styles = StyleSheet.create({
   venuesHeading: {
     fontSize: 18,
     fontWeight: '900',
-    color: HEADING_TEXT,
+    color: c.homeHeadingText,
   },
   exploreAll: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.primaryDark,
+    color: c.accentText,
   },
   venuesList: {
     paddingHorizontal: 20,
@@ -407,6 +427,7 @@ const styles = StyleSheet.create({
   venuesEmptyText: {
     marginHorizontal: 20,
     fontSize: 14,
-    color: colors.bodyText,
+    color: c.textSecondaryAlt,
   },
-});
+  });
+}

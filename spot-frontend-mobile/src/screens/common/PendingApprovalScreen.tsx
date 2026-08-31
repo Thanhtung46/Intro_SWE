@@ -5,18 +5,24 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { useLanguage } from '@/context/LanguageContext';
+import { TranslationKey } from '@/i18n/translations';
 import type { Role } from '@/types/auth';
 
-const COPY: Record<Extract<Role, 'owner' | 'referee'>, { title: string; body: string }> = {
-  owner: {
-    title: 'Venue Submitted for Review',
-    body: "We've received your venue details. An admin will review and approve your account — you'll be notified once it's ready.",
-  },
-  referee: {
-    title: 'Application Submitted for Review',
-    body: "We've received your referee application. An admin will review your credentials — you'll be notified once it's approved.",
-  },
-};
+function getCopy(
+  t: (key: TranslationKey) => string
+): Record<Extract<Role, 'owner' | 'referee'>, { title: string; body: string }> {
+  return {
+    owner: {
+      title: t('pendingApproval.ownerTitle'),
+      body: t('pendingApproval.ownerBody'),
+    },
+    referee: {
+      title: t('pendingApproval.refereeTitle'),
+      body: t('pendingApproval.refereeBody'),
+    },
+  };
+}
 
 type Props = {
   role: Extract<Role, 'owner' | 'referee'>;
@@ -29,7 +35,8 @@ type Props = {
  * content only, no network call.
  */
 export default function PendingApprovalScreen({ role, onDone }: Props) {
-  const copy = COPY[role];
+  const { t } = useLanguage();
+  const copy = getCopy(t)[role];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -45,9 +52,9 @@ export default function PendingApprovalScreen({ role, onDone }: Props) {
           onPress={onDone}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Back to home"
+          accessibilityLabel={t('pendingApproval.backHome')}
         >
-          <Text style={styles.buttonText}>Back to Home</Text>
+          <Text style={styles.buttonText}>{t('pendingApproval.backHome')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

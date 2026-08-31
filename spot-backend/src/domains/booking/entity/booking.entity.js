@@ -23,6 +23,8 @@ export function toPublicBooking(row) {
     endTime: formatTimeInZone(row.ends_at),
     totalAmount: Number(row.total_amount),
     depositAmount: Number(row.deposit_amount),
+    hireReferee: Boolean(row.hire_referee),
+    refereeFeeVnd: row.referee_fee_vnd != null ? Number(row.referee_fee_vnd) : null,
     status: row.status,
   };
 }

@@ -5,16 +5,26 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
+import { useLanguage } from '@/context/LanguageContext';
 
 type Props = {
   onAvatarPress: () => void;
   avatarInitial: string;
+  onNotificationsPress: () => void;
+  unreadCount: number;
   /** 'blurred' = Home's frosted-glass look (Figma 8:124); 'plain' (default) = Booking's flat look (Figma 79:1521). */
   variant?: 'blurred' | 'plain';
 };
 
 /** Shared top app bar — logo + AI/notification/avatar buttons — used by Home and Booking. */
-export default function AppHeader({ onAvatarPress, avatarInitial, variant = 'plain' }: Props) {
+export default function AppHeader({
+  onAvatarPress,
+  avatarInitial,
+  onNotificationsPress,
+  unreadCount,
+  variant = 'plain',
+}: Props) {
+  const { t } = useLanguage();
   const content = (
     <>
       <View style={styles.headerLeft}>
@@ -24,26 +34,30 @@ export default function AppHeader({ onAvatarPress, avatarInitial, variant = 'pla
       <View style={styles.headerRight}>
         <TouchableOpacity
           style={styles.headerButton}
-          onPress={() => comingSoon('AI Assistant')}
+          onPress={() => comingSoon(t('header.aiAssistant'))}
           accessibilityRole="button"
-          accessibilityLabel="AI Assistant"
+          accessibilityLabel={t('header.aiAssistant')}
         >
           <MaterialCommunityIcons name="creation" size={20} color={colors.primaryDark} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.headerButton}
-          onPress={() => comingSoon('Notifications')}
+          onPress={onNotificationsPress}
           accessibilityRole="button"
-          accessibilityLabel="Notifications"
+          accessibilityLabel={t('header.notifications')}
         >
           <Ionicons name="notifications-outline" size={18} color={colors.primaryDark} />
-          <View style={styles.notificationDot} />
+          {unreadCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.avatarButton}
           onPress={onAvatarPress}
           accessibilityRole="button"
-          accessibilityLabel="Account menu"
+          accessibilityLabel={t('header.accountMenu')}
         >
           <Text style={styles.avatarText}>{avatarInitial}</Text>
         </TouchableOpacity>
@@ -103,16 +117,27 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.ringBorder,
   },
-  notificationDot: {
+  // Colors match Figma node 1:802 (`817:112`/`817:113`) — copied verbatim
+  // from AppShell.tsx's `notificationBadge`/`notificationBadgeText` so both
+  // headers render the exact same badge.
+  notificationBadge: {
     position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#996100',
+    top: 6,
+    right: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D2B306',
     borderWidth: 1,
     borderColor: colors.white,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFEDE6',
   },
   avatarButton: {
     width: 40,

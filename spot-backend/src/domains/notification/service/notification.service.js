@@ -50,7 +50,7 @@ async function shouldSendReminderEmail(user) {
   return user.push_notifications_enabled !== false;
 }
 
-function emailPayloadForType(type, { title, body }) {
+function emailPayloadForType(type, { title, body, data = {} }) {
   if (type === NOTIFICATION_TYPES.BOOKING_CREATED) {
     return {
       subject: title || 'SPOT booking confirmation',
@@ -60,6 +60,28 @@ function emailPayloadForType(type, { title, body }) {
   if (type === NOTIFICATION_TYPES.BOOKING_REMINDER) {
     return {
       subject: title || 'SPOT booking reminder',
+      text: body,
+    };
+  }
+  if (
+    type === NOTIFICATION_TYPES.SYSTEM &&
+    typeof data.action === 'string' &&
+    data.action.startsWith('ACCOUNT_')
+  ) {
+    return {
+      subject: 'SPOT account security alert',
+      text: body,
+    };
+  }
+  if (type === NOTIFICATION_TYPES.REFEREE_INVITATION) {
+    return {
+      subject: title || 'New referee match invitation',
+      text: body,
+    };
+  }
+  if (type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) {
+    return {
+      subject: title || 'Rate your referee',
       text: body,
     };
   }
@@ -99,7 +121,7 @@ export async function createNotification({
     const isReminder = type === NOTIFICATION_TYPES.BOOKING_REMINDER;
     const allowEmail =
       sendEmail &&
-      (type === NOTIFICATION_TYPES.BOOKING_CREATED ||
+      (        type === NOTIFICATION_TYPES.BOOKING_CREATED ||
         type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
         type === NOTIFICATION_TYPES.MATCH_EXPIRED_UNDERFILLED ||
         type === NOTIFICATION_TYPES.MATCH_CANCELLED ||
@@ -108,12 +130,14 @@ export async function createNotification({
         type === NOTIFICATION_TYPES.GROUP_REJECTED ||
         type === NOTIFICATION_TYPES.GROUP_KICKED ||
         type === NOTIFICATION_TYPES.GROUP_ADMIN_TRANSFERRED ||
-        type === NOTIFICATION_TYPES.SYSTEM) &&
+        type === NOTIFICATION_TYPES.SYSTEM ||
+        type === NOTIFICATION_TYPES.REFEREE_INVITATION ||
+        type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) &&
       (!isReminder || (await shouldSendReminderEmail(user)));
 
     if (allowEmail && user.email) {
       try {
-        const mail = emailPayloadForType(type, { title, body });
+        const mail = emailPayloadForType(type, { title, body, data });
         await sendNotificationEmail({
           email: user.email,
           subject: mail.subject,

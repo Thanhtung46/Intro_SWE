@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from 'react';
 import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import {
@@ -7,8 +8,11 @@ import {
   markNotificationRead,
   NotificationItem,
 } from '../services/notificationService';
-import { colors } from '@/constants/colors';
 import { showAlert } from '@/utils/showAlert';
+import { useLanguage } from '@/context/LanguageContext';
+import { TranslationKey } from '@/i18n/translations';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
 interface NotificationMenuProps {
   visible: boolean;
@@ -19,12 +23,12 @@ function isSameLocalDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function formatRelativeTime(iso: string): string {
+function formatRelativeTime(iso: string, t: (key: TranslationKey) => string): string {
   const date = new Date(iso);
   const now = new Date();
   const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
 
-  if (diffMin < 1) return 'Just now';
+  if (diffMin < 1) return t('notifications.justNow');
   if (diffMin < 60) return `${diffMin} min ago`;
 
   const diffHours = Math.floor(diffMin / 60);
@@ -32,23 +36,29 @@ function formatRelativeTime(iso: string): string {
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (isSameLocalDay(date, yesterday)) return 'Yesterday';
+  if (isSameLocalDay(date, yesterday)) return t('notifications.yesterday');
 
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
 }
 
-function iconForType(type: NotificationItem['type']): {
+function iconForType(
+  type: NotificationItem['type'],
+  c: ThemeColors
+): {
   name: keyof typeof Ionicons.glyphMap;
   bg: string;
   color: string;
 } {
   if (type === 'SYSTEM') {
-    return { name: 'information-circle', bg: colors.border, color: colors.subtitle };
+    return { name: 'information-circle', bg: c.systemIconBg, color: c.textSecondary };
   }
-  return { name: 'calendar', bg: colors.primaryDark, color: colors.white };
+  return { name: 'calendar', bg: c.primary, color: c.white };
 }
 
 export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
+  const { t } = useLanguage();
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -69,7 +79,7 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
     const result = await markAllNotificationsRead();
     if (!result.success) {
       setItems(previous);
-      showAlert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert(t('common.error'), result.message || t('common.genericError'));
     }
   };
 
@@ -86,10 +96,6 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
     }
   };
 
-  const handleViewAll = () => {
-    showAlert('Coming soon', 'A full notifications screen is not available yet.');
-  };
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -97,17 +103,20 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
           <TouchableWithoutFeedback>
             <View style={styles.card} testID="notification-menu-card">
               <View style={styles.header}>
-                <Text style={styles.title}>Notifications</Text>
+                <Text style={styles.title}>{t('notifications.title')}</Text>
                 <TouchableOpacity testID="notification-mark-all-read" onPress={handleMarkAllRead}>
-                  <Text style={styles.markAllRead}>Mark all read</Text>
+                  <Text style={styles.markAllRead}>{t('notifications.markAllRead')}</Text>
                 </TouchableOpacity>
               </View>
 
               {loading ? (
-                <Text style={styles.emptyText}>Loading...</Text>
+                <Text style={styles.emptyText}>{t('common.loading')}</Text>
               ) : items.length === 0 ? (
-                <Text style={styles.emptyText}>No notifications yet</Text>
+                <Text style={styles.emptyText}>{t('notifications.emptyState')}</Text>
               ) : (
+                <ScrollView style={styles.itemsScroll} showsVerticalScrollIndicator>
+                  {items.map((item) => {
+                    const icon = iconForType(item.type, themeColors);
                 <ScrollView style={styles.list}>
                   {items.map((item) => {
                     const icon = iconForType(item.type);
@@ -115,6 +124,7 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
                       <TouchableOpacity
                         key={item.notificationId}
                         testID={`notification-item-${item.notificationId}`}
+                        style={[styles.item, !item.isRead && styles.itemUnread]}
                         style={styles.item}
                         onPress={() => handleItemPress(item)}
                       >
@@ -124,6 +134,7 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
                         <View style={styles.itemBody}>
                           <Text style={styles.itemTitle}>{item.title}</Text>
                           {item.body ? <Text style={styles.itemText}>{item.body}</Text> : null}
+                          <Text style={styles.itemTime}>{formatRelativeTime(item.createdAt, t)}</Text>
                           <Text style={styles.itemTime}>{formatRelativeTime(item.createdAt)}</Text>
                         </View>
                         {!item.isRead ? <View style={styles.unreadDot} /> : null}
@@ -132,10 +143,6 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
                   })}
                 </ScrollView>
               )}
-
-              <TouchableOpacity testID="notification-view-all" style={styles.viewAllButton} onPress={handleViewAll}>
-                <Text style={styles.viewAllText}>View All Notifications</Text>
-              </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -144,6 +151,102 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
   );
 }
 
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    },
+    card: {
+      position: 'absolute',
+      top: 64,
+      right: 16,
+      width: 300,
+      maxHeight: 420,
+      backgroundColor: c.menuSurface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+      paddingVertical: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.menuHeaderBorder,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    markAllRead: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    emptyText: {
+      paddingHorizontal: 16,
+      paddingVertical: 20,
+      fontSize: 13,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    itemsScroll: {
+      maxHeight: 370,
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      gap: 10,
+    },
+    itemUnread: {
+      backgroundColor: c.unreadItemTint,
+    },
+    itemIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemBody: {
+      flex: 1,
+    },
+    itemTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    itemText: {
+      fontSize: 13,
+      color: c.textSecondaryAlt,
+      marginTop: 2,
+    },
+    itemTime: {
+      fontSize: 11,
+      color: c.textMuted,
+      marginTop: 4,
+    },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: c.primary,
+      marginTop: 4,
+    },
+  });
+}
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,

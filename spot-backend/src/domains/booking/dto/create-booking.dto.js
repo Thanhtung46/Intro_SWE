@@ -27,6 +27,8 @@ export const createBookingSchema = z
     bookingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'bookingDate must be YYYY-MM-DD'),
     startTime: z.string().regex(TIME_REGEX, 'startTime must be HH:mm'),
     endTime: z.string().regex(TIME_REGEX, 'endTime must be HH:mm'),
+    hireReferee: z.boolean().optional().default(false),
+    refereeFeeVnd: z.coerce.number().min(0).optional(),
   })
   .strict()
   .superRefine((val, ctx) => {
@@ -47,6 +49,14 @@ export const createBookingSchema = z
         code: z.ZodIssueCode.custom,
         message: 'bookingDate/startTime must not be in the past',
         path: ['bookingDate'],
+      });
+    }
+
+    if (!val.hireReferee && val.refereeFeeVnd != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'refereeFeeVnd requires hireReferee=true',
+        path: ['refereeFeeVnd'],
       });
     }
   });

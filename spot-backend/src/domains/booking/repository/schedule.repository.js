@@ -148,13 +148,42 @@ export async function getProfileStatsForUser(client, userId) {
 
 export async function insertVenue(
   client,
-  { ownerId, name, address, openingHours = null, closingHours = null },
+  {
+    ownerId,
+    name,
+    address,
+    openingHours = null,
+    closingHours = null,
+    province = null,
+    city = null,
+    latitude = null,
+    longitude = null,
+  },
 ) {
+  const hasLocation = latitude != null && longitude != null;
   const { rows } = await client.query(
-    `INSERT INTO schema_venue.venues (owner_id, name, address, opening_hours, closing_hours)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING venue_id, name, address, opening_hours, closing_hours`,
-    [ownerId, name, address, openingHours, closingHours],
+    `INSERT INTO schema_venue.venues (
+       owner_id, name, address, opening_hours, closing_hours,
+       province, city, location
+     )
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7,
+       ${hasLocation ? 'ST_SetSRID(ST_MakePoint($9, $8), 4326)::geography' : 'NULL'}
+     )
+     RETURNING venue_id, name, address, opening_hours, closing_hours, province, city`,
+    hasLocation
+      ? [
+          ownerId,
+          name,
+          address,
+          openingHours,
+          closingHours,
+          province,
+          city,
+          latitude,
+          longitude,
+        ]
+      : [ownerId, name, address, openingHours, closingHours, province, city],
   );
   return rows[0];
 }

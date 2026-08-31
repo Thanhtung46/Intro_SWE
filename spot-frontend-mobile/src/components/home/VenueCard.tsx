@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '@/constants/colors';
 import { VenueBase } from '@/types/venue';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
 export type Venue = VenueBase & {
   priceLabel: string;
@@ -18,12 +19,15 @@ type Props = {
 
 /** Recommended-venues card — Figma node 8:82 ("Skyline Arena" / "Champions Club"). */
 export default function VenueCard({ venue, onPress }: Props) {
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.photoWrap}>
         <Image source={venue.image} style={styles.photo} resizeMode="cover" />
         <View style={styles.distanceBadge}>
-          <Ionicons name="location" size={11} color={colors.headingText} />
+          <Ionicons name="location" size={11} color={themeColors.textSecondaryAlt} />
           <Text style={styles.distanceText}>{venue.distanceLabel}</Text>
         </View>
         <View style={styles.priceBadge}>
@@ -45,80 +49,82 @@ export default function VenueCard({ venue, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    width: 280,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.glassBackground,
-    overflow: 'hidden',
-  },
-  photoWrap: {
-    height: 160,
-    width: '100%',
-  },
-  photo: {
-    width: '100%',
-    height: '100%',
-  },
-  distanceBadge: {
-    position: 'absolute',
-    left: 12,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  distanceText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: colors.headingText,
-  },
-  priceBadge: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  priceText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.headingText,
-  },
-  info: {
-    padding: 16,
-    gap: 4,
-  },
-  infoTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.headingText,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.headingText,
-  },
-  tag: {
-    fontSize: 12,
-    color: colors.bodyText,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      width: 280,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+      backgroundColor: c.glassCardBg,
+      overflow: 'hidden',
+    },
+    photoWrap: {
+      height: 160,
+      width: '100%',
+    },
+    photo: {
+      width: '100%',
+      height: '100%',
+    },
+    distanceBadge: {
+      position: 'absolute',
+      left: 12,
+      bottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.photoChipBg,
+      borderRadius: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    distanceText: {
+      fontSize: 10,
+      fontWeight: '500',
+      color: c.venueCardMutedText,
+    },
+    priceBadge: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      backgroundColor: c.photoChipBg,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    priceText: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: c.venueCardHeadingText,
+    },
+    info: {
+      padding: 16,
+      gap: 4,
+    },
+    infoTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+    name: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: c.venueCardHeadingText,
+    },
+    ratingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    ratingText: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: c.venueCardHeadingText,
+    },
+    tag: {
+      fontSize: 12,
+      color: c.textSecondaryAlt,
+    },
+  });
+}

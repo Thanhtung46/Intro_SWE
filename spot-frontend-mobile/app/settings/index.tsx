@@ -8,7 +8,7 @@ export default function SettingsRoute() {
   return (
     <AppShell activeTab="settings">
       <SettingsScreen
-        onEditProfile={() => router.push(ROUTES.PROFILE_EDIT)}
+        onEditProfile={() => router.push(ROUTES.PROFILE)}
         onSignedOut={() => router.replace(ROUTES.AUTH_LOGIN)}
       />
     </AppShell>
