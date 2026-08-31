@@ -46,6 +46,36 @@ type CourtField = { key: string; name: string };
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BULK_MAX_SCHEDULES = 100;
 
+// @react-native-community/datetimepicker has no web build, so on web fall
+// back to the browser's own native date/time inputs. `date` is held as an
+// ISO yyyy-mm-dd string and `timeFrom`/`timeTo` as HH:mm — both are exactly
+// the value format of <input type="date"> / <input type="time">.
+const IS_WEB = Platform.OS === 'web';
+
+function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; min?: string; onChange: (v: string) => void }) {
+  // react-native-web renders unrecognised lowercase JSX tags as raw DOM nodes.
+  return (
+    <input
+      type={props.type}
+      value={props.value}
+      min={props.min}
+      onChange={(e: { target: { value: string } }) => props.onChange(e.target.value)}
+      style={{
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: colors.cardBorder,
+        borderRadius: 10,
+        padding: spacing.sm,
+        fontSize: 14,
+        color: colors.headingText,
+        backgroundColor: colors.white,
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    />
+  );
+}
+
 let courtKeySeq = 0;
 function nextCourtKey(): string {
   courtKeySeq += 1;
@@ -483,10 +513,14 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
 
         <Section title="Schedule" icon="calendar-outline">
           <Field label="Date" error={fieldErrors.date}>
-            <TouchableOpacity testID="host-match-date" style={styles.pickerField} onPress={() => setShowDatePicker(true)}>
-              <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>{date ? formatDisplayDate(date) : 'Select a date'}</Text>
-              <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
-            </TouchableOpacity>
+            {IS_WEB ? (
+              <WebDateTimeInput type="date" value={date} min={toIsoDate(new Date())} onChange={setDate} />
+            ) : (
+              <TouchableOpacity testID="host-match-date" style={styles.pickerField} onPress={() => setShowDatePicker(true)}>
+                <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>{date ? formatDisplayDate(date) : 'Select a date'}</Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+              </TouchableOpacity>
+            )}
             {showDatePicker && (
               <DateTimePicker
                 value={date ? parseIsoDate(date) : new Date()}
@@ -500,18 +534,26 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           <View style={styles.row}>
             <View style={styles.rowItem}>
               <Field label="Start Time" error={fieldErrors.timeFrom}>
-                <TouchableOpacity testID="host-match-time-from" style={styles.pickerField} onPress={() => setShowTimeFromPicker(true)}>
-                  <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
-                  <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-                </TouchableOpacity>
+                {IS_WEB ? (
+                  <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} />
+                ) : (
+                  <TouchableOpacity testID="host-match-time-from" style={styles.pickerField} onPress={() => setShowTimeFromPicker(true)}>
+                    <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
+                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                )}
               </Field>
             </View>
             <View style={styles.rowItem}>
               <Field label="End Time" error={fieldErrors.timeTo}>
-                <TouchableOpacity testID="host-match-time-to" style={styles.pickerField} onPress={() => setShowTimeToPicker(true)}>
-                  <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
-                  <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-                </TouchableOpacity>
+                {IS_WEB ? (
+                  <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} />
+                ) : (
+                  <TouchableOpacity testID="host-match-time-to" style={styles.pickerField} onPress={() => setShowTimeToPicker(true)}>
+                    <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
+                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                )}
               </Field>
             </View>
           </View>
