@@ -1,15 +1,23 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React, { useEffect } from 'react';
 import { Alert } from 'react-native';
 import EditProfileScreen from '../app/profile/edit';
 import { LoginUser } from '../src/services/authService';
+import * as authService from '../src/services/authService';
 import { UserProvider, useUser } from '../src/context/UserContext';
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack, push: jest.fn() }),
+  useRouter: () => ({ back: mockBack, push: mockPush }),
 }));
+
+jest.mock('../src/services/authService', () => ({
+  forgotPassword: jest.fn(),
+}));
+
+const mockForgotPassword = authService.forgotPassword as jest.MockedFunction<typeof authService.forgotPassword>;
 
 function Preset({ user }: { user?: LoginUser }) {
   const { setUser } = useUser();
@@ -30,6 +38,8 @@ function renderEditProfile(user?: LoginUser) {
 describe('EditProfileScreen', () => {
   beforeEach(() => {
     mockBack.mockClear();
+    mockPush.mockClear();
+    mockForgotPassword.mockReset();
   });
 
   it('blocks save and shows an inline error when Name is empty', () => {
@@ -79,13 +89,30 @@ describe('EditProfileScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('shows "Coming soon" when Change Password is pressed', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const { getByTestId } = renderEditProfile();
+  it('sends an OTP to the user\'s email and navigates to the OTP screen when Change Password succeeds', async () => {
+    mockForgotPassword.mockResolvedValue({ success: true });
+    const { getByTestId } = renderEditProfile({ fullName: 'A', email: 'a@b.com' });
 
     fireEvent.press(getByTestId('edit-profile-change-password'));
 
-    expect(alertSpy).toHaveBeenCalledWith('Coming soon', 'Change Password is not available yet.');
+    await waitFor(() => expect(mockForgotPassword).toHaveBeenCalledWith('a@b.com'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/auth/forgot-password-otp',
+      params: { email: 'a@b.com' },
+    });
+  });
+
+  it('shows an error alert and does not navigate when sending the OTP fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockForgotPassword.mockResolvedValue({ success: false, message: 'Network error. Please check your connection and try again.' });
+    const { getByTestId } = renderEditProfile({ fullName: 'A', email: 'a@b.com' });
+
+    fireEvent.press(getByTestId('edit-profile-change-password'));
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Error', 'Network error. Please check your connection and try again.')
+    );
+    expect(mockPush).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 

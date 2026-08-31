@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { OtpInput } from '@/components/OtpInput';
 import { otpSchema } from '@/schemas/otpSchema';
 import { resendOtp, verifyOtp } from '@/services/authService';
-import { colors } from '@/constants/colors';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -38,6 +40,9 @@ export default function OtpScreen({
    */
   mode?: 'verify' | 'collect';
 }) {
+  const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -107,11 +112,11 @@ export default function OtpScreen({
     <View style={styles.screen}>
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <Ionicons name="shield-checkmark" size={28} color={colors.primaryDark} />
+          <Ionicons name="shield-checkmark" size={28} color={c.primary} />
         </View>
 
-        <Text style={styles.title}>OTP Verification</Text>
-        <Text style={styles.subtitle}>Enter the 6-digit code sent to your email.</Text>
+        <Text style={styles.title}>{t('otp.title')}</Text>
+        <Text style={styles.subtitle}>{t('otp.subtitle')}</Text>
 
         <OtpInput
           value={otp}
@@ -119,13 +124,15 @@ export default function OtpScreen({
           onComplete={mode === 'verify' ? runVerify : undefined}
           error={!!error}
           containerStyle={styles.otpRow}
+          themeColors={c}
         />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <View style={styles.resendRow}>
           <Text style={styles.resendText}>
-            Resend code in <Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
+            {t('otp.resendPrefix')}
+            <Text style={styles.resendCountdown}>{formatCountdown(cooldown)}</Text>
           </Text>
           <TouchableOpacity
             testID="resend-link"
@@ -133,7 +140,7 @@ export default function OtpScreen({
             disabled={cooldown > 0 || resending}
           >
             <Text style={[styles.resendLink, cooldown > 0 && styles.resendLinkDisabled]}>
-              {resending ? 'Resending...' : 'Resend code now'}
+              {resending ? t('otp.resending') : t('otp.resendNow')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -145,115 +152,117 @@ export default function OtpScreen({
           disabled={submitting}
         >
           <Text style={styles.verifyButtonText}>
-            {submitting ? 'Verifying...' : mode === 'collect' ? 'Continue' : 'Verify'}
+            {submitting ? t('otp.verifying') : mode === 'collect' ? t('otp.continueButton') : t('otp.verifyButton')}
           </Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Ionicons name="help-circle-outline" size={16} color={colors.subtitle} />
-          <Text style={styles.footerText}> Need help? Contact us</Text>
+          <Ionicons name="help-circle-outline" size={16} color={c.textSecondary} />
+          <Text style={styles.footerText}>{t('otp.helpText')}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.formScreenBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.subtitle,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  otpRow: {
-    width: '100%',
-  },
-  errorText: {
-    color: colors.formError,
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  resendRow: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  resendText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  resendCountdown: {
-    color: colors.primaryDark,
-    fontWeight: '600',
-  },
-  resendLink: {
-    fontSize: 14,
-    color: colors.primaryDark,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  resendLinkDisabled: {
-    color: colors.placeholder,
-  },
-  verifyButton: {
-    width: '100%',
-    backgroundColor: colors.primaryDark,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  verifyButtonDisabled: {
-    opacity: 0.6,
-  },
-  verifyButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 13,
-    color: colors.subtitle,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: c.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 360,
+      backgroundColor: c.surface,
+      borderRadius: 20,
+      paddingHorizontal: 24,
+      paddingVertical: 32,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    iconCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: c.tintedSurface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginTop: 8,
+      marginBottom: 24,
+    },
+    otpRow: {
+      width: '100%',
+    },
+    errorText: {
+      color: c.error,
+      fontSize: 13,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+    resendRow: {
+      marginTop: 16,
+      alignItems: 'center',
+    },
+    resendText: {
+      fontSize: 14,
+      color: c.textSecondaryAlt,
+    },
+    resendCountdown: {
+      color: c.accentText,
+      fontWeight: '600',
+    },
+    resendLink: {
+      fontSize: 14,
+      color: c.accentText,
+      fontWeight: '600',
+      marginTop: 4,
+    },
+    resendLinkDisabled: {
+      color: c.textMuted,
+    },
+    verifyButton: {
+      width: '100%',
+      backgroundColor: c.primary,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 24,
+    },
+    verifyButtonDisabled: {
+      opacity: 0.6,
+    },
+    verifyButtonText: {
+      color: c.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 20,
+    },
+    footerText: {
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+  });
+}

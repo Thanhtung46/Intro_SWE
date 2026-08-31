@@ -2,10 +2,20 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 import { ReviewModal } from '@/components/ReviewModal';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
+import {
+  MONTH_NAMES_EN,
+  MONTH_NAMES_VI,
+  MONTH_ABBR_EN,
+  MONTH_ABBR_VI,
+  WEEKDAYS_ABBR_EN,
+  WEEKDAYS_ABBR_VI,
+} from '@/i18n/translations';
 
 type ScheduleEvent = {
   id: string;
@@ -17,23 +27,6 @@ type ScheduleEvent = {
   status: 'upcoming' | 'completed';
   bookingId: number;
 };
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const WEEKDAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -127,6 +120,12 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 export default function ScheduleScreen() {
+  const { t, language } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
+  const MONTH_NAMES = language === 'vi' ? MONTH_NAMES_VI : MONTH_NAMES_EN;
+  const MONTH_ABBR = language === 'vi' ? MONTH_ABBR_VI : MONTH_ABBR_EN;
+  const WEEKDAY_LABELS = language === 'vi' ? WEEKDAYS_ABBR_VI : WEEKDAYS_ABBR_EN;
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
@@ -147,7 +146,7 @@ export default function ScheduleScreen() {
         setFetchError(null);
       } else {
         setEvents([]);
-        setFetchError(result.message ?? 'Something went wrong. Please try again.');
+        setFetchError(result.message ?? t('common.genericError'));
       }
     });
   }, [currentMonth]);
@@ -170,8 +169,8 @@ export default function ScheduleScreen() {
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>My Schedule</Text>
-          <Text style={styles.subtitle}>Review your upcoming matches and training.</Text>
+          <Text style={styles.title}>{t('schedule.title')}</Text>
+          <Text style={styles.subtitle}>{t('schedule.subtitle')}</Text>
         </View>
 
         <View style={styles.calendarCard}>
@@ -186,7 +185,7 @@ export default function ScheduleScreen() {
                 onPress={() => goToMonth(-1)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="chevron-back" size={20} color={colors.text} />
+                <Ionicons name="chevron-back" size={20} color={c.textPrimary} />
               </TouchableOpacity>
               <TouchableOpacity
                 testID="schedule-next-month"
@@ -194,7 +193,7 @@ export default function ScheduleScreen() {
                 onPress={() => goToMonth(1)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="chevron-forward" size={20} color={colors.text} />
+                <Ionicons name="chevron-forward" size={20} color={c.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -245,70 +244,70 @@ export default function ScheduleScreen() {
         {selectedDate ? (
           <View style={styles.matchesSection}>
             <Text style={styles.matchesLabel}>
-              MATCHES ON {MONTH_ABBR[selectedDate.getMonth()].toUpperCase()} {selectedDate.getDate()}
+              {t('schedule.matchesOnPrefix')}{MONTH_ABBR[selectedDate.getMonth()].toUpperCase()} {selectedDate.getDate()}
             </Text>
 
             {eventsForSelectedDate.length === 0 ? (
               <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="calendar-remove-outline" size={28} color={colors.placeholder} />
-                <Text style={styles.emptyStateText}>No matches on this day</Text>
+                <MaterialCommunityIcons name="calendar-remove-outline" size={28} color={c.textMuted} />
+                <Text style={styles.emptyStateText}>{t('schedule.emptyDay')}</Text>
               </View>
             ) : (
               eventsForSelectedDate.map((event) =>
                 event.status === 'upcoming' ? (
                   <View key={event.id} style={styles.upcomingCard}>
-                    <Text style={styles.cardStatusLabel}>UPCOMING</Text>
+                    <Text style={styles.cardStatusLabel}>{t('schedule.statusUpcoming')}</Text>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primaryDark} />
+                      <SportIcon type={event.type} color={c.primary} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Ionicons name="time-outline" size={16} color={colors.subtitle} />
+                      <Ionicons name="time-outline" size={16} color={c.textSecondary} />
                       <Text style={styles.detailText}>{event.time}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Ionicons name="location-outline" size={16} color={colors.subtitle} />
+                      <Ionicons name="location-outline" size={16} color={c.textSecondary} />
                       <Text style={styles.detailText}>{event.location}</Text>
                     </View>
                     {event.host ? (
                       <View style={styles.detailRow}>
-                        <Ionicons name="person-outline" size={16} color={colors.subtitle} />
-                        <Text style={styles.detailText}>Host: {event.host}</Text>
+                        <Ionicons name="person-outline" size={16} color={c.textSecondary} />
+                        <Text style={styles.detailText}>{t('schedule.hostPrefix')}{event.host}</Text>
                       </View>
                     ) : null}
                     <TouchableOpacity
                       testID={`schedule-match-details-${event.id}`}
                       style={styles.primaryButton}
-                      onPress={() => comingSoon('Match Details')}
+                      onPress={() => comingSoon(t('schedule.matchDetails'))}
                     >
-                      <Text style={styles.primaryButtonText}>Match Details</Text>
+                      <Text style={styles.primaryButtonText}>{t('schedule.matchDetails')}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View key={event.id} style={styles.completedCard}>
                     <View style={styles.completedHeader}>
-                      <Text style={styles.cardStatusLabel}>COMPLETED</Text>
-                      <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                      <Text style={styles.cardStatusLabel}>{t('schedule.statusCompleted')}</Text>
+                      <Ionicons name="checkmark-circle" size={20} color={c.successText} />
                     </View>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={colors.primaryDark} />
+                      <SportIcon type={event.type} color={c.primary} />
                       <Text style={styles.sportBadgeText}>{event.type}</Text>
                     </View>
                     <Text style={styles.completedDate}>
                       {isYesterday(event.date)
-                        ? `Yesterday, ${event.time.split(' - ')[0]}`
+                        ? `${t('schedule.yesterdayPrefix')}${event.time.split(' - ')[0]}`
                         : `${MONTH_ABBR[event.date.getMonth()]} ${event.date.getDate()}, ${event.time.split(' - ')[0]}`}
                     </Text>
                     <Text style={styles.detailText}>{event.location}</Text>
                     {reviewedBookingIds.has(event.bookingId) ? (
-                      <Text style={styles.reviewedText}>Reviewed</Text>
+                      <Text style={styles.reviewedText}>{t('schedule.reviewed')}</Text>
                     ) : (
                       <TouchableOpacity
                         testID={`schedule-leave-review-${event.id}`}
                         style={styles.outlineButton}
                         onPress={() => setReviewBookingId(event.bookingId)}
                       >
-                        <Text style={styles.outlineButtonText}>Leave Review</Text>
+                        <Text style={styles.outlineButtonText}>{t('schedule.leaveReview')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -332,218 +331,220 @@ export default function ScheduleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.formScreenBackground,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingBottom: 128,
-  },
-  header: {
-    paddingTop: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: colors.subtitle,
-  },
-  calendarCard: {
-    marginTop: 20,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  calendarTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  monthNav: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  monthNavButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  weekdayLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.subtitle,
-  },
-  weekRow: {
-    flexDirection: 'row',
-  },
-  dayCell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  dayCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCircleSelected: {
-    backgroundColor: colors.primaryDark,
-  },
-  dayText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  dayTextMuted: {
-    color: colors.placeholder,
-  },
-  dayTextSelected: {
-    color: colors.white,
-    fontWeight: '700',
-  },
-  eventDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.primaryDark,
-    marginTop: 2,
-  },
-  errorText: {
-    marginTop: 12,
-    fontSize: 13,
-    color: colors.subtitle,
-  },
-  matchesSection: {
-    marginTop: 24,
-  },
-  matchesLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.subtitle,
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 32,
-    backgroundColor: colors.primarySoft,
-    borderRadius: 16,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: colors.subtitle,
-  },
-  sportBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  sportBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primaryDark,
-  },
-  cardStatusLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.subtitle,
-    letterSpacing: 0.5,
-  },
-  upcomingCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.primaryDark,
-    padding: 16,
-    marginBottom: 16,
-  },
-  completedCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.primarySoft,
-    padding: 16,
-    marginBottom: 16,
-  },
-  completedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  completedDate: {
-    fontSize: 13,
-    color: colors.subtitle,
-    marginBottom: 4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  detailText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  primaryButton: {
-    marginTop: 4,
-    backgroundColor: colors.primaryDark,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  outlineButton: {
-    marginTop: 8,
-    borderWidth: 1.5,
-    borderColor: colors.primaryDark,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  outlineButtonText: {
-    color: colors.primaryDark,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  reviewedText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.subtitle,
-    textAlign: 'center',
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingBottom: 128,
+    },
+    header: {
+      paddingTop: 48,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: c.textPrimary,
+    },
+    subtitle: {
+      marginTop: 4,
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    calendarCard: {
+      marginTop: 20,
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      padding: 16,
+    },
+    calendarHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    calendarTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    monthNav: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    monthNavButton: {
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    weekdayRow: {
+      flexDirection: 'row',
+      marginBottom: 4,
+    },
+    weekdayLabel: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 11,
+      fontWeight: '700',
+      color: c.textSecondary,
+    },
+    weekRow: {
+      flexDirection: 'row',
+    },
+    dayCell: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 6,
+    },
+    dayCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dayCircleSelected: {
+      backgroundColor: c.primary,
+    },
+    dayText: {
+      fontSize: 14,
+      color: c.textPrimary,
+    },
+    dayTextMuted: {
+      color: c.textMuted,
+    },
+    dayTextSelected: {
+      color: c.white,
+      fontWeight: '700',
+    },
+    eventDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: c.primary,
+      marginTop: 2,
+    },
+    errorText: {
+      marginTop: 12,
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+    matchesSection: {
+      marginTop: 24,
+    },
+    matchesLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textSecondary,
+      letterSpacing: 0.5,
+      marginBottom: 12,
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 32,
+      backgroundColor: c.tintedSurface,
+      borderRadius: 16,
+    },
+    emptyStateText: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    sportBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      backgroundColor: c.tintedSurface,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      marginTop: 8,
+      marginBottom: 12,
+    },
+    sportBadgeText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    cardStatusLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: c.textSecondary,
+      letterSpacing: 0.5,
+    },
+    upcomingCard: {
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: c.primary,
+      padding: 16,
+      marginBottom: 16,
+    },
+    completedCard: {
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: c.tintedSurface,
+      padding: 16,
+      marginBottom: 16,
+    },
+    completedHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    completedDate: {
+      fontSize: 13,
+      color: c.textSecondary,
+      marginBottom: 4,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8,
+    },
+    detailText: {
+      fontSize: 14,
+      color: c.textPrimary,
+    },
+    primaryButton: {
+      marginTop: 4,
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    primaryButtonText: {
+      color: c.white,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    outlineButton: {
+      marginTop: 8,
+      borderWidth: 1.5,
+      borderColor: c.primary,
+      borderRadius: 12,
+      paddingVertical: 10,
+      alignItems: 'center',
+    },
+    outlineButtonText: {
+      color: c.primary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    reviewedText: {
+      marginTop: 8,
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+  });
+}

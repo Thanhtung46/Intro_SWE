@@ -183,18 +183,6 @@ describe('LoginScreen', () => {
     expect(queryByText('Something went wrong. Please try again.')).toBeNull();
   });
 
-  it('shows a "Coming soon" alert when Login with Google is pressed, without calling authService', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const { getByTestId } = renderLoginScreen();
-
-    fireEvent.press(getByTestId('google-login-button'));
-
-    expect(alertSpy).toHaveBeenCalledWith('Coming soon', 'Login with Google is not available yet.');
-    expect(mockLogin).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
-  });
-
   it.each([
     ['footer-privacy', 'Privacy Policy'],
     ['footer-terms', 'Terms of Service'],

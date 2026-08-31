@@ -3,8 +3,10 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithout
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
+import { useLanguage } from '@/context/LanguageContext';
 import { getFieldAvailability } from '@/services/venueService';
 import { createBookingsBulk } from '@/services/bookingService';
 import DatePickerModal from './DatePickerModal';
@@ -21,6 +23,7 @@ type Props = {
   onClose: () => void;
   /** Called after at least one slot in the multi-select was booked successfully. */
   onConfirm: () => void;
+  themeColors?: ThemeColors;
 };
 
 function startOfToday(): Date {
@@ -55,7 +58,17 @@ function buildTimeSlots(openHour: number, closeHour: number): string[] {
 }
 
 /** Pitch & time-slot booking grid — Figma node 81:152 ("Booking field - Select Pitch & Time"). */
-export default function SelectPitchTimeModal({ visible, venueId, pitches, openHour, closeHour, onClose, onConfirm }: Props) {
+export default function SelectPitchTimeModal({
+  visible,
+  venueId,
+  pitches,
+  openHour,
+  closeHour,
+  onClose,
+  onConfirm,
+  themeColors,
+}: Props) {
+  const { t } = useLanguage();
   const timeSlots = useMemo(() => buildTimeSlots(openHour, closeHour), [openHour, closeHour]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => startOfToday());
@@ -126,22 +139,22 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
     setSubmitting(false);
 
     if (!result.success) {
-      showAlert('Booking failed', result.message || 'Something went wrong. Please try again.');
+      showAlert(t('selectPitchTime.bookingFailedTitle'), result.message || t('common.genericError'));
       return;
     }
 
     const { totalCreated, totalRequested, failed } = result;
     if (!totalCreated) {
-      showAlert('Booking failed', failed?.[0]?.message || 'None of the selected slots could be booked.');
+      showAlert(t('selectPitchTime.bookingFailedTitle'), failed?.[0]?.message || t('selectPitchTime.noneBookedFailure'));
       return;
     }
 
     setSelectedCells(new Set());
     if (totalCreated === totalRequested) {
-      showAlert('Booked', `${totalCreated} slot${totalCreated === 1 ? '' : 's'} booked successfully.`);
+      showAlert(t('selectPitchTime.bookedTitle'), `${totalCreated} slot${totalCreated === 1 ? '' : 's'} booked successfully.`);
     } else {
       showAlert(
-        'Partially booked',
+        t('selectPitchTime.partiallyBookedTitle'),
         `${totalCreated}/${totalRequested} slots booked. ${failed?.length ?? 0} failed (already taken).`,
       );
     }
@@ -154,22 +167,24 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
         <View style={styles.overlay} />
       </TouchableWithoutFeedback>
 
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, themeColors && { backgroundColor: themeColors.screenBackgroundAlt }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.dragHandle} />
+        <View style={[styles.header, themeColors && { borderBottomColor: themeColors.chromeBorder }]}>
+          <View style={[styles.dragHandle, themeColors && { backgroundColor: themeColors.neutralDivider }]} />
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.iconButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
-              <Ionicons name="close" size={16} color={colors.headingText} />
+            <TouchableOpacity style={styles.iconButton} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('selectPitchTime.closeLabel')}>
+              <Ionicons name="close" size={16} color={themeColors?.venueCardHeadingText ?? colors.headingText} />
             </TouchableOpacity>
-            <Text style={styles.title}>Select Pitch & Time</Text>
+            <Text style={[styles.title, themeColors && { color: themeColors.quickActionPrimaryIcon }]}>
+              {t('selectPitchTime.title')}
+            </Text>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => comingSoon('Help')}
+              onPress={() => comingSoon(t('selectPitchTime.helpLabel'))}
               accessibilityRole="button"
-              accessibilityLabel="Help"
+              accessibilityLabel={t('selectPitchTime.helpLabel')}
             >
-              <Ionicons name="help-circle-outline" size={20} color={colors.headingText} />
+              <Ionicons name="help-circle-outline" size={20} color={themeColors?.venueCardHeadingText ?? colors.headingText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -177,13 +192,15 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
         {/* Date selector — opens the full month calendar so any date, in
             any month, can be picked (not just a rolling few-week window). */}
         <TouchableOpacity
-          style={styles.dateSelector}
+          style={[styles.dateSelector, themeColors && { backgroundColor: themeColors.roleIconBg }]}
           onPress={() => setDatePickerVisible(true)}
           accessibilityRole="button"
         >
-          <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
-          <Text style={styles.dateSelectorText}>{formatDateLabel(selectedDate)}</Text>
-          <Ionicons name="chevron-down" size={16} color={colors.primaryDark} />
+          <Ionicons name="calendar-outline" size={18} color={themeColors?.primary ?? colors.primaryDark} />
+          <Text style={[styles.dateSelectorText, themeColors && { color: themeColors.primary }]}>
+            {formatDateLabel(selectedDate)}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={themeColors?.primary ?? colors.primaryDark} />
         </TouchableOpacity>
 
         <DatePickerModal
@@ -194,18 +211,38 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
             setSelectedDate(date);
             setDatePickerVisible(false);
           }}
+          themeColors={themeColors}
         />
 
         {/* Matrix */}
-        <View style={styles.matrixWrap}>
+        <View style={[styles.matrixWrap, themeColors && { backgroundColor: themeColors.matrixBg }]}>
           <View style={styles.pitchColumn}>
-            <View style={styles.cornerCell}>
-              <MaterialCommunityIcons name="soccer" size={18} color={colors.primary} />
+            <View
+              style={[
+                styles.cornerCell,
+                themeColors && { backgroundColor: themeColors.surface, borderColor: themeColors.inputBorder },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="soccer"
+                size={18}
+                color={themeColors?.quickActionPrimaryIcon ?? colors.primary}
+              />
             </View>
             {pitches.map((pitch) => (
-              <View key={pitch.name} style={styles.pitchCell}>
-                <Text style={styles.pitchName}>{pitch.name}</Text>
-                <Text style={styles.pitchFormat}>{pitch.format}</Text>
+              <View
+                key={pitch.name}
+                style={[
+                  styles.pitchCell,
+                  themeColors && { backgroundColor: themeColors.surface, borderColor: themeColors.inputBorder },
+                ]}
+              >
+                <Text style={[styles.pitchName, themeColors && { color: themeColors.venueCardHeadingText }]}>
+                  {pitch.name}
+                </Text>
+                <Text style={[styles.pitchFormat, themeColors && { color: themeColors.mutedCellText }]}>
+                  {pitch.format}
+                </Text>
               </View>
             ))}
           </View>
@@ -214,8 +251,16 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
             <View>
               <View style={styles.timeHeaderRow}>
                 {timeSlots.map((time) => (
-                  <View key={time} style={styles.timeHeaderCell}>
-                    <Text style={styles.timeHeaderText}>{time}</Text>
+                  <View
+                    key={time}
+                    style={[
+                      styles.timeHeaderCell,
+                      themeColors && { backgroundColor: themeColors.glassButtonBg, borderColor: themeColors.inputBorder },
+                    ]}
+                  >
+                    <Text style={[styles.timeHeaderText, themeColors && { color: themeColors.textSecondaryAlt }]}>
+                      {time}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -228,17 +273,41 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
                     return (
                       <TouchableOpacity
                         key={key}
-                        style={[styles.gridCell, booked && styles.gridCellBooked, selected && styles.gridCellSelected]}
+                        style={[
+                          styles.gridCell,
+                          themeColors && { backgroundColor: themeColors.surface, borderColor: themeColors.gridCellBorder },
+                          booked && [
+                            styles.gridCellBooked,
+                            themeColors && { backgroundColor: themeColors.inputBorder },
+                          ],
+                          selected && [
+                            styles.gridCellSelected,
+                            themeColors && { backgroundColor: themeColors.quickActionPrimaryIcon },
+                          ],
+                        ]}
                         onPress={() => toggleCell(pitchIndex, timeIndex)}
                         disabled={booked}
                         accessibilityRole="button"
                         accessibilityLabel={`${pitch.name} ${timeSlots[timeIndex]}${booked ? ', booked' : ''}`}
                       >
-                        {booked && <Text style={styles.cellLabelBooked}>BOOKED</Text>}
+                        {booked && (
+                          <Text style={[styles.cellLabelBooked, themeColors && { color: themeColors.mutedCellText }]}>
+                            {t('selectPitchTime.cellBooked')}
+                          </Text>
+                        )}
                         {selected && (
                           <>
-                            <Text style={styles.cellLabelSelected}>SELECTED</Text>
-                            <View style={styles.selectedAccent} />
+                            <Text
+                              style={[styles.cellLabelSelected, themeColors && { color: themeColors.white }]}
+                            >
+                              {t('selectPitchTime.cellSelected')}
+                            </Text>
+                            <View
+                              style={[
+                                styles.selectedAccent,
+                                themeColors && { backgroundColor: themeColors.selectedAccentOverlay },
+                              ]}
+                            />
                           </>
                         )}
                       </TouchableOpacity>
@@ -251,27 +320,31 @@ export default function SelectPitchTimeModal({ visible, venueId, pitches, openHo
         </View>
 
         {/* Bottom action bar */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, themeColors && { borderTopColor: themeColors.chromeBorder }]}>
           <TouchableOpacity
-            style={[styles.confirmButton, (selectedCells.size === 0 || submitting) && styles.confirmButtonDisabled]}
+            style={[
+              styles.confirmButton,
+              themeColors && { backgroundColor: themeColors.quickActionPrimaryIcon },
+              (selectedCells.size === 0 || submitting) && styles.confirmButtonDisabled,
+            ]}
             onPress={handleConfirm}
             disabled={selectedCells.size === 0 || submitting}
             accessibilityRole="button"
           >
-            <Text style={styles.confirmButtonText}>
+            <Text style={[styles.confirmButtonText, themeColors && { color: themeColors.white }]}>
               {submitting
-                ? 'Booking…'
-                : `Confirm Booking${selectedCells.size > 1 ? ` (${selectedCells.size})` : ''}`}
+                ? t('selectPitchTime.confirming')
+                : `${t('selectPitchTime.confirmBooking')}${selectedCells.size > 1 ? ` (${selectedCells.size})` : ''}`}
             </Text>
-            <Ionicons name="calendar" size={18} color={colors.white} />
+            <Ionicons name="calendar" size={18} color={themeColors?.white ?? colors.white} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.clearButton}
+            style={[styles.clearButton, themeColors && { backgroundColor: themeColors.clearButtonBg }]}
             onPress={() => setSelectedCells(new Set())}
             accessibilityRole="button"
-            accessibilityLabel="Clear selection"
+            accessibilityLabel={t('selectPitchTime.clearSelectionLabel')}
           >
-            <Ionicons name="trash-outline" size={20} color={colors.primaryDark} />
+            <Ionicons name="trash-outline" size={20} color={themeColors?.primary ?? colors.primaryDark} />
           </TouchableOpacity>
         </View>
       </View>

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { VenueBase } from '@/types/venue';
 
 export type BookingVenue = VenueBase & {
@@ -22,6 +24,9 @@ type Props = {
 
 /** Immersive venue card — Figma node 79:1405 ("Venue Card 1", Booking Field screen). */
 export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, onNavigatePress }: Props) {
+  const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
   return (
     <View style={styles.card}>
       <View style={styles.photoWrap}>
@@ -36,17 +41,17 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
             style={styles.iconButton}
             onPress={onFavoritePress}
             accessibilityRole="button"
-            accessibilityLabel="Save venue"
+            accessibilityLabel={t('booking.saveVenueLabel')}
           >
-            <Ionicons name="heart-outline" size={18} color={colors.primaryDark} />
+            <Ionicons name="heart-outline" size={18} color={c.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={onNavigatePress}
             accessibilityRole="button"
-            accessibilityLabel="Navigate to venue"
+            accessibilityLabel={t('booking.navigateToVenueLabel')}
           >
-            <Ionicons name="navigate-outline" size={18} color={colors.primaryDark} />
+            <Ionicons name="navigate-outline" size={18} color={c.primary} />
           </TouchableOpacity>
         </View>
 
@@ -61,7 +66,7 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
             <Text style={styles.priceUnit}>/hr</Text>
           </View>
           <TouchableOpacity style={styles.bookButton} onPress={onBookPress} activeOpacity={0.85}>
-            <Text style={styles.bookButtonText}>Book Field</Text>
+            <Text style={styles.bookButtonText}>{t('home.bookField')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -69,127 +74,129 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
       <View style={styles.details}>
         <Text style={styles.name}>{venue.name}</Text>
         <View style={styles.metaRow}>
-          <Ionicons name="location" size={13} color={colors.bodyText} />
-          <Text style={styles.metaText}>{venue.distanceLabel} away</Text>
+          <Ionicons name="location" size={13} color={c.textSecondaryAlt} />
+          <Text style={styles.metaText}>{venue.distanceLabel}{t('booking.awaySuffix')}</Text>
         </View>
         <View style={styles.metaRow}>
-          <Ionicons name="business-outline" size={13} color={colors.bodyText} />
+          <Ionicons name="business-outline" size={13} color={c.textSecondaryAlt} />
           <Text style={styles.metaText}>{venue.address}</Text>
         </View>
         <View style={styles.metaRow}>
-          <Ionicons name="time-outline" size={13} color={colors.bodyText} />
-          <Text style={styles.metaText}>Open: {venue.hours}</Text>
+          <Ionicons name="time-outline" size={13} color={c.textSecondaryAlt} />
+          <Text style={styles.metaText}>{t('booking.openPrefix')}{venue.hours}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    width: '100%',
-    backgroundColor: colors.white,
-  },
-  photoWrap: {
-    height: 320,
-    width: '100%',
-    overflow: 'hidden',
-  },
-  photo: {
-    width: '100%',
-    height: '100%',
-  },
-  topLeftActions: {
-    position: 'absolute',
-    left: 16,
-    top: 16,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-  },
-  ratingBadge: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0B1C30',
-  },
-  bottomRow: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  priceBadge: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.primaryDark,
-  },
-  priceUnit: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.bodyText,
-  },
-  bookButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.primaryDark,
-  },
-  bookButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  details: {
-    padding: 16,
-    gap: 8,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-    color: '#0B1C30',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaText: {
-    fontSize: 13,
-    color: colors.bodyText,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      width: '100%',
+      backgroundColor: c.surface,
+    },
+    photoWrap: {
+      height: 320,
+      width: '100%',
+      overflow: 'hidden',
+    },
+    photo: {
+      width: '100%',
+      height: '100%',
+    },
+    topLeftActions: {
+      position: 'absolute',
+      left: 16,
+      top: 16,
+      flexDirection: 'row',
+      gap: 8,
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.photoChipBg,
+    },
+    ratingBadge: {
+      position: 'absolute',
+      right: 16,
+      top: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: c.venueCardChipBg,
+    },
+    ratingText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.venueCardHeadingText,
+    },
+    bottomRow: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      bottom: 16,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    priceBadge: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 4,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: c.venueCardChipBg,
+    },
+    priceValue: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: c.primary,
+    },
+    priceUnit: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: c.textSecondaryAlt,
+    },
+    bookButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    bookButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.white,
+    },
+    details: {
+      padding: 16,
+      gap: 8,
+    },
+    name: {
+      fontSize: 24,
+      fontWeight: '900',
+      letterSpacing: -0.6,
+      color: c.venueCardHeadingText,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    metaText: {
+      fontSize: 13,
+      color: c.textSecondaryAlt,
+    },
+  });
+}

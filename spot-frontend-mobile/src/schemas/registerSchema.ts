@@ -1,17 +1,21 @@
 import { z } from 'zod';
+import type { TranslationKey } from '@/i18n/translations';
 
-export const genderOptions = [
-  { label: 'Male', value: 'male' },
-  { label: 'Female', value: 'female' },
-  { label: 'Other', value: 'other' },
-] as const;
+export function getGenderOptions(
+  t: (key: TranslationKey) => string,
+): { label: string; value: 'male' | 'female' }[] {
+  return [
+    { label: t('common.male'), value: 'male' },
+    { label: t('common.female'), value: 'female' },
+  ];
+}
 
 export const registerSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required'),
     email: z.string().trim().min(1, 'Email is required').email('Enter a valid email address'),
     phone: z.string().trim().optional().or(z.literal('')),
-    gender: z.enum(['male', 'female', 'other']).optional(),
+    gender: z.enum(['male', 'female']).optional(),
     password: z
       .string()
       .min(8, 'Password must be at least 8 characters')

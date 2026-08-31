@@ -6,6 +6,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { useLanguage } from '@/context/LanguageContext';
 
 const PROGRESS_DURATION_MS = 900;
 
@@ -26,6 +27,7 @@ type Props = {
  * finishes filling, so the route knows when it's safe to navigate away.
  */
 export default function SplashScreen({ status, onAnimationComplete, onRetry }: Props) {
+  const { t } = useLanguage();
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -74,21 +76,21 @@ export default function SplashScreen({ status, onAnimationComplete, onRetry }: P
           {/* Brand identity */}
           <View style={styles.brandBlock}>
             <Text style={styles.brandTitle}>SPOT</Text>
-            <Text style={styles.brandTagline}>Premium Arena Access</Text>
+            <Text style={styles.brandTagline}>{t('splash.tagline')}</Text>
           </View>
 
           {/* Loading indicator / error + retry */}
           {status === 'error' ? (
             <View style={styles.errorBlock}>
-              <Text style={styles.errorText}>Couldn't connect. Check your network.</Text>
+              <Text style={styles.errorText}>{t('splash.errorMessage')}</Text>
               <TouchableOpacity
                 style={styles.retryButton}
                 onPress={onRetry}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Retry"
+                accessibilityLabel={t('splash.retryButton')}
               >
-                <Text style={styles.retryButtonText}>Try Again</Text>
+                <Text style={styles.retryButtonText}>{t('splash.retryButton')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -96,7 +98,7 @@ export default function SplashScreen({ status, onAnimationComplete, onRetry }: P
               <View style={styles.progressTrack}>
                 <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
               </View>
-              <Text style={styles.progressLabel}>Starting...</Text>
+              <Text style={styles.progressLabel}>{t('splash.loadingLabel')}</Text>
             </View>
           )}
         </View>
@@ -104,7 +106,7 @@ export default function SplashScreen({ status, onAnimationComplete, onRetry }: P
         {/* Footer */}
         <View style={styles.footer}>
           <Ionicons name="sparkles" size={14} color={colors.primary} />
-          <Text style={styles.footerText}>Powered by AI &amp; Matchmaking</Text>
+          <Text style={styles.footerText}>{t('splash.footerTagline')}</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>

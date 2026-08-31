@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutLeft } from 'react-nat
 
 import { colors } from '@/constants/colors';
 import { onboardingSlides } from '@/constants/onboardingSlides';
+import { useLanguage } from '@/context/LanguageContext';
 import PaginationDots from '@/components/onboarding/PaginationDots';
 import GlassCard from '@/components/onboarding/GlassCard';
 import RingDecoration from '@/components/onboarding/RingDecoration';
@@ -28,6 +29,7 @@ const LAST_INDEX = onboardingSlides.length - 1;
  * reads as one persistent surface instead of the whole screen sliding.
  */
 export default function OnboardingScreen({ onSkip, onGetStarted }: Props) {
+  const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const slide = onboardingSlides[currentIndex];
   const isLast = currentIndex === LAST_INDEX;
@@ -51,9 +53,9 @@ export default function OnboardingScreen({ onSkip, onGetStarted }: Props) {
             onPress={onSkip}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Skip onboarding"
+            accessibilityLabel={t('onboarding.skip')}
           >
-            <Text style={styles.skipText}>Skip</Text>
+            <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -79,9 +81,9 @@ export default function OnboardingScreen({ onSkip, onGetStarted }: Props) {
                   onPress={onGetStarted}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Get started"
+                  accessibilityLabel={t('onboarding.getStarted')}
                 >
-                  <Text style={styles.ctaText}>Get started</Text>
+                  <Text style={styles.ctaText}>{t('onboarding.getStarted')}</Text>
                   <Ionicons name="arrow-forward" size={18} color={colors.white} />
                 </TouchableOpacity>
               </Animated.View>
@@ -97,7 +99,7 @@ export default function OnboardingScreen({ onSkip, onGetStarted }: Props) {
                   onPress={handleNext}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Next slide"
+                  accessibilityLabel={t('onboarding.nextSlideA11y')}
                 >
                   <Ionicons name="arrow-forward" size={22} color={colors.white} />
                 </TouchableOpacity>

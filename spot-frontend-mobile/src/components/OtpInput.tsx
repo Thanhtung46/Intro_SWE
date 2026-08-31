@@ -9,6 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
 
 interface OtpInputProps {
   length?: number;
@@ -17,9 +18,10 @@ interface OtpInputProps {
   onComplete?: (value: string) => void;
   error?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
+  themeColors?: ThemeColors;
 }
 
-export function OtpInput({ length = 6, value, onChange, onComplete, error, containerStyle }: OtpInputProps) {
+export function OtpInput({ length = 6, value, onChange, onComplete, error, containerStyle, themeColors }: OtpInputProps) {
   const inputs = useRef<Array<TextInput | null>>([]);
   const digits = Array.from({ length }, (_, i) => value[i] || '');
 
@@ -72,7 +74,15 @@ export function OtpInput({ length = 6, value, onChange, onComplete, error, conta
             inputs.current[index] = el;
           }}
           testID={`otp-input-${index}`}
-          style={[styles.box, error ? styles.boxError : null]}
+          style={[
+            styles.box,
+            themeColors && {
+              backgroundColor: themeColors.inputBg,
+              borderColor: themeColors.divider,
+              color: themeColors.textPrimary,
+            },
+            error ? [styles.boxError, themeColors && { borderColor: themeColors.error }] : null,
+          ]}
           value={digit}
           onChangeText={(text) => handleChangeText(index, text)}
           onKeyPress={(e) => handleKeyPress(index, e)}
