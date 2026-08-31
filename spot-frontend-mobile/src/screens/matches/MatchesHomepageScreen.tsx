@@ -92,8 +92,8 @@ const MAP_BUTTON_SIZE = 44;
  * ProfileMenu.tsx) so rendering it here isn't a routing decision by this
  * screen — Filter has no destination to navigate to.
  *
- * Groups/Tournaments sub-tab + their FAB actions are locked per the user's
- * note #1 ("Group, Tournament — chưa làm") — see SPOT-76 plan mục 2.5.
+ * Groups sub-tab + its FAB actions are wired (GroupsBrowseScreen, /groups/*).
+ * Tournaments sub-tab stays locked ("Coming soon") — see SPOT-76 plan mục 2.5.
  */
 export default function MatchesHomepageScreen(props: Props) {
   const router = useRouter();

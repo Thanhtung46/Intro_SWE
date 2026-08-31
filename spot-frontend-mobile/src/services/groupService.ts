@@ -236,7 +236,12 @@ export async function listGroupMembers(
 export async function getGroupSchedule(groupId: number, date: string): Promise<GroupSchedule> {
   try {
     const res = await apiClient.get(`/groups/${groupId}/schedule`, { params: { date } });
-    return res.data as GroupSchedule;
+    return {
+      groupId: res.data.groupId,
+      date: res.data.date,
+      dayOfWeek: res.data.dayOfWeek,
+      courts: res.data.courts,
+    };
   } catch (err) {
     throwFromAxiosError(err, "Couldn't load the schedule. Check your network and try again.");
   }
