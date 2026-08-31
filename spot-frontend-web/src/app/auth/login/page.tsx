@@ -60,14 +60,25 @@ export default function AdminLoginPage() {
 
     try {
       const { data } = await apiClient.post('/auth/login', { email, password })
+      const role = data.user?.role
 
-      if (data.user?.role !== 'ADMIN') {
-        setError('Tài khoản này không có quyền admin')
+      if (role === 'ADMIN') {
+        login(data.accessToken, data.refreshToken, data.user)
+        router.push('/admin')
         return
       }
 
-      login(data.accessToken, data.refreshToken, data.user)
-      router.push('/admin')
+      if (role === 'OWNER') {
+        if (data.user?.status === 'ACTIVE') {
+          login(data.accessToken, data.refreshToken, data.user)
+          router.push('/owner')
+          return
+        }
+        setError('Tài khoản của bạn đang chờ duyệt, vui lòng quay lại sau')
+        return
+      }
+
+      setError('Tài khoản này không có quyền truy cập khu vực quản trị.')
     } catch (err) {
       setError(mapLoginError(err))
     } finally {
@@ -78,8 +89,8 @@ export default function AdminLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-bold text-slate-900">SPOT Admin</h1>
-        <p className="mb-6 text-sm text-slate-500">Đăng nhập vào khu vực quản trị</p>
+        <h1 className="mb-1 text-2xl font-bold text-slate-900">SPOT Console</h1>
+        <p className="mb-6 text-sm text-slate-500">Đăng nhập vào khu vực quản trị / vận hành</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
