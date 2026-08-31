@@ -121,6 +121,23 @@ services:
     restart: unless-stopped
 
   # ==================== AI SERVICES ====================
+  recommendation:
+    build:
+      context: ./spot-ai-services/recommendation
+      dockerfile: Dockerfile
+    container_name: spot-recommendation
+    env_file:
+      - ./spot-backend/.env
+    environment:
+      PORT: 5001
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./spot-ai-services/recommendation:/app
+    networks:
+      - spot-network
+    restart: unless-stopped
+
   nlp:
     build:
       context: ./spot-ai-services/nlp-assistant
