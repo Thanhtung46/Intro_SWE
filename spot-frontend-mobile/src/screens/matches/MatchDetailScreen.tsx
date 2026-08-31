@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import JoinMatchSheet from '@/components/matches/JoinMatchSheet';
+import MatchCoverImage from '@/components/matches/MatchCoverImage';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
@@ -21,6 +21,7 @@ type Props = {
   onBack: () => void;
   onOpenMap: () => void;
   onOpenHostProfile: (hostUserId: number) => void;
+  onManageSquad?: () => void;
 };
 
 type SquadMember = { key: string; name: string; avatarUrl: string | null };
@@ -48,7 +49,7 @@ function buildSquadMembers(participants: Participant[]): SquadMember[] {
  * the browse-all Join Match - Map screen (task #6) — both deferred behind
  * "coming soon" until Geoapify key wiring lands (plan mục 3b).
  */
-export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHostProfile }: Props) {
+export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHostProfile, onManageSquad }: Props) {
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -114,7 +115,7 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
     );
   }
 
-  const { match, participants, canJoin, yourRequest } = detail;
+  const { match, participants, canJoin, isHost, yourRequest } = detail;
   const isPending = yourRequest?.status === 'PENDING';
   const host = participants.find((p) => p.role === 'HOST');
   const squadMembers = buildSquadMembers(participants);
@@ -126,16 +127,7 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
-          {match.coverUrl ? (
-            <Image source={{ uri: match.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-          )}
+          <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} emojiSize={64} labelSize={14} />
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <View style={styles.sportBadge}>
@@ -264,7 +256,14 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
             <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
             <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
           </View>
-          {isPending ? (
+          {isHost && onManageSquad ? (
+            <TouchableOpacity testID="match-detail-manage-squad" style={styles.joinButton} onPress={onManageSquad}>
+              <Text style={styles.joinButtonText}>
+                {match.joinMode === 'APPROVAL' && (match.pendingRequestCount ?? 0) > 0 ? 'Manage Squad' : 'View Squad'}
+              </Text>
+              <Ionicons name="people-outline" size={16} color={colors.white} />
+            </TouchableOpacity>
+          ) : isPending ? (
             <TouchableOpacity
               testID="match-detail-cancel-request"
               style={[styles.cancelRequestButton, isCancelling && styles.joinButtonDisabled]}

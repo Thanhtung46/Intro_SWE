@@ -7,6 +7,16 @@ import {
   vnProvinceName,
 } from '../../../shared/constants/vn-admin.js';
 
+/** Hide Vmito import markers from notes shown in the app. */
+export function sanitizePublicMatchNotes(notes) {
+  if (!notes) return null;
+  const cleaned = String(notes)
+    .replace(/\n*\[vmito-import:[^\]]+\]\s*$/i, '')
+    .replace(/\n*Nguồn:\s*Vmito\s+https?:\/\/\S+/gi, '')
+    .trim();
+  return cleaned || null;
+}
+
 export function toPublicMatch(
   row,
   courts = [],
@@ -47,7 +57,7 @@ export function toPublicMatch(
     sport: row.sport,
     format: row.format,
     title: row.title,
-    notes: row.notes ?? null,
+    notes: sanitizePublicMatchNotes(row.notes),
     venueName: row.venue_name,
     venueAddress: row.venue_address,
     province: row.province ?? null,

@@ -126,6 +126,7 @@ export type Participant = {
 export type MatchDetail = {
   match: Match;
   canJoin: boolean;
+  isHost?: boolean;
   yourRequest: JoinRequest | null;
   participants: Participant[];
 };

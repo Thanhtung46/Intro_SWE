@@ -11,6 +11,7 @@ export type AppMapMarker = {
   longitude: number;
   tintColor: string;
   emoji: string;
+  count?: number;
 };
 
 export type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };

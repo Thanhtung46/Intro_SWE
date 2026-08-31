@@ -1,17 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
 import { BottomNavBar } from '@/components/common/BottomNavBar';
 import ErrorBanner from '@/components/common/ErrorBanner';
-import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
-import { openVenueDirections } from '@/utils/directions';
+import { getErrorMessage, listMatches } from '@/services/matchService';
 import type { Match, Sport } from '@/types/match';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -25,43 +22,79 @@ type Props = {
 // Ho Chi Minh City center — fallback when no visible match has coords yet.
 const DEFAULT_REGION = { latitude: 10.7769, longitude: 106.7009, latitudeDelta: 0.1, longitudeDelta: 0.1 };
 
-const SPORT_PIN: Record<Sport, { tintColor: string; emoji: string }> = {
-  FOOTBALL: { tintColor: '#3B82F6', emoji: '⚽' },
-  BADMINTON: { tintColor: '#22C55E', emoji: '🏸' },
+const SPORT_PIN: Record<Sport, { tintColor: string; emoji: string; label: string }> = {
+  FOOTBALL: { tintColor: '#3B82F6', emoji: '⚽', label: 'Bóng đá' },
+  BADMINTON: { tintColor: '#22C55E', emoji: '🏸', label: 'Cầu lông' },
 };
 
-// Offsets matches that share the exact same venue coords (common with
-// seeded/smoke-test data — several kèo hosted at one venue) so their pins
-// don't render pixel-on-pixel and become one untappable blob. Spreads them
-// in a small ring (~35m radius) around the shared point; groups of 1 are
-// untouched.
-const OVERLAP_SPREAD_DEGREES = 0.00035;
+/** Nudge pins apart when one venue hosts multiple sports at the same coords. */
+const SPORT_COORD_OFFSET: Record<Sport, { dLat: number; dLng: number }> = {
+  BADMINTON: { dLat: 0, dLng: 0 },
+  FOOTBALL: { dLat: 0.00028, dLng: 0.00018 },
+};
 
-function spreadOverlappingMarkers(
+function coordKey(latitude: number, longitude: number) {
+  return `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+}
+
+function clusterKey(latitude: number, longitude: number, sport: Sport) {
+  return `${coordKey(latitude, longitude)}|${sport}`;
+}
+
+function groupMatchesByCoordAndSport(matches: (Match & { latitude: number; longitude: number })[]) {
+  const groups = new Map<string, (Match & { latitude: number; longitude: number })[]>();
+  for (const match of matches) {
+    const key = clusterKey(match.latitude, match.longitude, match.sport);
+    const group = groups.get(key);
+    if (group) group.push(match);
+    else groups.set(key, [match]);
+  }
+  return groups;
+}
+
+function sportsAtCoords(matches: (Match & { latitude: number; longitude: number })[]) {
+  const map = new Map<string, Set<Sport>>();
+  for (const match of matches) {
+    const ck = coordKey(match.latitude, match.longitude);
+    const set = map.get(ck) ?? new Set<Sport>();
+    set.add(match.sport);
+    map.set(ck, set);
+  }
+  return map;
+}
+
+/** One pin per venue + sport; emoji always visible, count as badge when > 1. */
+function buildClusterMarkers(
   matches: (Match & { latitude: number; longitude: number })[]
 ): AppMapMarker[] {
-  const groups = new Map<string, typeof matches>();
-  for (const m of matches) {
-    const key = `${m.latitude.toFixed(5)},${m.longitude.toFixed(5)}`;
-    const group = groups.get(key);
-    if (group) group.push(m);
-    else groups.set(key, [m]);
-  }
+  const groups = groupMatchesByCoordAndSport(matches);
+  const multiSportCoords = sportsAtCoords(matches);
 
-  const markers: AppMapMarker[] = [];
-  for (const group of groups.values()) {
-    group.forEach((m, index) => {
-      const angle = (2 * Math.PI * index) / group.length;
-      const offset = group.length > 1 ? OVERLAP_SPREAD_DEGREES : 0;
-      markers.push({
-        id: String(m.matchId),
-        latitude: m.latitude + offset * Math.sin(angle),
-        longitude: m.longitude + offset * Math.cos(angle),
-        ...SPORT_PIN[m.sport],
-      });
-    });
-  }
-  return markers;
+  return Array.from(groups.entries()).map(([key, group]) => {
+    const first = group[0];
+    const pin = SPORT_PIN[first.sport];
+    const ck = coordKey(first.latitude, first.longitude);
+    const offset =
+      (multiSportCoords.get(ck)?.size ?? 1) > 1 ? SPORT_COORD_OFFSET[first.sport] : { dLat: 0, dLng: 0 };
+    return {
+      id: key,
+      latitude: first.latitude + offset.dLat,
+      longitude: first.longitude + offset.dLng,
+      tintColor: pin.tintColor,
+      emoji: pin.emoji,
+      count: group.length,
+    };
+  });
+}
+
+function formatMatchStart(iso: string) {
+  return new Date(iso).toLocaleString('vi-VN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /**
@@ -70,17 +103,17 @@ function spreadOverlappingMarkers(
  * wiring (no Google Maps API key needed). Matches without lat/lng (optional
  * field) can't get a pin, so they're filtered out of the map. This screen
  * is map-only — the scrollable match list already lives on the Homepage
- * (95:2417), so duplicating it here added nothing.
+ * (95:2417). Shared venue coords render as one cluster pin; tap opens a
+ * compact list of kèo at that location (not MatchCard).
  */
 export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
-  const router = useRouter();
   const [category, setCategory] = useState<Category>('ALL');
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
+  const [selectedClusterKey, setSelectedClusterKey] = useState<string | null>(null);
 
   const fetchMatches = useCallback(async () => {
     setStatus('loading');
@@ -101,29 +134,21 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
     fetchMatches();
   }, [fetchMatches]);
 
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch {
-      setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-    }
-  };
-
   const mappableMatches = useMemo(
     () => matches.filter((m): m is Match & { latitude: number; longitude: number } => m.latitude != null && m.longitude != null),
     [matches]
   );
 
-  const markers: AppMapMarker[] = useMemo(() => spreadOverlappingMarkers(mappableMatches), [mappableMatches]);
+  const matchGroups = useMemo(() => groupMatchesByCoordAndSport(mappableMatches), [mappableMatches]);
+
+  const markers: AppMapMarker[] = useMemo(() => buildClusterMarkers(mappableMatches), [mappableMatches]);
 
   const initialRegion = useMemo(() => {
     const first = mappableMatches[0];
     return first ? { ...DEFAULT_REGION, latitude: first.latitude, longitude: first.longitude } : DEFAULT_REGION;
   }, [mappableMatches]);
 
-  const selectedMatch = matches.find((m) => m.matchId === selectedMatchId) ?? null;
+  const selectedGroup = selectedClusterKey ? matchGroups.get(selectedClusterKey) ?? null : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -175,7 +200,7 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
           <>
             <AppMap
               markers={markers}
-              onSelectMarker={(id) => setSelectedMatchId(Number(id))}
+              onSelectMarker={(id) => setSelectedClusterKey(id)}
               initialRegion={initialRegion}
             />
             {matches.length > 0 && mappableMatches.length === 0 && (
@@ -183,21 +208,52 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
                 <Text style={styles.noPinsNoticeText}>None of these matches have a map location yet.</Text>
               </View>
             )}
-            {selectedMatch && (
+            {selectedGroup && selectedGroup.length > 0 && (
               <View style={styles.popupWrap}>
                 <TouchableOpacity
                   testID="join-map-popup-close"
                   style={styles.popupCloseButton}
-                  onPress={() => setSelectedMatchId(null)}
+                  onPress={() => setSelectedClusterKey(null)}
                 >
                   <Ionicons name="close" size={16} color={colors.headingText} />
                 </TouchableOpacity>
-                <MatchCard
-                  match={selectedMatch}
-                  onPress={() => onOpenMatch(selectedMatch.matchId)}
-                  onToggleFavorite={() => handleToggleFavorite(selectedMatch)}
-                  onDirections={() => openVenueDirections(router, selectedMatch)}
-                />
+                <View style={styles.clusterPanel}>
+                  <Text style={styles.clusterPanelTitle}>
+                    {selectedGroup[0].venueName}
+                    {selectedGroup.length > 1 ? ` · ${selectedGroup.length} kèo` : ''}
+                  </Text>
+                  <Text style={styles.clusterPanelSport}>
+                    {SPORT_PIN[selectedGroup[0].sport].emoji} {SPORT_PIN[selectedGroup[0].sport].label}
+                  </Text>
+                  <Text style={styles.clusterPanelAddress} numberOfLines={2}>
+                    {selectedGroup[0].venueAddress}
+                  </Text>
+                  <ScrollView style={styles.clusterList} nestedScrollEnabled>
+                    {selectedGroup.map((match) => (
+                      <TouchableOpacity
+                        key={match.matchId}
+                        testID={`join-map-cluster-item-${match.matchId}`}
+                        style={styles.clusterListRow}
+                        onPress={() => onOpenMatch(match.matchId)}
+                      >
+                        <View style={styles.clusterListRowMain}>
+                          <Text style={styles.clusterListTitle} numberOfLines={2}>
+                            {match.title}
+                          </Text>
+                          <Text style={styles.clusterListMeta}>
+                            {formatMatchStart(match.startsAt)} · {match.spotsLeft} chỗ trống
+                          </Text>
+                          {(match.host?.fullName ?? match.hostFullName) ? (
+                            <Text style={styles.clusterListHost}>
+                              Host: {match.host?.fullName ?? match.hostFullName}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={colors.outline} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </View>
             )}
           </>
@@ -277,6 +333,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  clusterPanel: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.md,
+    maxHeight: 320,
+  },
+  clusterPanelTitle: { fontSize: 15, fontWeight: '700', color: colors.headingText },
+  clusterPanelSport: { fontSize: 12, fontWeight: '600', color: colors.primaryDark, marginTop: 4 },
+  clusterPanelAddress: { fontSize: 12, color: colors.outline, marginTop: 4, marginBottom: spacing.sm },
+  clusterList: { maxHeight: 220 },
+  clusterListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+  },
+  clusterListRowMain: { flex: 1, gap: 2 },
+  clusterListTitle: { fontSize: 14, fontWeight: '600', color: colors.headingText },
+  clusterListMeta: { fontSize: 12, color: colors.outline },
+  clusterListHost: { fontSize: 12, color: colors.primaryDark, marginTop: 2 },
 
   spinner: { marginTop: spacing.xl },
 });

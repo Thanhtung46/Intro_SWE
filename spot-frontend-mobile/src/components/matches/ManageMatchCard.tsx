@@ -29,8 +29,8 @@ export default function ManageMatchCard({ match, variant, onManageSquad, onViewD
   const isHostReview = isHost && (match.pendingRequestCount ?? 0) > 0 && match.joinMode === 'APPROVAL';
   const sportLabel = match.sport === 'FOOTBALL' ? 'Football' : 'Badminton';
 
-  return (
-    <View style={styles.card}>
+  const cardBody = (
+    <>
       <View style={styles.topRow}>
         <View style={styles.sportChip}>
           <Text style={styles.sportChipText}>{sportLabel}</Text>
@@ -92,18 +92,33 @@ export default function ManageMatchCard({ match, variant, onManageSquad, onViewD
       </View>
 
       {isHost && (
-        <>
-          <View style={styles.progressRow}>
-            <View style={styles.participantsRow}>
-              {match.participantAvatars.slice(0, 3).map((uri, index) => (
-                <Image key={index} source={{ uri }} style={[styles.participantAvatar, index > 0 && styles.participantAvatarOverlap]} />
-              ))}
-            </View>
-            <Text style={styles.progressText}>
-              {match.filledCount}/{match.maxPlayers} Joined
-            </Text>
-            <Text style={styles.spotsLeftText}>{match.spotsLeft} Spots Left</Text>
+        <View style={styles.progressRow}>
+          <View style={styles.participantsRow}>
+            {match.participantAvatars.slice(0, 3).map((uri, index) => (
+              <Image key={index} source={{ uri }} style={[styles.participantAvatar, index > 0 && styles.participantAvatarOverlap]} />
+            ))}
           </View>
+          <Text style={styles.progressText}>
+            {match.filledCount}/{match.maxPlayers} Joined
+          </Text>
+          <Text style={styles.spotsLeftText}>{match.spotsLeft} Spots Left</Text>
+        </View>
+      )}
+    </>
+  );
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        testID={`manage-match-card-${match.matchId}`}
+        onPress={onViewDetails}
+        activeOpacity={0.85}
+      >
+        {cardBody}
+      </TouchableOpacity>
+
+      {isHost && (
+        <>
           {isHostReview ? (
             <View style={styles.pendingBanner}>
               <Text style={styles.pendingBannerText}>{match.pendingRequestCount} pending requests</Text>

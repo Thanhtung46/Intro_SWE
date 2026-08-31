@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import MatchCoverImage from '@/components/matches/MatchCoverImage';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel, skillTierColor } from '@/constants/matchSkills';
@@ -40,16 +40,7 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onDirectio
   return (
     <TouchableOpacity testID={`match-card-${match.matchId}`} style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.cardCover}>
-        {match.coverUrl ? (
-          <Image source={{ uri: match.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        ) : (
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-        )}
+        <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} />
         <View style={styles.cardCoverTopRow}>
           <TouchableOpacity testID={`match-favorite-${match.matchId}`} style={styles.cardIconButton} onPress={onToggleFavorite}>
             <Ionicons name={match.isFavorited ? 'heart' : 'heart-outline'} size={16} color={match.isFavorited ? colors.error : colors.white} />

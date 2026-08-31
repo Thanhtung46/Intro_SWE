@@ -633,6 +633,7 @@ export async function getMatch(userId, rawId) {
     return {
       match: attachMatchOutcome(publicMatch, row),
       canJoin,
+      isHost,
       yourRequest,
       participants,
       summary,

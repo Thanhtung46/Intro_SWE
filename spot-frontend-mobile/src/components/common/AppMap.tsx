@@ -10,6 +10,8 @@ export type AppMapMarker = {
   longitude: number;
   tintColor: string;
   emoji: string;
+  /** When > 1, shown as a badge — emoji stays visible for sport. */
+  count?: number;
 };
 
 export type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
@@ -35,8 +37,10 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; background: #F8F9FF; }
-    .spot-pin { width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
-      border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 16px; }
+    .spot-pin { position: relative; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 16px; font-weight: 700; color: #fff; }
+    .spot-pin-badge { position: absolute; top: -5px; right: -7px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+      background: #111827; border: 1.5px solid #fff; font-size: 10px; line-height: 13px; text-align: center; font-weight: 700; color: #fff; }
   </style>
 </head>
 <body>
@@ -50,9 +54,12 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
 
     var markers = ${markersJson};
     markers.forEach(function (m) {
+      var badge = (m.count && m.count > 1)
+        ? '<span class="spot-pin-badge">' + m.count + '</span>'
+        : '';
       var icon = L.divIcon({
         className: '',
-        html: '<div class="spot-pin" style="background:' + m.tintColor + '">' + m.emoji + '</div>',
+        html: '<div class="spot-pin" style="background:' + m.tintColor + '">' + m.emoji + badge + '</div>',
         iconSize: [32, 32],
         iconAnchor: [16, 16],
       });

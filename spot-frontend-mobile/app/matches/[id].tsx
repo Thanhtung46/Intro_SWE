@@ -17,6 +17,7 @@ export default function MatchDetailRoute() {
       onBack={() => router.back()}
       onOpenMap={() => comingSoon('Map view')}
       onOpenHostProfile={(hostUserId) => router.push(`/matches/host/${hostUserId}`)}
+      onManageSquad={() => router.push(`/matches/${matchId}/squad`)}
     />
   );
 }
