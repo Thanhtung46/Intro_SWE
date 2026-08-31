@@ -6,8 +6,9 @@ general behavioral guidelines and the cross-project map — read it too.
 ## Project Overview
 
 Vite + React 18 + TypeScript admin dashboard for SPOT. Talks to
-`spot-backend`'s REST API. This is its **own git repository** (has a nested
-`.git`) — commits here are not tracked by the root repo.
+`spot-backend`'s REST API. This used to be its own git repository, but was
+merged into the root repo (commit `a2dff26`) — there is no nested `.git`
+here anymore; commits are tracked by the root repo like everything else.
 
 **Status: scaffolded, and the most complete of the three frontends.**
 `src/App.tsx`, `src/main.tsx`, `src/App.css`, `src/index.css` have real
@@ -55,10 +56,12 @@ what's in `package.json` — don't rely on that claim.
 
 ## Important Guidelines
 
-- This directory has its own `.git` — `git status`/`git commit` at the repo
-  root does not see changes made here.
+- This directory no longer has its own `.git` — `git status`/`git commit` at
+  the repo root does see changes made here.
 - `npm run lint` will fail until an ESLint config file is added — don't
-  assume CI/lint gates work here yet.
+  assume CI/lint gates work here yet. A leftover `.oxlintrc.json` file
+  exists in this directory but isn't wired to anything (`oxlint` isn't a
+  dependency) — don't assume it does anything either.
 - `README.md`'s "Project Structure" section is an empty heading with no
   content under it — don't expect a tree diagram there.
 - `.env.example` → copy to `.env` per README; `VITE_API_URL`/`VITE_ENV` are
