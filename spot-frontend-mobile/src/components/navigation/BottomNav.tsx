@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
 import BottomNavItem from '@/components/navigation/BottomNavItem';
 
 export type BottomNavKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
@@ -42,7 +41,7 @@ export default function BottomNav({ active }: Props) {
         icon="trophy-outline"
         label="Matches"
         active={active === 'matches'}
-        onPress={active === 'matches' ? noop : () => comingSoon('Matches')}
+        onPress={active === 'matches' ? noop : () => router.push(ROUTES.MATCHES)}
       />
       <BottomNavItem
         icon="calendar-outline"

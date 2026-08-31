@@ -4,6 +4,7 @@ export const ROUTES = {
   HOME: '/home',
   BOOKING: '/booking',
   BOOKING_MAP: '/booking/map',
+  MATCHES: '/matches',
   SCHEDULE: '/schedule',
   SETTINGS: '/settings',
   ONBOARDING: '/onboarding',

@@ -46,9 +46,10 @@ type Props = {
 
 /**
  * Choose Role screen (Figma node 1:565). Player / Venue Owner / Referee
- * cards; role change happens locally until `onContinue` is pressed — no
- * network call here (the API call belongs to the register forms that
- * follow for Owner/Referee, per the AC).
+ * cards; role change happens locally until `onContinue` is pressed. When
+ * reached from Register (see app/auth/choose-role.tsx), `onContinue` calls
+ * POST /auth/role for real — `submitting`/`error` reflect that call's
+ * loading/error state, per .claude/rules/api-conventions.md's contract.
  */
 // Header title fades in once the user scrolls past roughly this many
 // pixels — mirrors iOS's collapsing large-title nav bar (title text is

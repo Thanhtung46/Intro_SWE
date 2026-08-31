@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import {
   getNotifications,
   markAllNotificationsRead,
@@ -108,27 +108,29 @@ export function NotificationMenu({ visible, onClose }: NotificationMenuProps) {
               ) : items.length === 0 ? (
                 <Text style={styles.emptyText}>No notifications yet</Text>
               ) : (
-                items.map((item) => {
-                  const icon = iconForType(item.type);
-                  return (
-                    <TouchableOpacity
-                      key={item.notificationId}
-                      testID={`notification-item-${item.notificationId}`}
-                      style={styles.item}
-                      onPress={() => handleItemPress(item)}
-                    >
-                      <View style={[styles.itemIcon, { backgroundColor: icon.bg }]}>
-                        <Ionicons name={icon.name} size={18} color={icon.color} />
-                      </View>
-                      <View style={styles.itemBody}>
-                        <Text style={styles.itemTitle}>{item.title}</Text>
-                        {item.body ? <Text style={styles.itemText}>{item.body}</Text> : null}
-                        <Text style={styles.itemTime}>{formatRelativeTime(item.createdAt)}</Text>
-                      </View>
-                      {!item.isRead ? <View style={styles.unreadDot} /> : null}
-                    </TouchableOpacity>
-                  );
-                })
+                <ScrollView style={styles.list}>
+                  {items.map((item) => {
+                    const icon = iconForType(item.type);
+                    return (
+                      <TouchableOpacity
+                        key={item.notificationId}
+                        testID={`notification-item-${item.notificationId}`}
+                        style={styles.item}
+                        onPress={() => handleItemPress(item)}
+                      >
+                        <View style={[styles.itemIcon, { backgroundColor: icon.bg }]}>
+                          <Ionicons name={icon.name} size={18} color={icon.color} />
+                        </View>
+                        <View style={styles.itemBody}>
+                          <Text style={styles.itemTitle}>{item.title}</Text>
+                          {item.body ? <Text style={styles.itemText}>{item.body}</Text> : null}
+                          <Text style={styles.itemTime}>{formatRelativeTime(item.createdAt)}</Text>
+                        </View>
+                        {!item.isRead ? <View style={styles.unreadDot} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               )}
 
               <TouchableOpacity testID="notification-view-all" style={styles.viewAllButton} onPress={handleViewAll}>
@@ -178,6 +180,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.primaryDark,
+  },
+  list: {
+    flexShrink: 1,
   },
   emptyText: {
     paddingHorizontal: 16,

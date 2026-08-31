@@ -1,0 +1,67 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import ErrorBanner from '@/components/common/ErrorBanner';
+import { colors } from '@/constants/colors';
+import CreateTournamentScreen from '@/screens/tournaments/CreateTournamentScreen';
+import { getErrorMessage } from '@/services/apiErrors';
+import { getTournamentDetail } from '@/services/tournamentService';
+import type { TournamentDetail } from '@/types/tournament';
+
+// Thin route (.claude/rules/code-style.md) — pre-fetches the tournament so
+// CreateTournamentScreen has no loading state of its own in edit mode
+// (same pattern as app/groups/[id]/edit.tsx).
+export default function EditTournamentRoute() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const tournamentId = Number(id);
+
+  const [tournament, setTournament] = useState<TournamentDetail | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+
+  const fetch = useCallback(async () => {
+    setStatus('loading');
+    try {
+      setTournament(await getTournamentDetail(tournamentId));
+      setStatus('ready');
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setStatus('error');
+    }
+  }, [tournamentId]);
+
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  if (status === 'ready' && tournament) {
+    return (
+      <CreateTournamentScreen
+        sport={tournament.sport}
+        mode="edit"
+        tournamentId={tournamentId}
+        initialTournament={tournament}
+        onBack={() => router.back()}
+        onSaved={(savedId) => router.replace(`/tournaments/${savedId}`)}
+        onHostMatch={() => router.replace('/matches')}
+      />
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {status === 'error' ? (
+        <ErrorBanner message={error} onRetry={fetch} />
+      ) : (
+        <ActivityIndicator color={colors.primary} />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.screenBackground },
+});

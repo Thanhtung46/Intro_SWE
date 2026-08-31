@@ -1,7 +1,23 @@
 import { AxiosError } from 'axios';
 import apiClient from './apiClient';
 
-export type NotificationType = 'BOOKING_CREATED' | 'BOOKING_REMINDER' | 'SYSTEM';
+export type NotificationType =
+  | 'BOOKING_CREATED'
+  | 'BOOKING_REMINDER'
+  | 'SYSTEM'
+  | 'GROUP_JOIN_REQUEST'
+  | 'GROUP_APPROVED'
+  | 'GROUP_REJECTED'
+  | 'GROUP_KICKED'
+  | 'GROUP_ADMIN_TRANSFERRED'
+  | 'MATCH_CANCELLED'
+  | 'MATCH_EXPIRED_UNDERFILLED'
+  | 'TOURNAMENT_JOIN_REQUEST'
+  | 'TOURNAMENT_JOIN_APPROVED'
+  | 'TOURNAMENT_JOIN_REJECTED'
+  | 'TOURNAMENT_CANCELLED'
+  | 'TOURNAMENT_KICKED'
+  | 'TOURNAMENT_UPDATED';
 
 export interface NotificationItem {
   notificationId: number;

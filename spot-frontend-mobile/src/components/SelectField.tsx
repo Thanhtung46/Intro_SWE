@@ -17,9 +17,11 @@ interface SelectFieldProps {
   onChange: (value: string) => void;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Read-only, greyed-out display — used when the value came from a trusted source (e.g. an existing DB venue) instead of manual pick. */
+  disabled?: boolean;
 }
 
-export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle }: SelectFieldProps) {
+export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle, disabled }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
@@ -30,14 +32,15 @@ export function SelectField({ label, required, placeholder, value, options, onCh
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
       <TouchableOpacity
-        style={[styles.input, error ? styles.inputError : null]}
-        onPress={() => setOpen(true)}
-        activeOpacity={0.7}
+        style={[styles.input, error ? styles.inputError : null, disabled ? styles.inputDisabled : null]}
+        onPress={() => !disabled && setOpen(true)}
+        activeOpacity={disabled ? 1 : 0.7}
+        disabled={disabled}
       >
-        <Text style={selected ? styles.valueText : styles.placeholderText}>
+        <Text style={selected ? styles.valueText : styles.placeholderText} numberOfLines={1} ellipsizeMode="tail">
           {selected ? selected.label : placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={colors.placeholder} />
+        {!disabled && <Ionicons name="chevron-down" size={18} color={colors.placeholder} />}
       </TouchableOpacity>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -92,11 +95,18 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.formError,
   },
+  inputDisabled: {
+    backgroundColor: colors.formScreenBackground,
+  },
   valueText: {
+    flexShrink: 1,
+    marginRight: 8,
     fontSize: 15,
     color: colors.text,
   },
   placeholderText: {
+    flexShrink: 1,
+    marginRight: 8,
     fontSize: 15,
     color: colors.placeholder,
   },
