@@ -395,6 +395,14 @@ export default function MatchesHomepageScreen(props: Props) {
         </ScrollView>
       )}
 
+      {fabOpen && (
+        <TouchableOpacity
+          testID="matches-fab-backdrop"
+          style={styles.fabBackdrop}
+          activeOpacity={1}
+          onPress={() => toggleFab(false)}
+        />
+      )}
       <Animated.View
         pointerEvents={fabOpen ? 'auto' : 'none'}
         style={[
@@ -567,6 +575,11 @@ const styles = StyleSheet.create({
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
   emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+
+  // Transparent full-screen catcher rendered behind the open FAB menu so a
+  // tap anywhere outside the panel/button closes it (the menu + fab render
+  // after this in source order, so they stay tappable — no zIndex needed).
+  fabBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 
   fab: {
     position: 'absolute',
