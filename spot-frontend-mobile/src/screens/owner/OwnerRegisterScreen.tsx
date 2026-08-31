@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { useLanguage } from '@/context/LanguageContext';
 import FormField from '@/components/common/FormField';
 import SubmitButton from '@/components/common/SubmitButton';
 import ErrorBanner from '@/components/common/ErrorBanner';
@@ -42,6 +43,7 @@ type Props = {
  * from signup, so it isn't re-collected here).
  */
 export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
+  const { t } = useLanguage();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const {
     control,
@@ -84,7 +86,7 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
           <Ionicons name="arrow-back" size={30} color={colors.primaryDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          Register - Step 3
+          {t('ownerRegister.headerTitle')}
         </Text>
         <View style={styles.headerSide} />
       </View>
@@ -97,9 +99,9 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
           <Image source={require('../../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
           <View style={styles.headingBlock}>
-            <Text style={styles.heading}>Register Your Venue</Text>
+            <Text style={styles.heading}>{t('ownerRegister.heading')}</Text>
             <Text style={styles.subheading}>
-              Tell us about your venue — an admin will review and approve it.
+              {t('ownerRegister.subheading')}
             </Text>
           </View>
 
@@ -109,8 +111,8 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
               name="venueName"
               render={({ field }) => (
                 <FormField
-                  label="Venue name"
-                  placeholder="e.g. Sunrise Football Field"
+                  label={t('ownerRegister.venueNameLabel')}
+                  placeholder={t('ownerRegister.venueNamePlaceholder')}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -123,8 +125,8 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
               name="address"
               render={({ field }) => (
                 <FormField
-                  label="Address"
-                  placeholder="Street, ward, city"
+                  label={t('ownerRegister.addressLabel')}
+                  placeholder={t('ownerRegister.addressPlaceholder')}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -137,8 +139,8 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
               name="contactPerson"
               render={({ field }) => (
                 <FormField
-                  label="Contact person"
-                  placeholder="Full name of the person we should contact"
+                  label={t('ownerRegister.contactPersonLabel')}
+                  placeholder={t('ownerRegister.contactPersonPlaceholder')}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -148,7 +150,7 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
             />
 
             <View style={styles.fieldWrapper}>
-              <Text style={styles.label}>Business license</Text>
+              <Text style={styles.label}>{t('ownerRegister.businessLicenseLabel')}</Text>
               <TouchableOpacity
                 style={[styles.filePickerButton, errors.licenseDocument && styles.filePickerButtonError]}
                 onPress={handlePickDocument}
@@ -160,7 +162,7 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
                   <Ionicons name="document-attach-outline" size={20} color={colors.primary} />
                 </View>
                 <Text style={styles.filePickerText} numberOfLines={1}>
-                  {licenseDocument?.name ?? 'Choose PDF, JPG, or PNG (max 5MB)'}
+                  {licenseDocument?.name ?? t('ownerRegister.filePickerPlaceholder')}
                 </Text>
               </TouchableOpacity>
               {errors.licenseDocument?.message ? (
@@ -171,7 +173,7 @@ export default function OwnerRegisterScreen({ onBack, onRegistered }: Props) {
 
           {submitError ? <ErrorBanner message={submitError} onRetry={onSubmit} /> : null}
 
-          <SubmitButton label="Submit for Review" loading={isSubmitting} onPress={onSubmit} />
+          <SubmitButton label={t('ownerRegister.submitButton')} loading={isSubmitting} onPress={onSubmit} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

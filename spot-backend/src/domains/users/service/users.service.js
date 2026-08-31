@@ -27,6 +27,7 @@ import * as userSportSkillRepository from '../../auth/repository/user-sport-skil
 import { toPublicUser, toPublicPreferences } from '../../auth/entity/user.entity.js';
 import config from '../../../shared/config/env.js';
 import * as bookingService from '../../booking/service/booking.service.js';
+import * as accountSecurityNotify from '../../notification/service/account-security-notify.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -370,6 +371,8 @@ export async function confirmEmailChange(userId, input) {
       throw new AppError('Email is already registered', 409);
     }
 
+    const oldEmail = user.email;
+
     let updated;
     await client.query('BEGIN');
     try {
@@ -389,6 +392,12 @@ export async function confirmEmailChange(userId, input) {
     }
 
     await clearOtpRedisState(newEmail, purpose);
+
+    void accountSecurityNotify.notifyEmailChanged({
+      userId,
+      oldEmail,
+      newEmail,
+    });
 
     return {
       message: 'Email updated successfully',
@@ -548,6 +557,11 @@ export async function confirmPhoneChange(userId, input) {
 
     await clearOtpRedisState(deliveryEmail, purpose);
 
+    void accountSecurityNotify.notifyPhoneChanged({
+      userId,
+      newPhone,
+    });
+
     return {
       message: 'Phone number updated successfully',
       user: toPublicUser(updated),
@@ -584,6 +598,8 @@ export async function changePassword(userId, input) {
     const passwordHash = await hashPassword(input.newPassword);
     await userRepository.updatePasswordHash(client, userId, passwordHash);
     await userRepository.resetLoginState(client, userId);
+
+    void accountSecurityNotify.notifyPasswordChanged({ userId });
 
     return {
       message: 'Password updated successfully',

@@ -50,7 +50,7 @@ async function shouldSendReminderEmail(user) {
   return user.push_notifications_enabled !== false;
 }
 
-function emailPayloadForType(type, { title, body }) {
+function emailPayloadForType(type, { title, body, data = {} }) {
   if (type === NOTIFICATION_TYPES.BOOKING_CREATED) {
     return {
       subject: title || 'SPOT booking confirmation',
@@ -60,6 +60,16 @@ function emailPayloadForType(type, { title, body }) {
   if (type === NOTIFICATION_TYPES.BOOKING_REMINDER) {
     return {
       subject: title || 'SPOT booking reminder',
+      text: body,
+    };
+  }
+  if (
+    type === NOTIFICATION_TYPES.SYSTEM &&
+    typeof data.action === 'string' &&
+    data.action.startsWith('ACCOUNT_')
+  ) {
+    return {
+      subject: 'SPOT account security alert',
       text: body,
     };
   }
@@ -106,7 +116,7 @@ export async function createNotification({
 
     if (allowEmail && user.email) {
       try {
-        const mail = emailPayloadForType(type, { title, body });
+        const mail = emailPayloadForType(type, { title, body, data });
         await sendNotificationEmail({
           email: user.email,
           subject: mail.subject,

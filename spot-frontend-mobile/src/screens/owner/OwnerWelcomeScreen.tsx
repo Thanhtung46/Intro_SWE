@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import useFloatingAnimation from '@/hooks/useFloatingAnimation';
+import { useLanguage } from '@/context/LanguageContext';
 
 const OWNER_WEB_URL = 'owner.spot.com';
 
@@ -26,6 +27,7 @@ type Props = {
  * presentation-only, matching the onboarding/choose-role screens' pattern.
  */
 export default function OwnerWelcomeScreen({ onContinue }: Props) {
+  const { t } = useLanguage();
   const floatStyle = useFloatingAnimation({ distance: 10, duration: 2000 });
   const [copied, setCopied] = useState(false);
 
@@ -59,16 +61,19 @@ export default function OwnerWelcomeScreen({ onContinue }: Props) {
               />
             </Animated.View>
 
-            <Text style={styles.heading}>Welcome, Venue Owner!</Text>
+            <Text style={styles.heading}>{t('ownerWelcome.heading')}</Text>
             <Text style={styles.body}>
-              To ensure the best management experience,{' '}
-              <Text style={styles.bodyStrong}>revenue administration</Text> and{' '}
-              <Text style={styles.bodyStrong}>licensing features</Text> will be performed on the
-              Web Portal for computers.
+              {t('ownerWelcome.bodyPart1')}
+              <Text style={styles.bodyStrong}>{t('ownerWelcome.bodyRevenueAdmin')}</Text>
+              {t('ownerWelcome.bodyAnd')}
+              <Text style={styles.bodyStrong}>{t('ownerWelcome.bodyLicensingFeatures')}</Text>
+              {t('ownerWelcome.bodyPart2')}
+              {' '}
+              {t('ownerWelcome.bodyPart3')}
             </Text>
 
             <View style={styles.urlSection}>
-              <Text style={styles.urlLabel}>Access on Browser</Text>
+              <Text style={styles.urlLabel}>{t('ownerWelcome.urlLabel')}</Text>
               <View style={styles.urlBox}>
                 <View style={styles.urlBoxLeft}>
                   <MaterialIcons name="language" size={22} color={colors.primary} />
@@ -96,7 +101,7 @@ export default function OwnerWelcomeScreen({ onContinue }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Continue to venue registration"
             >
-              <Text style={styles.primaryButtonText}>Continue to Registration</Text>
+              <Text style={styles.primaryButtonText}>{t('ownerWelcome.continueButton')}</Text>
               <Ionicons name="arrow-forward" size={20} color={colors.white} />
             </TouchableOpacity>
           </BlurView>
@@ -104,12 +109,12 @@ export default function OwnerWelcomeScreen({ onContinue }: Props) {
           <View style={styles.footnote}>
             <View style={styles.footnoteItem}>
               <MaterialIcons name="verified-user" size={16} color={colors.outline} />
-              <Text style={styles.footnoteText}>256-bit Security</Text>
+              <Text style={styles.footnoteText}>{t('ownerWelcome.footnoteSecurity')}</Text>
             </View>
             <View style={styles.footnoteDot} />
             <View style={styles.footnoteItem}>
               <MaterialIcons name="support-agent" size={16} color={colors.outline} />
-              <Text style={styles.footnoteText}>24/7 Support</Text>
+              <Text style={styles.footnoteText}>{t('ownerWelcome.footnoteSupport')}</Text>
             </View>
           </View>
         </ScrollView>

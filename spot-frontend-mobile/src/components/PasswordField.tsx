@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { StyleProp, StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
 
 interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry'> {
   label: string;
@@ -10,6 +11,7 @@ interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry'> {
   containerStyle?: StyleProp<ViewStyle>;
   labelRight?: React.ReactNode;
   leftIcon?: React.ReactNode;
+  themeColors?: ThemeColors;
 }
 
 export function PasswordField({
@@ -20,6 +22,7 @@ export function PasswordField({
   containerStyle,
   labelRight,
   leftIcon,
+  themeColors,
   ...inputProps
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
@@ -27,17 +30,23 @@ export function PasswordField({
   return (
     <View style={[styles.container, containerStyle]}>
       <View style={styles.labelRow}>
-        <Text style={styles.label}>
+        <Text style={[styles.label, themeColors && { color: themeColors.textSecondaryAlt }]}>
           {label}
           {required ? <Text style={styles.required}> *</Text> : null}
         </Text>
         {labelRight}
       </View>
-      <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
+      <View
+        style={[
+          styles.inputWrapper,
+          themeColors && { backgroundColor: themeColors.inputBg, borderColor: themeColors.divider },
+          error ? [styles.inputError, themeColors && { borderColor: themeColors.error }] : null,
+        ]}
+      >
         {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
         <TextInput
-          style={[styles.input, style]}
-          placeholderTextColor={colors.placeholder}
+          style={[styles.input, themeColors && { color: themeColors.textPrimary }, style]}
+          placeholderTextColor={themeColors ? themeColors.textMuted : colors.placeholder}
           secureTextEntry={!visible}
           numberOfLines={1}
           {...inputProps}
@@ -47,10 +56,16 @@ export function PasswordField({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel={visible ? 'Hide password' : 'Show password'}
         >
-          <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.placeholder} />
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={themeColors ? themeColors.textMuted : colors.placeholder}
+          />
         </TouchableOpacity>
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text style={[styles.errorText, themeColors && { color: themeColors.error }]}>{error}</Text>
+      ) : null}
     </View>
   );
 }

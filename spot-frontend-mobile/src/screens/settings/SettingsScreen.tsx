@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { ReactNode, useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@/context/UserContext';
-import { colors } from '@/constants/colors';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 import { comingSoon } from '@/utils/comingSoon';
 import { clearAllTokens } from '@/utils/authStorage';
 import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
@@ -29,11 +31,13 @@ function PickerModal<T extends string>({
   options,
   onSelect,
   onClose,
+  styles,
 }: {
   visible: boolean;
   options: { label: string; value: T }[];
   onSelect: (value: T) => void;
   onClose: () => void;
+  styles: ReturnType<typeof getStyles>;
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -57,11 +61,11 @@ function PickerModal<T extends string>({
   );
 }
 
-function SectionLabel({ label }: { label: string }) {
+function SectionLabel({ label, styles }: { label: string; styles: ReturnType<typeof getStyles> }) {
   return <Text style={styles.sectionLabel}>{label}</Text>;
 }
 
-function Card({ children }: { children: ReactNode }) {
+function Card({ children, styles }: { children: ReactNode; styles: ReturnType<typeof getStyles> }) {
   return <View style={styles.card}>{children}</View>;
 }
 
@@ -74,6 +78,8 @@ function Row({
   toggleValue,
   onToggle,
   danger,
+  styles,
+  themeColors,
 }: {
   testID: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -83,27 +89,29 @@ function Row({
   toggleValue?: boolean;
   onToggle?: (value: boolean) => void;
   danger?: boolean;
+  styles: ReturnType<typeof getStyles>;
+  themeColors: ThemeColors;
 }) {
-  const iconColor = danger ? colors.formError : colors.primaryDark;
+  const iconColor = danger ? themeColors.error : themeColors.textPrimary;
   const content = (
     <View style={styles.row}>
       <Ionicons name={icon} size={20} color={iconColor} style={styles.rowIcon} />
-      <Text style={[styles.rowLabel, danger ? { color: colors.formError, fontWeight: '600' } : null]}>{label}</Text>
+      <Text style={[styles.rowLabel, danger ? { color: themeColors.error, fontWeight: '600' } : null]}>{label}</Text>
       {toggleValue !== undefined ? (
         <Switch
           testID={testID}
           value={toggleValue}
           onValueChange={onToggle}
-          trackColor={{ true: colors.primaryDark, false: colors.border }}
-          thumbColor={colors.white}
+          trackColor={{ true: themeColors.primary, false: themeColors.divider }}
+          thumbColor={themeColors.white}
         />
       ) : secondaryLabel ? (
         <View style={styles.rowRight}>
           <Text style={styles.secondaryLabel}>{secondaryLabel}</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
+          <Ionicons name="chevron-forward" size={18} color={themeColors.textMuted} />
         </View>
       ) : onPress ? (
-        <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
+        <Ionicons name="chevron-forward" size={18} color={themeColors.textMuted} />
       ) : null}
     </View>
   );
@@ -127,6 +135,9 @@ export default function SettingsScreen({
   onSignedOut: () => void;
 }) {
   const { clearUser } = useUser();
+  const { language: appLanguage, setLanguage: setAppLanguage, t } = useLanguage();
+  const { colors: themeColors, setMode } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
 
   const [language, setLanguage] = useState<Language>('en');
   const [appearance, setAppearance] = useState<Appearance>('light');
@@ -139,7 +150,9 @@ export default function SettingsScreen({
     getPreferences().then((result) => {
       if (result.success && result.preferences) {
         setLanguage(result.preferences.language);
+        setAppLanguage(result.preferences.language);
         setAppearance(result.preferences.appearance);
+        setMode(result.preferences.appearance === 'dark' ? 'dark' : 'light');
         setPushNotifications(result.preferences.pushNotificationsEnabled);
         setLocationServices(result.preferences.locationServicesEnabled);
       }
@@ -171,15 +184,19 @@ export default function SettingsScreen({
     if (!result.success) {
       setLanguage(previous);
       notifyError(result.message || 'Something went wrong. Please try again.');
+      return;
     }
+    setAppLanguage(value);
   };
 
   const handleSelectAppearance = async (value: Appearance) => {
     const previous = appearance;
     setAppearance(value);
+    setMode(value === 'dark' ? 'dark' : 'light');
     const result = await updatePreferences({ appearance: value });
     if (!result.success) {
       setAppearance(previous);
+      setMode(previous === 'dark' ? 'dark' : 'light');
       notifyError(result.message || 'Something went wrong. Please try again.');
     }
   };
@@ -193,91 +210,123 @@ export default function SettingsScreen({
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>{t('settings.title')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <SectionLabel label="ACCOUNT" />
-        <Card>
+        <SectionLabel label={t('settings.account')} styles={styles} />
+        <Card styles={styles}>
           <Row
             testID="settings-personal-information"
             icon="person-outline"
-            label="Personal Information"
+            label={t('settings.personalInformation')}
             onPress={onEditProfile}
+            styles={styles}
+            themeColors={themeColors}
           />
         </Card>
 
-        <SectionLabel label="PREFERENCE" />
-        <Card>
+        <SectionLabel label={t('settings.preference')} styles={styles} />
+        <Card styles={styles}>
           <Row
             testID="settings-push-notifications-toggle"
             icon="notifications-outline"
-            label="Push Notifications"
+            label={t('settings.pushNotifications')}
             toggleValue={pushNotifications}
             onToggle={handleTogglePushNotifications}
+            styles={styles}
+            themeColors={themeColors}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-location-services-toggle"
             icon="location-outline"
-            label="Location Services"
+            label={t('settings.locationServices')}
             toggleValue={locationServices}
             onToggle={handleToggleLocationServices}
+            styles={styles}
+            themeColors={themeColors}
           />
         </Card>
 
-        <SectionLabel label="LAYOUT" />
-        <Card>
+        <SectionLabel label={t('settings.layout')} styles={styles} />
+        <Card styles={styles}>
           <Row
             testID="settings-language"
             icon="globe-outline"
-            label="Language"
+            label={t('settings.language')}
             secondaryLabel={language === 'vi' ? 'Tiếng Việt' : 'English'}
             onPress={() => setLanguagePickerOpen(true)}
+            styles={styles}
+            themeColors={themeColors}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-appearance"
             icon="color-palette-outline"
-            label="Appearance"
-            secondaryLabel={appearance.charAt(0).toUpperCase() + appearance.slice(1)}
+            label={t('settings.appearance')}
+            secondaryLabel={
+              appearance === 'dark'
+                ? t('settings.dark')
+                : appearance === 'light'
+                  ? t('settings.light')
+                  : appearance.charAt(0).toUpperCase() + appearance.slice(1)
+            }
             onPress={() => setAppearancePickerOpen(true)}
+            styles={styles}
+            themeColors={themeColors}
           />
         </Card>
 
-        <SectionLabel label="OTHER" />
-        <Card>
+        <SectionLabel label={t('settings.other')} styles={styles} />
+        <Card styles={styles}>
           <Row
             testID="settings-help-center"
             icon="help-circle-outline"
-            label="Help Center"
+            label={t('settings.helpCenter')}
             onPress={() => comingSoon('Help Center')}
+            styles={styles}
+            themeColors={themeColors}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-about-us"
             icon="information-circle-outline"
-            label="About Us"
+            label={t('settings.aboutUs')}
             onPress={() => comingSoon('About Us')}
+            styles={styles}
+            themeColors={themeColors}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-contact-us"
             icon="mail-outline"
-            label="Contact Us"
+            label={t('settings.contactUs')}
             onPress={() => comingSoon('Contact Us')}
+            styles={styles}
+            themeColors={themeColors}
           />
           <View style={styles.rowDivider} />
           <Row
             testID="settings-report-issue"
             icon="alert-circle-outline"
-            label="Report an Issue"
+            label={t('settings.reportIssue')}
             onPress={() => comingSoon('Report an Issue')}
+            styles={styles}
+            themeColors={themeColors}
           />
         </Card>
 
         <View style={styles.signOutCard}>
-          <Row testID="settings-sign-out" icon="log-out-outline" label="Sign Out" onPress={handleSignOut} danger />
+          <Row
+            testID="settings-sign-out"
+            icon="log-out-outline"
+            label={t('settings.signOut')}
+            onPress={handleSignOut}
+            danger
+            styles={styles}
+            themeColors={themeColors}
+          />
         </View>
 
         <Text style={styles.version}>Version 1.0.0</Text>
@@ -291,111 +340,118 @@ export default function SettingsScreen({
         ]}
         onSelect={handleSelectLanguage}
         onClose={() => setLanguagePickerOpen(false)}
+        styles={styles}
       />
       <PickerModal
         visible={appearancePickerOpen}
         options={[
-          { label: 'Light', value: 'light' },
-          { label: 'Dark', value: 'dark' },
-          { label: 'System', value: 'system' },
+          { label: t('settings.light'), value: 'light' },
+          { label: t('settings.dark'), value: 'dark' },
         ]}
         onSelect={handleSelectAppearance}
         onClose={() => setAppearancePickerOpen(false)}
+        styles={styles}
       />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.formScreenBackground,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 128,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.subtitle,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  signOutCard: {
-    backgroundColor: colors.white,
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginTop: 24,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  rowIcon: {
-    marginRight: 12,
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  secondaryLabel: {
-    fontSize: 14,
-    color: colors.subtitle,
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginLeft: 48,
-  },
-  version: {
-    marginTop: 24,
-    textAlign: 'center',
-    fontSize: 12,
-    color: colors.placeholder,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  sheet: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    paddingVertical: 8,
-    maxHeight: 240,
-  },
-  option: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  optionText: {
-    fontSize: 15,
-    color: colors.text,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.background,
+    },
+    header: {
+      paddingHorizontal: 16,
+      paddingTop: 48,
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: '800',
+      color: c.textPrimary,
+    },
+    content: {
+      paddingHorizontal: 16,
+      paddingTop: 20,
+      paddingBottom: 128,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.textSecondary,
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginTop: 16,
+    },
+    card: {
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+    },
+    signOutCard: {
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      overflow: 'hidden',
+      marginTop: 24,
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    rowIcon: {
+      marginRight: 12,
+    },
+    rowLabel: {
+      flex: 1,
+      fontSize: 15,
+      color: c.textPrimary,
+    },
+    rowRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    secondaryLabel: {
+      fontSize: 14,
+      color: c.textSecondary,
+    },
+    rowDivider: {
+      height: 1,
+      backgroundColor: c.divider,
+      marginLeft: 48,
+    },
+    version: {
+      marginTop: 24,
+      textAlign: 'center',
+      fontSize: 12,
+      color: c.textMuted,
+    },
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
+    },
+    sheet: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      paddingVertical: 8,
+      maxHeight: 240,
+    },
+    option: {
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+    },
+    optionText: {
+      fontSize: 15,
+      color: c.textPrimary,
+    },
+  });
+}

@@ -35,6 +35,7 @@ import { toPublicUser, toPublicHostProfile } from '../entity/user.entity.js';
 import { SPORTS } from '../../../shared/constants/sports.js';
 import config from '../../../shared/config/env.js';
 import * as matchRepository from '../../matchmaking/repository/match.repository.js';
+import * as accountSecurityNotify from '../../notification/service/account-security-notify.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -302,10 +303,25 @@ export async function verifyOtp(input) {
 
     await clearOtpRedisState(user.user_id, email, purpose);
 
-    return {
+    const verifiedUser = await userRepository.findById(client, user.user_id);
+    const response = {
       message: 'Email verified successfully',
       email: user.email,
     };
+
+    if (
+      verifiedUser?.status === USER_STATUSES.PENDING &&
+      (verifiedUser.role === USER_ROLES.OWNER ||
+        verifiedUser.role === USER_ROLES.REFEREE)
+    ) {
+      response.accessToken = signAccessToken(verifiedUser);
+      response.refreshToken = signRefreshToken(verifiedUser);
+      response.tokenType = 'Bearer';
+      response.expiresIn = getAccessTokenTtlSeconds();
+      response.nextStep = 'SUBMIT_VERIFICATION';
+    }
+
+    return response;
   } finally {
     client.release();
   }
@@ -761,6 +777,8 @@ export async function resetPassword(input) {
     }
 
     await clearOtpRedisState(user.user_id, email, purpose);
+
+    void accountSecurityNotify.notifyPasswordReset({ userId: user.user_id });
 
     return {
       message: 'Password has been reset successfully. You can now log in.',

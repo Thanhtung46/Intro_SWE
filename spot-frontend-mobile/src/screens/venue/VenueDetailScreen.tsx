@@ -8,6 +8,8 @@ import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
 import { ROUTES } from '@/constants/routes';
+import { useLanguage } from '@/context/LanguageContext';
+import { TranslationKey } from '@/i18n/translations';
 import SelectPitchTimeModal, { Pitch } from '@/components/booking/SelectPitchTimeModal';
 import { getVenueDetail, getVenueImages, PublicField, PublicVenueImage } from '@/services/venueService';
 import { getVenueRating } from '@/services/reviewService';
@@ -72,12 +74,15 @@ function parseHours(hours: string): [number, number] | null {
 }
 
 type Tab = 'about' | 'pricing' | 'gallery' | 'reviews';
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'about', label: 'About' },
-  { key: 'pricing', label: 'Pricing' },
-  { key: 'gallery', label: 'Gallery' },
-  { key: 'reviews', label: 'Reviews' },
-];
+
+function getTabs(t: (key: TranslationKey) => string): { key: Tab; label: string }[] {
+  return [
+    { key: 'about', label: t('venueDetail.tabAbout') },
+    { key: 'pricing', label: t('venueDetail.tabPricing') },
+    { key: 'gallery', label: t('venueDetail.tabGallery') },
+    { key: 'reviews', label: t('venueDetail.tabReviews') },
+  ];
+}
 
 type Props = {
   venueId: string;
@@ -87,6 +92,8 @@ type Props = {
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
 export default function VenueDetailScreen({ venueId, onBack }: Props) {
   const router = useRouter();
+  const { t } = useLanguage();
+  const TABS = getTabs(t);
   const [venue, setVenue] = useState<VenueDetail>(EMPTY_VENUE_DETAIL);
   const [fields, setFields] = useState<PublicField[]>([]);
   const [reviewRating, setReviewRating] = useState<{ avgRating: number; ratingCount: number } | null>(null);
@@ -116,7 +123,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           apiVenue.openingHours && apiVenue.closingHours
             ? `${apiVenue.openingHours} - ${apiVenue.closingHours}`
             : '— - —',
-        capacityLabel: `${apiFields.length} Pitch${apiFields.length === 1 ? '' : 'es'}`,
+        capacityLabel: `${apiFields.length} ${apiFields.length === 1 ? t('venueDetail.pitchSingular') : t('venueDetail.pitchPlural')}`,
         amenities: apiVenue.amenities,
         pitches: apiFields.map((f) => ({ fieldId: f.fieldId, name: f.name, format: f.sportType })),
         price: prices.length ? formatVnd(Math.min(...prices)) : '—',
@@ -131,7 +138,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
         setReviewRatingError(null);
       } else {
         setReviewRating(null);
-        setReviewRatingError(result.message ?? 'Something went wrong. Please try again.');
+        setReviewRatingError(result.message ?? t('common.genericError'));
       }
     });
 
@@ -141,7 +148,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
         setImagesError(null);
       } else {
         setImages([]);
-        setImagesError(result.message ?? 'Something went wrong. Please try again.');
+        setImagesError(result.message ?? t('common.genericError'));
       }
     });
   }, [numericVenueId]);
@@ -193,13 +200,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             {venue.verified && (
               <View style={styles.verifiedBadge}>
                 <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                <Text style={styles.verifiedText}>Verified</Text>
+                <Text style={styles.verifiedText}>{t('venueDetail.verified')}</Text>
               </View>
             )}
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={12} color="#D97706" />
               <Text style={styles.ratingText}>
-                {venue.rating} ({venue.reviewCount} Reviews)
+                {venue.rating} ({venue.reviewCount} {t('venueDetail.reviewsCountWord')})
               </Text>
             </View>
           </View>
@@ -233,14 +240,14 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               <View style={styles.quickInfoIcon}>
                 <Ionicons name="time-outline" size={20} color={colors.primaryDark} />
               </View>
-              <Text style={styles.quickInfoLabel}>Hours</Text>
+              <Text style={styles.quickInfoLabel}>{t('venueDetail.hours')}</Text>
               <Text style={styles.quickInfoValue}>{venue.hours}</Text>
             </View>
             <View style={styles.quickInfoCard}>
               <View style={styles.quickInfoIcon}>
                 <Ionicons name="grid-outline" size={20} color={colors.primaryDark} />
               </View>
-              <Text style={styles.quickInfoLabel}>Capacity</Text>
+              <Text style={styles.quickInfoLabel}>{t('venueDetail.capacity')}</Text>
               <Text style={styles.quickInfoValue}>{venue.capacityLabel}</Text>
             </View>
           </View>
@@ -249,7 +256,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <Ionicons name="sparkles-outline" size={18} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>Amenities</Text>
+              <Text style={styles.sectionTitle}>{t('venueDetail.amenities')}</Text>
             </View>
             <View style={styles.amenitiesRow}>
               {venue.amenities ? (
@@ -258,7 +265,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                   <Text style={styles.amenityText}>{venue.amenities}</Text>
                 </View>
               ) : (
-                <Text style={styles.amenityText}>No amenities listed</Text>
+                <Text style={styles.amenityText}>{t('venueDetail.noAmenities')}</Text>
               )}
             </View>
           </View>
@@ -267,7 +274,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <Ionicons name="map-outline" size={18} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>Location</Text>
+              <Text style={styles.sectionTitle}>{t('venueDetail.location')}</Text>
             </View>
             <View style={styles.locationCard}>
               <View style={styles.mapPreview}>
@@ -282,7 +289,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               </View>
               <TouchableOpacity style={styles.mapsButton} onPress={openInMaps} accessibilityRole="button">
                 <Ionicons name="navigate-outline" size={18} color={colors.primaryDark} />
-                <Text style={styles.mapsButtonText}>Open in Google Maps</Text>
+                <Text style={styles.mapsButtonText}>{t('venueDetail.openInMaps')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -290,9 +297,9 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           {/* Schedule */}
           <View style={styles.section}>
             <View style={styles.scheduleHeader}>
-              <Text style={styles.sectionTitleDark}>Schedule</Text>
+              <Text style={styles.sectionTitleDark}>{t('venueDetail.schedule')}</Text>
               <TouchableOpacity onPress={() => router.push(ROUTES.SCHEDULE)} accessibilityRole="button">
-                <Text style={styles.linkText}>View Calendar</Text>
+                <Text style={styles.linkText}>{t('venueDetail.viewCalendar')}</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.scheduleCard}>
@@ -310,7 +317,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                 onPress={() => comingSoon('Edit booking')}
                 accessibilityRole="button"
               >
-                <Text style={styles.editText}>Edit</Text>
+                <Text style={styles.editText}>{t('venueDetail.edit')}</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.primaryDark} />
               </TouchableOpacity>
             </View>
@@ -318,7 +325,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
 
           {/* Extra services */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Extra Services</Text>
+            <Text style={styles.sectionTitle}>{t('venueDetail.extraServices')}</Text>
             <View style={styles.extraServiceCard}>
               <View style={styles.extraServiceIcon}>
                 <Ionicons name="shield-checkmark-outline" size={22} color="#2563EB" />
@@ -340,7 +347,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
               <Ionicons name="call-outline" size={18} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>Contact Venue</Text>
+              <Text style={styles.sectionTitle}>{t('venueDetail.contactVenue')}</Text>
             </View>
             <View style={styles.contactCard}>
               <View style={styles.contactRow}>
@@ -363,7 +370,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.contactButton} onPress={callVenue} accessibilityRole="button">
                   <Ionicons name="call-outline" size={18} color={colors.primaryDark} />
-                  <Text style={styles.contactButtonText}>Call Now</Text>
+                  <Text style={styles.contactButtonText}>{t('venueDetail.callNow')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -376,10 +383,10 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             <View style={styles.section}>
               <View style={styles.sectionHeading}>
                 <Ionicons name="pricetag-outline" size={18} color={colors.headingText} />
-                <Text style={styles.sectionTitle}>Pricing</Text>
+                <Text style={styles.sectionTitle}>{t('venueDetail.tabPricing')}</Text>
               </View>
               {fields.length === 0 ? (
-                <Text style={styles.amenityText}>No pitches to price yet</Text>
+                <Text style={styles.amenityText}>{t('venueDetail.noPitchesToPrice')}</Text>
               ) : (
                 fields.map((field) => (
                   <View key={field.fieldId} style={styles.scheduleCard}>
@@ -388,7 +395,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                       <Text style={styles.schedulePitch}>{field.sportType}</Text>
                     </View>
                     <Text style={styles.priceValue}>{formatVnd(field.pricePerHour)}</Text>
-                    <Text style={styles.priceUnit}>VND / hr</Text>
+                    <Text style={styles.priceUnit}>{t('venueDetail.priceUnit')}</Text>
                   </View>
                 ))
               )}
@@ -401,7 +408,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             <View style={styles.section}>
               <View style={styles.sectionHeading}>
                 <Ionicons name="star-outline" size={18} color={colors.headingText} />
-                <Text style={styles.sectionTitle}>Reviews</Text>
+                <Text style={styles.sectionTitle}>{t('venueDetail.tabReviews')}</Text>
               </View>
               {reviewRatingError ? (
                 <Text style={styles.amenityText}>{reviewRatingError}</Text>
@@ -409,13 +416,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                 <View style={styles.ratingBadge}>
                   <Ionicons name="star" size={12} color="#D97706" />
                   <Text style={styles.ratingText}>
-                    {reviewRating.avgRating} ({reviewRating.ratingCount} Reviews)
+                    {reviewRating.avgRating} ({reviewRating.ratingCount} {t('venueDetail.reviewsCountWord')})
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.amenityText}>No reviews yet</Text>
+                <Text style={styles.amenityText}>{t('venueDetail.noReviewsYet')}</Text>
               )}
-              <Text style={styles.amenityText}>Individual review comments aren&apos;t available yet.</Text>
+              <Text style={styles.amenityText}>{t('venueDetail.reviewCommentsUnavailable')}</Text>
             </View>
           </View>
         )}
@@ -425,12 +432,12 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             <View style={styles.section}>
               <View style={styles.sectionHeading}>
                 <Ionicons name="images-outline" size={18} color={colors.headingText} />
-                <Text style={styles.sectionTitle}>Gallery</Text>
+                <Text style={styles.sectionTitle}>{t('venueDetail.tabGallery')}</Text>
               </View>
               {imagesError ? (
                 <Text style={styles.amenityText}>{imagesError}</Text>
               ) : images.length === 0 ? (
-                <Text style={styles.amenityText}>No photos yet</Text>
+                <Text style={styles.amenityText}>{t('venueDetail.noPhotosYet')}</Text>
               ) : (
                 <View style={styles.galleryGrid}>
                   {images.map((image) => (
@@ -451,24 +458,24 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
       {/* Sticky bottom bar */}
       <View style={styles.bottomBar}>
         <View>
-          <Text style={styles.startsAt}>Starts at</Text>
+          <Text style={styles.startsAt}>{t('venueDetail.startsAt')}</Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceValue}>{venue.price}</Text>
-            <Text style={styles.priceUnit}>{venue.priceUnit}</Text>
+            <Text style={styles.priceUnit}>{t('venueDetail.priceUnit')}</Text>
           </View>
         </View>
         <TouchableOpacity
           style={[styles.bookNowButton, !parsedHours && styles.bookNowButtonDisabled]}
           onPress={() => {
             if (!parsedHours) {
-              showAlert('Not available yet', "This venue hasn't set its opening hours yet.");
+              showAlert(t('venueDetail.notAvailableYetTitle'), t('venueDetail.noOpeningHoursMessage'));
               return;
             }
             setPitchTimeVisible(true);
           }}
           accessibilityRole="button"
         >
-          <Text style={styles.bookNowText}>Book Now</Text>
+          <Text style={styles.bookNowText}>{t('venueDetail.bookNow')}</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.white} />
         </TouchableOpacity>
       </View>

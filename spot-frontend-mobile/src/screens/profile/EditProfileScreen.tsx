@@ -1,57 +1,88 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ChangeContactModal } from '@/components/ChangeContactModal';
 import { FormField } from '@/components/FormField';
 import { SelectField } from '@/components/SelectField';
-import { genderOptions } from '@/schemas/registerSchema';
+import { getGenderOptions } from '@/schemas/registerSchema';
 import { useUser } from '@/context/UserContext';
-import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
-import { getProfile, updateProfile } from '@/services/profileService';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
+import { getProfile, updateProfile, updateSkills, SkillsUpdatePayload } from '@/services/profileService';
+import { forgotPassword } from '@/services/authService';
 
-// Not part of user_profiles per any BE spec/AC — placeholder options for the
-// Figma-required UI only, confirm real values with team/PO later.
-const skillLevelOptions = [
-  { label: 'Beginner', value: 'beginner' },
-  { label: 'Intermediate', value: 'intermediate' },
-  { label: 'Advanced', value: 'advanced' },
-  { label: 'Pro', value: 'pro' },
+const badmintonSkillOptions = [
+  { label: 'Beginner-', value: 'BEGINNER_MINUS' },
+  { label: 'Beginner', value: 'BEGINNER' },
+  { label: 'Beginner+', value: 'BEGINNER_PLUS' },
+  { label: 'Low avg', value: 'LOW_AVERAGE' },
+  { label: 'Avg-', value: 'AVERAGE_MINUS' },
+  { label: 'Avg', value: 'AVERAGE' },
+  { label: 'Avg+', value: 'AVERAGE_PLUS' },
+  { label: 'Fair', value: 'FAIR' },
+  { label: 'Semi-pro', value: 'SEMI_PRO' },
+  { label: 'Pro', value: 'PROFESSIONAL' },
 ];
 
-export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
+const footballSkillOptions = [
+  { label: 'Learning', value: 'LEARNING' },
+  { label: 'Rec basic', value: 'REC_BASIC' },
+  { label: 'Rec advanced', value: 'REC_ADVANCED' },
+  { label: 'Semi-pro', value: 'SEMI_PRO' },
+  { label: 'Pro', value: 'PROFESSIONAL' },
+  { label: 'Elite', value: 'ELITE' },
+];
+
+export default function EditProfileScreen({
+  onBack,
+  onChangePasswordOtpSent,
+}: {
+  onBack: () => void;
+  onChangePasswordOtpSent: (email: string) => void;
+}) {
   const { user, setUser } = useUser();
+  const { t } = useLanguage();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => getStyles(c), [c]);
 
   const [name, setName] = useState(user?.fullName || '');
   const [nameError, setNameError] = useState<string | undefined>();
   const [gender, setGender] = useState('');
-  const [skillLevel, setSkillLevel] = useState('');
-  const [skillDescription, setSkillDescription] = useState('');
+  const [badmintonSkill, setBadmintonSkill] = useState('');
+  const [footballSkill, setFootballSkill] = useState('');
   const [saving, setSaving] = useState(false);
+  const [changeEmailModalVisible, setChangeEmailModalVisible] = useState(false);
+  const [changePhoneModalVisible, setChangePhoneModalVisible] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const initialBadmintonSkill = useRef('');
+  const initialFootballSkill = useRef('');
 
   useEffect(() => {
     getProfile().then((result) => {
       if (result.success && result.user?.gender) {
         setGender(result.user.gender);
       }
+      if (result.success && result.user?.skills?.badminton) {
+        setBadmintonSkill(result.user.skills.badminton);
+        initialBadmintonSkill.current = result.user.skills.badminton;
+      }
+      if (result.success && result.user?.skills?.football) {
+        setFootballSkill(result.user.skills.football);
+        initialFootballSkill.current = result.user.skills.football;
+      }
     });
   }, []);
 
-  const displayName = user?.fullName || 'Guest';
+  const displayName = user?.fullName || t('common.guestFallback');
 
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setNameError('Name is required');
+      setNameError(t('profile.nameRequired'));
       return;
     }
     setNameError(undefined);
@@ -64,13 +95,42 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setSaving(false);
 
     if (!result.success) {
-      showAlert('Error', result.message || 'Something went wrong. Please try again.');
+      showAlert(t('common.error'), result.message || t('common.genericError'));
       return;
     }
 
+    const skillsPayload: SkillsUpdatePayload = {};
+    if (badmintonSkill !== initialBadmintonSkill.current) skillsPayload.badminton = badmintonSkill || null;
+    if (footballSkill !== initialFootballSkill.current) skillsPayload.football = footballSkill || null;
+
+    if (Object.keys(skillsPayload).length > 0) {
+      const skillsResult = await updateSkills(skillsPayload);
+      if (!skillsResult.success) {
+        showAlert(t('common.error'), skillsResult.message || t('profile.skillsUpdateFailed'));
+        return;
+      }
+    }
+
     setUser({ ...user, fullName: result.user?.fullName ?? trimmed });
-    showAlert('Success', 'Profile updated');
+    showAlert(t('common.success'), t('profile.profileUpdatedSuccess'));
     onBack();
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.email) {
+      showAlert(t('common.error'), t('profile.noEmailOnFile'));
+      return;
+    }
+    setChangingPassword(true);
+    const result = await forgotPassword(user.email);
+    setChangingPassword(false);
+
+    if (!result.success) {
+      showAlert(t('common.error'), result.message || t('common.genericError'));
+      return;
+    }
+
+    onChangePasswordOtpSent(user.email);
   };
 
   return (
@@ -82,16 +142,16 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           onPress={onBack}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="close" size={24} color={colors.text} />
+          <Ionicons name="close" size={24} color={c.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Edit Profile</Text>
+        <Text style={styles.topBarTitle}>{t('profile.editTitle')}</Text>
         <TouchableOpacity
           testID="edit-profile-save"
           style={styles.topBarSideRight}
           onPress={handleSave}
           disabled={saving}
         >
-          <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save'}</Text>
+          <Text style={styles.saveText}>{saving ? t('profile.saving') : t('profile.save')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -106,16 +166,16 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
             <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
           </View>
           <View style={styles.cameraBadge}>
-            <Ionicons name="camera" size={14} color={colors.white} />
+            <Ionicons name="camera" size={14} color={c.white} />
           </View>
         </TouchableOpacity>
-        <Text style={styles.avatarCaption}>Tap to upload profile picture</Text>
+        <Text style={styles.avatarCaption}>{t('profile.avatarCaption')}</Text>
 
         <FormField
           testID="edit-profile-name-input"
-          label="Name"
+          label={t('profile.nameLabel')}
           required
-          placeholder="Enter your name"
+          placeholder={t('profile.namePlaceholder')}
           value={name}
           onChangeText={(text) => {
             setName(text);
@@ -123,187 +183,209 @@ export default function EditProfileScreen({ onBack }: { onBack: () => void }) {
           }}
           error={nameError}
           autoCapitalize="words"
+          themeColors={c}
         />
 
         <FormField
           testID="edit-profile-email-input"
-          label="Email"
+          label={t('profile.emailLabel')}
           value={user?.email || ''}
           editable={false}
+          themeColors={c}
         />
+        <TouchableOpacity
+          testID="edit-profile-change-email-button"
+          style={styles.changeContactButton}
+          onPress={() => setChangeEmailModalVisible(true)}
+        >
+          <Text style={styles.changeContactText}>{t('profile.change')}</Text>
+        </TouchableOpacity>
 
         <FormField
           testID="edit-profile-phone-input"
-          label="Phone Number"
+          label={t('profile.phoneLabel')}
           value={user?.phoneNumber || ''}
-          placeholder="Not set"
+          placeholder={t('profile.phoneNotSet')}
           editable={false}
+          themeColors={c}
         />
-
-        <Text style={styles.lockedCaption}>
-          Changing email or phone requires OTP verification — coming soon.
-        </Text>
+        <TouchableOpacity
+          testID="edit-profile-change-phone-button"
+          style={styles.changeContactButton}
+          onPress={() => setChangePhoneModalVisible(true)}
+        >
+          <Text style={styles.changeContactText}>{t('profile.change')}</Text>
+        </TouchableOpacity>
 
         <SelectField
-          label="Gender"
-          placeholder="Select gender"
+          label={t('profile.genderLabel')}
+          placeholder={t('profile.selectGenderPlaceholder')}
           value={gender}
           onChange={setGender}
-          options={[...genderOptions]}
+          options={getGenderOptions(t)}
+          themeColors={c}
         />
 
         <SelectField
-          label="Skill Level"
-          placeholder="Select skill level"
-          value={skillLevel}
-          onChange={setSkillLevel}
-          options={skillLevelOptions}
+          label={t('profile.badmintonSkillLabel')}
+          placeholder={t('profile.selectSkillPlaceholder')}
+          value={badmintonSkill}
+          onChange={setBadmintonSkill}
+          options={badmintonSkillOptions}
+          themeColors={c}
         />
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Skill Description</Text>
-          <TextInput
-            testID="edit-profile-skill-description-input"
-            style={styles.textarea}
-            placeholder="Describe your skill level"
-            placeholderTextColor={colors.placeholder}
-            value={skillDescription}
-            onChangeText={setSkillDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
+        <SelectField
+          label={t('profile.footballSkillLabel')}
+          placeholder={t('profile.selectSkillPlaceholder')}
+          value={footballSkill}
+          onChange={setFootballSkill}
+          options={footballSkillOptions}
+          themeColors={c}
+        />
 
         <TouchableOpacity
           testID="edit-profile-change-password"
           style={styles.changePasswordButton}
-          onPress={() => comingSoon('Change Password')}
+          onPress={handleChangePassword}
+          disabled={changingPassword}
         >
-          <Ionicons name="lock-closed-outline" size={18} color={colors.text} />
-          <Text style={styles.changePasswordText}>Change Password</Text>
+          <Ionicons name="lock-closed-outline" size={18} color={c.textPrimary} />
+          <Text style={styles.changePasswordText}>
+            {changingPassword ? t('profile.sendingCode') : t('profile.changePassword')}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <ChangeContactModal
+        visible={changeEmailModalVisible}
+        onClose={() => setChangeEmailModalVisible(false)}
+        type="email"
+        currentValue={user?.email || ''}
+        onSuccess={(updatedUser) => {
+          setUser({ ...user, email: updatedUser.email });
+          setChangeEmailModalVisible(false);
+          showAlert(t('common.success'), t('profile.emailUpdatedSuccess'));
+        }}
+      />
+      <ChangeContactModal
+        visible={changePhoneModalVisible}
+        onClose={() => setChangePhoneModalVisible(false)}
+        type="phone"
+        currentValue={user?.phoneNumber || ''}
+        onSuccess={(updatedUser) => {
+          setUser({ ...user, phoneNumber: updatedUser.phoneNumber });
+          setChangePhoneModalVisible(false);
+          showAlert(t('common.success'), t('profile.phoneUpdatedSuccess'));
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  topBarSide: {
-    minWidth: 40,
-    alignItems: 'flex-start',
-  },
-  topBarSideRight: {
-    minWidth: 40,
-    alignItems: 'flex-end',
-  },
-  topBarTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  saveText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primaryDark,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  avatarSection: {
-    alignSelf: 'center',
-    width: 112,
-    height: 112,
-  },
-  avatar: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: colors.primaryDark,
-    fontWeight: '700',
-    fontSize: 36,
-  },
-  cameraBadge: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#22C55E',
-    borderWidth: 3,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarCaption: {
-    marginTop: 12,
-    marginBottom: 24,
-    fontSize: 13,
-    color: colors.subtitle,
-    textAlign: 'center',
-  },
-  lockedCaption: {
-    marginTop: -8,
-    marginBottom: 16,
-    fontSize: 12,
-    color: colors.subtitle,
-  },
-  fieldContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 6,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: colors.white,
-    minHeight: 96,
-  },
-  changePasswordButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  changePasswordText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      backgroundColor: c.authScreenBg,
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 48,
+      paddingBottom: 12,
+      backgroundColor: c.authScreenBg,
+      borderBottomWidth: 1,
+      borderBottomColor: c.divider,
+    },
+    topBarSide: {
+      minWidth: 40,
+      alignItems: 'flex-start',
+    },
+    topBarSideRight: {
+      minWidth: 40,
+      alignItems: 'flex-end',
+    },
+    topBarTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: c.textPrimary,
+    },
+    saveText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.primary,
+    },
+    content: {
+      paddingHorizontal: 24,
+      paddingTop: 24,
+      paddingBottom: 40,
+    },
+    avatarSection: {
+      alignSelf: 'center',
+      width: 112,
+      height: 112,
+    },
+    avatar: {
+      width: 112,
+      height: 112,
+      borderRadius: 56,
+      backgroundColor: c.avatarCircleBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      color: c.primary,
+      fontWeight: '700',
+      fontSize: 36,
+    },
+    cameraBadge: {
+      position: 'absolute',
+      right: 0,
+      bottom: 0,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#22C55E',
+      borderWidth: 3,
+      borderColor: c.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarCaption: {
+      marginTop: 12,
+      marginBottom: 24,
+      fontSize: 13,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    changeContactButton: {
+      alignSelf: 'flex-end',
+      marginTop: -10,
+      marginBottom: 16,
+    },
+    changeContactText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    changePasswordButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: c.divider,
+      borderRadius: 10,
+      paddingVertical: 14,
+      marginTop: 8,
+    },
+    changePasswordText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
+    },
+  });
+}
