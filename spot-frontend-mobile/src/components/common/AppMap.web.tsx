@@ -30,7 +30,7 @@ export default function AppMap(_props: Props) {
   return (
     <View style={styles.wrap}>
       <Ionicons name="map-outline" size={28} color={colors.outline} />
-      <Text style={styles.text}>Map view isn't available on web — use the list below.</Text>
+      <Text style={styles.text}>Map view isn't available on web.</Text>
     </View>
   );
 }

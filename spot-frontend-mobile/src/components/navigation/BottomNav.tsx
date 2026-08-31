@@ -48,6 +48,7 @@ export default function BottomNav({ active }: Props) {
         label={t('nav.matches')}
         active={active === 'matches'}
         onPress={active === 'matches' ? noop : () => comingSoon(t('nav.matches'))}
+        onPress={active === 'matches' ? noop : () => router.push(ROUTES.MATCHES)}
       />
       <BottomNavItem
         icon="calendar-outline"

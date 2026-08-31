@@ -15,6 +15,10 @@ export type GeoapifyPlace = {
   formatted: string;
   latitude: number;
   longitude: number;
+  /** POI name when the result is a named place (e.g. "Sân Thành Thái Badminton") — used to prefill venue name. */
+  name?: string;
+  /** Street line of the address (e.g. "12 Nguyễn Văn Linh") — venue-name fallback when there's no POI name. */
+  addressLine1?: string;
   /** Province-level admin name (e.g. "Thành phố Hồ Chí Minh") — fed to vnAdminMatch. */
   state?: string;
   /** District/ward-level admin name (e.g. "Quận 7") — fed to vnAdminMatch. */
@@ -24,7 +28,16 @@ export type GeoapifyPlace = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapResult(r: any): GeoapifyPlace {
-  return { formatted: r.formatted, latitude: r.lat, longitude: r.lon, state: r.state, county: r.county, city: r.city };
+  return {
+    formatted: r.formatted,
+    latitude: r.lat,
+    longitude: r.lon,
+    name: r.name,
+    addressLine1: r.address_line1,
+    state: r.state,
+    county: r.county,
+    city: r.city,
+  };
 }
 
 export async function searchAddress(query: string): Promise<GeoapifyPlace[]> {

@@ -1,8 +1,6 @@
 // Filter sheet output (Figma node 87:1903) — maps 1:1 onto matchService's
 // ListMatchesQuery fields except sport (owned by the Homepage screen's own
-// toggle, not part of this sheet) and radiusKm (blocked — needs
-// expo-location, not installed; see FilterSheet.tsx's Distance section
-// comment, SPOT-76 plan mục 2.1).
+// toggle, not part of this sheet).
 export type MatchFilters = {
   date?: string; // YYYY-MM-DD
   timeFrom?: string; // HH:mm
@@ -16,6 +14,12 @@ export type MatchFilters = {
   province?: string;
   city?: string;
   favorited?: boolean;
+  // Distance mode — mutually exclusive with the free-text search bar's
+  // `location` at the API level; all three must be set together. Mirrors
+  // GroupFilters/TournamentFilters (expo-location, 1-20km).
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number; // 1-20
 };
 
 export const EMPTY_MATCH_FILTERS: MatchFilters = { skill: [] };

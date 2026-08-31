@@ -1,8 +1,9 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
+import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SelectField } from '@/components/SelectField';
@@ -29,10 +30,41 @@ type LocationMode = 'location' | 'distance';
 const PRICE_MIN = 0;
 const PRICE_MAX = 500000;
 const PRICE_STEP = 10000;
+const RADIUS_MIN = 1;
+const RADIUS_MAX = 20;
+const RADIUS_DEFAULT = 10;
 // Extra inset beyond the sheet's own content padding so the slider's thumbs
 // (and their larger touch targets) never sit flush against the screen edge
 // / the phone's gesture-nav strip.
 const SLIDER_INSET = spacing.md;
+
+// @react-native-community/datetimepicker has no web build, so on web fall back
+// to the browser's own native date/time inputs — same pattern as
+// HostMatchScreen's WebDateTimeInput. `date` is an ISO yyyy-mm-dd string and
+// `timeFrom`/`timeTo` are HH:mm, exactly the value format of these inputs.
+const IS_WEB = Platform.OS === 'web';
+
+function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type={props.type}
+      value={props.value}
+      onChange={(e: { target: { value: string } }) => props.onChange(e.target.value)}
+      style={{
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: colors.cardBorder,
+        borderRadius: 10,
+        padding: spacing.sm,
+        fontSize: 14,
+        color: colors.headingText,
+        backgroundColor: colors.white,
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    />
+  );
+}
 
 /**
  * Filter sheet (Figma node 87:1903, SPOT-76). Self-contained Modal-based
@@ -45,14 +77,14 @@ const SLIDER_INSET = spacing.md;
  * profile edit) backs both dropdowns — City is empty/disabled until a
  * Province is picked.
  *
- * Distance (radius slider) is still stubbed: needs the device's current
- * lat/lng (`expo-location`, not installed yet) to mean anything — Figma
- * itself renders this section dimmed/inert when Location is selected, so
- * the "not functional yet" state already matches the design intent.
+ * Distance (radius slider) mirrors GroupFilterSheet/TournamentFilterSheet:
+ * a 1–20km slider; on Apply it requests `expo-location` foreground
+ * permission, reads the device position, and emits latitude/longitude/
+ * radiusKm (XOR with `location` / province+city at the API level).
  *
- * Date/Time use `@react-native-community/datetimepicker` (Expo Go
- * compatible) instead of plain text fields, matching Figma's calendar/clock
- * pickers. Price Range uses a two-thumb slider
+ * Date/Time use `@react-native-community/datetimepicker` on native and fall
+ * back to raw `<input type="date"|"time">` on web (no web build), matching
+ * Figma's calendar/clock pickers. Price Range uses a two-thumb slider
  * (`@ptomasroos/react-native-multi-slider`, pure JS, no native build step)
  * in VND (see src/utils/format.ts's currency decision — Figma mocks `$`
  * but spot-backend only ever works in VND).
@@ -70,7 +102,10 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
   const [provincesLoading, setProvincesLoading] = useState(false);
   const [provinceCode, setProvinceCode] = useState('');
   const [cityCode, setCityCode] = useState('');
+  const [radiusKm, setRadiusKm] = useState(RADIUS_DEFAULT);
+  const [locating, setLocating] = useState(false);
   const [sliderWidth, setSliderWidth] = useState(0);
+  const [distanceSliderWidth, setDistanceSliderWidth] = useState(0);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeFromPicker, setShowTimeFromPicker] = useState(false);
@@ -87,6 +122,8 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setFavoritedOnly(initialFilters.favorited ?? false);
     setProvinceCode(initialFilters.province ?? '');
     setCityCode(initialFilters.city ?? '');
+    setRadiusKm(initialFilters.radiusKm ?? RADIUS_DEFAULT);
+    setLocationMode(initialFilters.latitude != null ? 'distance' : 'location');
   }, [visible, initialFilters]);
 
   useEffect(() => {
@@ -115,20 +152,49 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setFavoritedOnly(false);
     setProvinceCode('');
     setCityCode('');
+    setRadiusKm(RADIUS_DEFAULT);
     setLocationMode('location');
   };
 
-  const handleApply = () => {
-    onApply({
+  const handleApply = async () => {
+    const base: MatchFilters = {
       date: date || undefined,
       timeFrom: timeFrom || undefined,
       timeTo: timeTo || undefined,
       skill: selectedSkills,
       priceMin: priceMin > PRICE_MIN ? priceMin : undefined,
       priceMax: priceMax < PRICE_MAX ? priceMax : undefined,
-      province: locationMode === 'location' ? provinceCode || undefined : undefined,
-      city: locationMode === 'location' ? cityCode || undefined : undefined,
       favorited: favoritedOnly || undefined,
+    };
+
+    if (locationMode === 'distance') {
+      setLocating(true);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Location needed', 'Allow location access to search matches near you, or switch back to Location.');
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({});
+        onApply({
+          ...base,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          radiusKm,
+        });
+        onClose();
+      } catch {
+        Alert.alert('Location unavailable', "Couldn't get your current location. Try again or switch back to Location.");
+      } finally {
+        setLocating(false);
+      }
+      return;
+    }
+
+    onApply({
+      ...base,
+      province: provinceCode || undefined,
+      city: cityCode || undefined,
     });
     onClose();
   };
@@ -165,17 +231,23 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Date</Text>
-              <TouchableOpacity
-                testID="filter-date-input"
-                style={styles.pickerField}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>
-                  {date ? formatDisplayDate(date) : 'Select a date'}
-                </Text>
-                <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
-              </TouchableOpacity>
-              {showDatePicker && (
+              {IS_WEB ? (
+                <View testID="filter-date-input">
+                  <WebDateTimeInput type="date" value={date} onChange={setDate} />
+                </View>
+              ) : (
+                <TouchableOpacity
+                  testID="filter-date-input"
+                  style={styles.pickerField}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>
+                    {date ? formatDisplayDate(date) : 'Select a date'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+                </TouchableOpacity>
+              )}
+              {showDatePicker && !IS_WEB && (
                 <DateTimePicker
                   value={date ? parseIsoDate(date) : new Date()}
                   mode="date"
@@ -195,28 +267,40 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
               <View style={styles.row}>
                 <View style={styles.rowItem}>
                   <Text style={styles.fieldLabel}>From</Text>
-                  <TouchableOpacity
-                    testID="filter-time-from-input"
-                    style={styles.pickerField}
-                    onPress={() => setShowTimeFromPicker(true)}
-                  >
-                    <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
-                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-                  </TouchableOpacity>
+                  {IS_WEB ? (
+                    <View testID="filter-time-from-input">
+                      <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} />
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      testID="filter-time-from-input"
+                      style={styles.pickerField}
+                      onPress={() => setShowTimeFromPicker(true)}
+                    >
+                      <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
+                      <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <View style={styles.rowItem}>
                   <Text style={styles.fieldLabel}>To</Text>
-                  <TouchableOpacity
-                    testID="filter-time-to-input"
-                    style={styles.pickerField}
-                    onPress={() => setShowTimeToPicker(true)}
-                  >
-                    <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
-                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-                  </TouchableOpacity>
+                  {IS_WEB ? (
+                    <View testID="filter-time-to-input">
+                      <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} />
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      testID="filter-time-to-input"
+                      style={styles.pickerField}
+                      onPress={() => setShowTimeToPicker(true)}
+                    >
+                      <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
+                      <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-              {showTimeFromPicker && (
+              {showTimeFromPicker && !IS_WEB && (
                 <DateTimePicker
                   value={timeFrom ? parseHm(timeFrom) : new Date()}
                   mode="time"
@@ -225,7 +309,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                   onChange={handleTimeFromChange}
                 />
               )}
-              {showTimeToPicker && (
+              {showTimeToPicker && !IS_WEB && (
                 <DateTimePicker
                   value={timeTo ? parseHm(timeTo) : new Date()}
                   mode="time"
@@ -254,47 +338,52 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                 </View>
                 <Text style={styles.sectionLabel}>Location</Text>
               </TouchableOpacity>
-              {provincesLoading ? (
-                <ActivityIndicator style={styles.geoLoading} color={colors.primary} />
-              ) : (
-                <View style={styles.row}>
-                  <SelectField
-                    label="Province/City"
-                    placeholder="Select province"
-                    value={provinceCode}
-                    onChange={(value) => {
-                      setProvinceCode(value);
-                      setCityCode('');
-                    }}
-                    options={provinces.map((p) => ({ label: p.name, value: p.code }))}
-                    containerStyle={styles.rowItem}
-                  />
-                  <SelectField
-                    label="Ward/Commune"
-                    placeholder={provinceCode ? 'Select ward' : 'Pick province'}
-                    value={cityCode}
-                    onChange={setCityCode}
-                    options={cityOptions}
-                    containerStyle={styles.rowItem}
-                  />
-                  <View style={styles.favoriteWrap}>
-                    <Text style={styles.favoriteSpacerLabel}> </Text>
-                    <TouchableOpacity
-                      testID="filter-favorited-toggle"
-                      style={styles.favoriteButton}
-                      onPress={() => setFavoritedOnly((prev) => !prev)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Favorited matches only"
-                    >
-                      <Ionicons
-                        name={favoritedOnly ? 'heart' : 'heart-outline'}
-                        size={18}
-                        color={favoritedOnly ? colors.error : colors.primaryDark}
-                      />
-                    </TouchableOpacity>
+              <View
+                style={locationMode !== 'location' && styles.dimmed}
+                pointerEvents={locationMode === 'location' ? 'auto' : 'none'}
+              >
+                {provincesLoading ? (
+                  <ActivityIndicator style={styles.geoLoading} color={colors.primary} />
+                ) : (
+                  <View style={styles.row}>
+                    <SelectField
+                      label="Province/City"
+                      placeholder="Select province"
+                      value={provinceCode}
+                      onChange={(value) => {
+                        setProvinceCode(value);
+                        setCityCode('');
+                      }}
+                      options={provinces.map((p) => ({ label: p.name, value: p.code }))}
+                      containerStyle={styles.rowItem}
+                    />
+                    <SelectField
+                      label="Ward/Commune"
+                      placeholder={provinceCode ? 'Select ward' : 'Pick province'}
+                      value={cityCode}
+                      onChange={setCityCode}
+                      options={cityOptions}
+                      containerStyle={styles.rowItem}
+                    />
+                    <View style={styles.favoriteWrap}>
+                      <Text style={styles.favoriteSpacerLabel}> </Text>
+                      <TouchableOpacity
+                        testID="filter-favorited-toggle"
+                        style={styles.favoriteButton}
+                        onPress={() => setFavoritedOnly((prev) => !prev)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Favorited matches only"
+                      >
+                        <Ionicons
+                          name={favoritedOnly ? 'heart' : 'heart-outline'}
+                          size={18}
+                          color={favoritedOnly ? colors.error : colors.primaryDark}
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
+              </View>
             </View>
 
             <View style={styles.section}>
@@ -303,11 +392,35 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                   {locationMode === 'distance' && <View style={styles.radioInner} />}
                 </View>
                 <Text style={styles.sectionLabel}>Distance</Text>
+                <Text style={[styles.distanceValue, locationMode !== 'distance' && styles.dimmed]}>{radiusKm} km</Text>
               </TouchableOpacity>
-              <View style={styles.disabledBlock}>
-                <Text style={styles.disabledFieldText}>1 km — 20 km</Text>
+              <View
+                style={locationMode !== 'distance' && styles.dimmed}
+                pointerEvents={locationMode === 'distance' ? 'auto' : 'none'}
+              >
+                <View style={styles.sliderWrap} onLayout={(e) => setDistanceSliderWidth(e.nativeEvent.layout.width)}>
+                  {distanceSliderWidth > 0 && (
+                    <MultiSlider
+                      values={[radiusKm]}
+                      min={RADIUS_MIN}
+                      max={RADIUS_MAX}
+                      step={1}
+                      sliderLength={Math.max(distanceSliderWidth - SLIDER_INSET * 2, 0)}
+                      onValuesChange={([value]) => setRadiusKm(value)}
+                      enabledOne={locationMode === 'distance'}
+                      selectedStyle={{ backgroundColor: colors.primaryDark }}
+                      unselectedStyle={{ backgroundColor: colors.cardBorder }}
+                      markerStyle={styles.sliderMarker}
+                      touchDimensions={{ height: 40, width: 40, borderRadius: 20, slipDisplacement: 40 }}
+                    />
+                  )}
+                </View>
+                <View style={styles.priceRangeLabels}>
+                  <Text style={styles.helperText}>{RADIUS_MIN} km</Text>
+                  <Text style={styles.helperText}>{RADIUS_MAX} km</Text>
+                </View>
+                <Text style={styles.helperText}>Uses your current device location.</Text>
               </View>
-              <Text style={styles.helperText}>Needs your device location — coming soon.</Text>
             </View>
 
             <View style={styles.section}>
@@ -372,8 +485,17 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
             <TouchableOpacity testID="filter-reset" style={styles.resetButton} onPress={handleReset}>
               <Text style={styles.resetButtonText}>Reset</Text>
             </TouchableOpacity>
-            <TouchableOpacity testID="filter-apply" style={styles.applyButton} onPress={handleApply}>
-              <Text style={styles.applyButtonText}>Apply Filters</Text>
+            <TouchableOpacity
+              testID="filter-apply"
+              style={[styles.applyButton, locating && styles.applyButtonDisabled]}
+              onPress={handleApply}
+              disabled={locating}
+            >
+              {locating ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.applyButtonText}>Apply Filters</Text>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -452,8 +574,8 @@ const styles = StyleSheet.create({
   },
   radioOuterActive: { borderColor: colors.primaryDark },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primaryDark },
-  disabledBlock: { flexDirection: 'row', gap: spacing.sm, opacity: 0.4 },
-  disabledFieldText: { fontSize: 13, color: colors.bodyText },
+  distanceValue: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  dimmed: { opacity: 0.4 },
   helperText: { fontSize: 11, color: colors.outline },
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   skillChip: {
@@ -504,5 +626,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
+  applyButtonDisabled: { opacity: 0.6 },
   applyButtonText: { fontSize: 14, fontWeight: '700', color: colors.white },
 });
