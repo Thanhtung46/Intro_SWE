@@ -55,7 +55,7 @@ type FabAction = { icon: keyof typeof Ionicons.glyphMap; label: string; onPress:
 // Each sub-tab routes through its own props (onCreateGroup/onManageGroups,
 // onCreateTournament/onManageTournaments) rather than reusing the
 // Matches-tab-specific onHostMatch/onManageMatches.
-function getFabActions(subTab: SubTab, sport: Sport, props: Props, comingSoon: (feature: string) => void): FabAction[] {
+function getFabActions(subTab: SubTab, sport: Sport, props: Props): FabAction[] {
   if (subTab === 'matches') {
     return [
       { icon: 'megaphone-outline', label: 'Host a Match', onPress: () => props.onHostMatch(sport) },
@@ -140,17 +140,23 @@ export default function MatchesHomepageScreen(props: Props) {
     async (isRefresh = false) => {
       isRefresh ? setRefreshing(true) : setStatus('loading');
       try {
+        // Distance mode (lat/lng/radiusKm) is XOR with free-text location and
+        // province/city at the API level — send only one set.
+        const distanceMode = filters.radiusKm != null && filters.latitude != null;
         const result = await listMatches({
           sport,
-          location: appliedLocation || undefined,
+          location: distanceMode ? undefined : appliedLocation || undefined,
           date: filters.date,
           timeFrom: filters.timeFrom,
           timeTo: filters.timeTo,
           skill: filters.skill.length ? filters.skill : undefined,
           priceMin: filters.priceMin,
           priceMax: filters.priceMax,
-          province: filters.province,
-          city: filters.city,
+          province: distanceMode ? undefined : filters.province,
+          city: distanceMode ? undefined : filters.city,
+          latitude: distanceMode ? filters.latitude : undefined,
+          longitude: distanceMode ? filters.longitude : undefined,
+          radiusKm: distanceMode ? filters.radiusKm : undefined,
           favorited: filters.favorited,
         });
         setMatches(result.matches);
@@ -231,8 +237,7 @@ export default function MatchesHomepageScreen(props: Props) {
     setSubTab(tab);
   };
 
-  const comingSoon = (feature: string) => Alert.alert('Coming soon', `${feature} is not available yet.`);
-  const fabActions = getFabActions(subTab, sport, props, comingSoon);
+  const fabActions = getFabActions(subTab, sport, props);
 
   const matchFiltersActive =
     filters.skill.length > 0 ||
@@ -243,6 +248,7 @@ export default function MatchesHomepageScreen(props: Props) {
     filters.priceMax != null ||
     !!filters.province ||
     !!filters.city ||
+    filters.radiusKm != null ||
     !!filters.favorited;
   const filterActive = subTab === 'matches' && matchFiltersActive;
 

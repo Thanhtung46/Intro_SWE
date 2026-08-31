@@ -36,6 +36,8 @@ const WEEKDAYS: { isoDay: number; label: string }[] = [
   { isoDay: 7, label: 'Sun' },
 ];
 
+const IS_WEB = Platform.OS === 'web';
+
 const DURATION_STEP = 30;
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
@@ -87,13 +89,46 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
         </View>
         <View style={styles.rowItem}>
           <Text style={styles.fieldLabel}>Start Time</Text>
-          <TouchableOpacity testID="group-schedule-start-time" style={styles.pickerField} onPress={() => setShowTimePicker(true)}>
-            <Text style={styles.pickerValue}>{startsAt}</Text>
-            <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-          </TouchableOpacity>
+          {IS_WEB ? (
+            // @react-native-community/datetimepicker has no web build — fall back
+            // to the browser's native time input. `startsAt` holds 'HH:mm', which
+            // is exactly the value format of <input type="time">.
+            <View testID="group-schedule-start-time-web">
+              <input
+                type="time"
+                value={startsAt}
+                step={1800}
+                onChange={(e: { target: { value: string } }) => {
+                  const parts = e.target.value.split(':');
+                  if (parts.length < 2) return;
+                  const h = Number(parts[0]);
+                  const m = Number(parts[1]);
+                  if (!Number.isInteger(h) || !Number.isInteger(m)) return;
+                  setStartsAt(`${String(h).padStart(2, '0')}:${m < 30 ? '00' : '30'}`);
+                }}
+                style={{
+                  borderWidth: 1,
+                  borderStyle: 'solid',
+                  borderColor: colors.cardBorder,
+                  borderRadius: 10,
+                  padding: spacing.sm,
+                  fontSize: 14,
+                  color: colors.headingText,
+                  backgroundColor: colors.white,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity testID="group-schedule-start-time" style={styles.pickerField} onPress={() => setShowTimePicker(true)}>
+              <Text style={styles.pickerValue}>{startsAt}</Text>
+              <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
-      {showTimePicker && (
+      {showTimePicker && !IS_WEB && (
         <DateTimePicker
           value={parseHm(startsAt)}
           mode="time"

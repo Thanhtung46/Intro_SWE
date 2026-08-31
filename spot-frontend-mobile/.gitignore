@@ -36,3 +36,10 @@ src/schemas/joinTournamentSchema.test.ts
 src/screens/tournaments/*.test.tsx
 src/components/tournaments/*.test.tsx
 __tests__/tournaments-*.test.tsx
+
+# SPOT-76 Groups domain test files — same local-only convention.
+src/schemas/createGroupSchema.test.ts
+src/schemas/joinGroupSchema.test.ts
+src/screens/groups/*.test.tsx
+src/components/groups/*.test.tsx
+__tests__/groups-*.test.tsx

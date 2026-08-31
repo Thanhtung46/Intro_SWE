@@ -38,7 +38,6 @@ type Status = 'loading' | 'ready' | 'error';
 type Props = {
   onBack: () => void;
   onOpenTournament: (tournamentId: number) => void;
-  onManageTournament: (tournamentId: number) => void;
 };
 
 const TABS: { key: TournamentMineTab; label: string }[] = [
@@ -52,7 +51,7 @@ const TABS: { key: TournamentMineTab; label: string }[] = [
  * Hosted = My Tournaments + Pending Requests (inline accept/reject);
  * Joined = My Tournaments + My Join Requests.
  */
-export default function ManageTournamentsScreen({ onBack, onOpenTournament, onManageTournament }: Props) {
+export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Props) {
   const [tab, setTab] = useState<TournamentMineTab>('hosted');
   const [hostedTournaments, setHostedTournaments] = useState<Tournament[]>([]);
   const [pendingRequests, setPendingRequests] = useState<TournamentJoinRequest[]>([]);
@@ -175,7 +174,7 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament, onMa
                   key={tournament.tournamentId}
                   tournament={tournament}
                   variant="hosted"
-                  onManage={() => onManageTournament(tournament.tournamentId)}
+                  onManage={() => onOpenTournament(tournament.tournamentId)}
                   onViewDetails={() => onOpenTournament(tournament.tournamentId)}
                 />
               ))
@@ -238,7 +237,7 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament, onMa
                   key={tournament.tournamentId}
                   tournament={tournament}
                   variant="joined"
-                  onManage={() => onManageTournament(tournament.tournamentId)}
+                  onManage={() => onOpenTournament(tournament.tournamentId)}
                   onViewDetails={() => onOpenTournament(tournament.tournamentId)}
                 />
               ))
