@@ -73,12 +73,15 @@ Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN
 | Schedule | `GET /users/me/schedule` + dev seed |
 | Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
 | Reviews | create + owner reply; venue rating cache |
+| Owner console | `/owner/dashboard/summary` + `/owner/facilities/*`, `/owner/revenue/*`, `/owner/reviews/*` (OWNER + ACTIVE) — Figma 224-6044/2414/2648/2893/4521 |
 
 **Not yet:** refresh-token rotate / JWT blacklist; booking payment gateway.
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
 
 **Admin console (BE):** `/admin` + `/api/admin` — dashboard, approvals, users, settings, audit log. Applicant docs: `POST /users/me/verification-requests`. OTP verify issues JWT for pending Owner/Referee (`nextStep: SUBMIT_VERIFICATION`).
+
+**Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`).
 
 ## Commands
 
@@ -98,6 +101,7 @@ npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
 npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
+npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -167,6 +171,9 @@ migrations/
 ├── 004_schema_venue_booking_social.sql  # venues, bookings, schema_social.matches
 ├── 005_schema_review.sql         # reviews + owner replies
 ├── 006_schema_matchmaking.sql    # pickup kèo + fold + province/city
+├── 007_schema_venue_images.sql   # venue gallery URLs
+├── 008_schema_admin.sql          # admin verification + settings
+├── 009_schema_owner_ops.sql      # owner field pricing + revenue indexes
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
