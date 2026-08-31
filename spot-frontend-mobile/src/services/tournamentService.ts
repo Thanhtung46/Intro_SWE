@@ -46,7 +46,15 @@ export async function listTournaments(
       total: res.data.total as number,
       limit: res.data.limit as number,
       offset: res.data.offset as number,
-      suggestions: res.data.suggestions,
+      // The tournaments search endpoint returns `{ kind, value }` rows (unlike
+      // /matches and /groups, which return `{ kind, text }`). Normalise to the
+      // `{ text, kind }` shape MatchesHomepageScreen's shared suggestion UI expects.
+      suggestions: (res.data.suggestions ?? []).map(
+        (row: { kind: string; text?: string; value?: string }) => ({
+          text: row.text ?? row.value ?? '',
+          kind: row.kind,
+        })
+      ),
       tournaments: res.data.tournaments as Tournament[],
     };
   } catch (err) {
@@ -57,10 +65,12 @@ export async function listTournaments(
 /** GET /tournaments/:id — Tournament Detail (Overview tab + shared fetch for the other tabs). */
 export async function getTournamentDetail(tournamentId: number): Promise<TournamentDetail> {
   try {
-    const res = await apiClient.get(`/tournaments/${tournamentId}`);
-    return res.data.tournament as TournamentDetail;
+    const res = await apiClient.get<{ tournament: TournamentDetail }>(`/tournaments/${tournamentId}`);
+    return res.data.tournament;
   } catch (err) {
-    throwFromAxiosError(err, 'Tournament not found.');
+    // The 404 body already says "Tournament not found"; this fallback only
+    // shows for a body-less error, so keep it generic like the siblings.
+    throwFromAxiosError(err, "Couldn't load this tournament. Check your network and try again.");
   }
 }
 

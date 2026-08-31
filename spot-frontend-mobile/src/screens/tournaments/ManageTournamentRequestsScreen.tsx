@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -10,10 +11,12 @@ import { getErrorMessage } from '@/services/apiErrors';
 import {
   acceptTournamentRequest,
   getTournamentDetail,
+  getTournamentPlayers,
+  kickTournamentTeam,
   listTournamentRequests,
   rejectTournamentRequest,
 } from '@/services/tournamentService';
-import type { TournamentDetail, TournamentJoinRequest } from '@/types/tournament';
+import type { TournamentDetail, TournamentJoinRequest, TournamentTeam } from '@/types/tournament';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -31,20 +34,25 @@ type Props = {
 export default function ManageTournamentRequestsScreen({ tournamentId, onBack }: Props) {
   const [tournament, setTournament] = useState<TournamentDetail | null>(null);
   const [requests, setRequests] = useState<TournamentJoinRequest[]>([]);
+  const [teams, setTeams] = useState<TournamentTeam[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [actingId, setActingId] = useState<number | null>(null);
+  const [kickTarget, setKickTarget] = useState<TournamentTeam | null>(null);
+  const [isKicking, setIsKicking] = useState(false);
 
   const fetchData = useCallback(async () => {
     setStatus('loading');
     try {
-      const [detail, reqs] = await Promise.all([
+      const [detail, reqs, players] = await Promise.all([
         getTournamentDetail(tournamentId),
         listTournamentRequests(tournamentId),
+        getTournamentPlayers(tournamentId).catch(() => ({ tournamentId, teams: [] as TournamentTeam[] })),
       ]);
       setTournament(detail);
       setRequests(reqs.filter((r) => r.status === 'PENDING'));
+      setTeams(players.teams);
       setStatus('ready');
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
@@ -71,6 +79,20 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
     }
   };
 
+  const confirmKick = async () => {
+    if (!kickTarget) return;
+    setIsKicking(true);
+    try {
+      await kickTournamentTeam(tournamentId, kickTarget.teamId);
+      setKickTarget(null);
+      await fetchData();
+    } catch (err) {
+      Alert.alert('Something went wrong', getErrorMessage(err));
+    } finally {
+      setIsKicking(false);
+    }
+  };
+
   const toggleExpanded = (requestId: number) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -94,6 +116,9 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
       </SafeAreaView>
     );
   }
+
+  // Organizer kick is only allowed before the tournament starts.
+  const canKick = tournament.status === 'OPEN_REGISTRATION' || tournament.status === 'FULL';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -192,7 +217,48 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
             );
           })
         )}
+
+        {canKick && teams.length > 0 && (
+          <View style={styles.acceptedSection}>
+            <Text style={styles.pendingCount}>Accepted teams</Text>
+            {teams.map((team) => (
+              <View key={team.teamId} style={styles.acceptedRow}>
+                <View style={styles.logo}>
+                  {team.teamLogoUrl ? (
+                    <Image source={{ uri: team.teamLogoUrl }} style={styles.logoImage} />
+                  ) : (
+                    <Text style={styles.logoText}>{(team.teamName || 'T').charAt(0).toUpperCase()}</Text>
+                  )}
+                </View>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.teamName} numberOfLines={1}>
+                    {team.teamName}
+                  </Text>
+                  <Text style={styles.captainLine} numberOfLines={1}>
+                    Captain: {team.captainFullName ?? 'Unknown'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  testID={`kick-team-${team.teamId}`}
+                  style={styles.kickButton}
+                  onPress={() => setKickTarget(team)}
+                >
+                  <Ionicons name="close" size={16} color={colors.error} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={kickTarget !== null}
+        title="Remove this team?"
+        message={`${kickTarget?.teamName ?? 'This team'} will be removed and its captain can't rejoin this tournament.`}
+        confirmLabel={isKicking ? 'Removing…' : 'Remove team'}
+        onConfirm={confirmKick}
+        onCancel={() => setKickTarget(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -270,4 +336,25 @@ const styles = StyleSheet.create({
   rejectButtonText: { fontSize: 13, fontWeight: '700', color: colors.error },
   acceptButton: { flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: spacing.sm, alignItems: 'center' },
   acceptButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
+
+  acceptedSection: { gap: spacing.sm, marginTop: spacing.md },
+  acceptedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: spacing.md,
+  },
+  kickButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

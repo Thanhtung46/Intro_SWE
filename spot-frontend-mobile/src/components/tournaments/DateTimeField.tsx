@@ -5,6 +5,7 @@ import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { toHm, toIsoDate } from '@/utils/dateTime';
 
 type Props = {
   label: string;
@@ -14,15 +15,66 @@ type Props = {
   disabled?: boolean;
 };
 
+// <input type="datetime-local"> value is `YYYY-MM-DDTHH:mm` in the browser's
+// local time — the same wall-clock a Date holds before CreateTournamentScreen
+// serialises it with .toISOString(). `new Date(str)` parses it back as local.
+function toLocalDatetime(d: Date): string {
+  return `${toIsoDate(d)}T${toHm(d)}`;
+}
+
+// react-native-web renders unrecognised lowercase JSX tags as raw DOM nodes.
+// Same shape as HostMatchScreen's WebDateTimeInput (fix `175f2e5`).
+function WebDateTimeInput(props: { value: string; disabled?: boolean; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="datetime-local"
+      value={props.value}
+      disabled={props.disabled}
+      onChange={(e: { target: { value: string } }) => props.onChange(e.target.value)}
+      style={{
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: colors.dotInactive,
+        borderRadius: 10,
+        padding: spacing.sm,
+        fontSize: 14,
+        color: colors.headingText,
+        backgroundColor: props.disabled ? colors.formScreenBackground : colors.white,
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    />
+  );
+}
+
 /**
- * A single "date + time" field: tapping it opens a date picker, then chains to
- * a time picker, and reports the combined Date. Works on both platforms
- * (Android fires a dialog per stage; iOS shows a spinner) — the RN community
- * picker has no cross-platform `datetime` mode.
+ * A single "date + time" field. Native (iOS/Android): tapping it opens a date
+ * picker, then chains to a time picker (the RN community picker has no
+ * cross-platform `datetime` mode). Web: `@react-native-community/datetimepicker`
+ * has no web build, so fall back to the browser's own
+ * `<input type="datetime-local">` — same pattern as HostMatchScreen's
+ * WebDateTimeInput (fix `175f2e5`).
  */
 export default function DateTimeField({ label, value, onChange, error, disabled }: Props) {
   const [stage, setStage] = useState<'none' | 'date' | 'time'>('none');
   const [temp, setTemp] = useState<Date>(value ?? new Date());
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.field} testID={`datetime-field-web-${label}`}>
+        <Text style={styles.label}>{label}</Text>
+        <WebDateTimeInput
+          value={value ? toLocalDatetime(value) : ''}
+          disabled={disabled}
+          onChange={(v) => {
+            const next = v ? new Date(v) : null;
+            if (next && !Number.isNaN(next.getTime())) onChange(next);
+          }}
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+      </View>
+    );
+  }
 
   const open = () => {
     if (disabled) return;

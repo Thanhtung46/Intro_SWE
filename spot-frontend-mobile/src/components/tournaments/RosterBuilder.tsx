@@ -17,7 +17,7 @@ type Props = {
   rows: RosterRow[];
   onChange: (rows: RosterRow[]) => void;
   rosterError?: string;
-  rowErrors?: Record<number, string>; // index -> jerseyNumber error
+  rowErrors?: Record<number, string>; // index -> row error (name or jersey)
 };
 
 let seq = 0;
@@ -58,39 +58,45 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
         </View>
       </View>
 
-      {rows.map((row, index) => (
-        <View key={row.key} style={styles.row}>
-          <TextInput
-            testID={`roster-name-${index}`}
-            style={[styles.nameInput, isFootball && styles.nameInputFootball]}
-            placeholder={index === 0 ? 'Captain name' : 'Player name'}
-            placeholderTextColor={colors.outline}
-            value={row.name}
-            onChangeText={(text) => updateRow(index, { name: text })}
-          />
-          {isFootball && (
-            <TextInput
-              testID={`roster-jersey-${index}`}
-              style={[styles.jerseyInput, rowErrors?.[index] && styles.inputError]}
-              placeholder="#"
-              placeholderTextColor={colors.outline}
-              keyboardType="number-pad"
-              maxLength={3}
-              value={row.jerseyNumber}
-              onChangeText={(text) => updateRow(index, { jerseyNumber: text.replace(/[^0-9]/g, '') })}
-            />
-          )}
-          {isFootball && rows.length > 1 && (
-            <TouchableOpacity
-              testID={`roster-remove-${index}`}
-              style={styles.removeButton}
-              onPress={() => removeRow(index)}
-            >
-              <Ionicons name="close" size={16} color={colors.bodyText} />
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
+      {rows.map((row, index) => {
+        const rowError = rowErrors?.[index];
+        return (
+          <View key={row.key} style={styles.rowGroup}>
+            <View style={styles.row}>
+              <TextInput
+                testID={`roster-name-${index}`}
+                style={[styles.nameInput, isFootball && styles.nameInputFootball, rowError && styles.inputError]}
+                placeholder={index === 0 ? 'Captain name' : 'Player name'}
+                placeholderTextColor={colors.outline}
+                value={row.name}
+                onChangeText={(text) => updateRow(index, { name: text })}
+              />
+              {isFootball && (
+                <TextInput
+                  testID={`roster-jersey-${index}`}
+                  style={[styles.jerseyInput, rowError && styles.inputError]}
+                  placeholder="#"
+                  placeholderTextColor={colors.outline}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                  value={row.jerseyNumber}
+                  onChangeText={(text) => updateRow(index, { jerseyNumber: text.replace(/[^0-9]/g, '') })}
+                />
+              )}
+              {isFootball && rows.length > 1 && (
+                <TouchableOpacity
+                  testID={`roster-remove-${index}`}
+                  style={styles.removeButton}
+                  onPress={() => removeRow(index)}
+                >
+                  <Ionicons name="close" size={16} color={colors.bodyText} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {rowError ? <Text style={styles.errorText}>{rowError}</Text> : null}
+          </View>
+        );
+      })}
 
       {isFootball && rows.length < maxSize && (
         <TouchableOpacity testID="roster-add" style={styles.addButton} onPress={addRow}>
@@ -118,6 +124,7 @@ const styles = StyleSheet.create({
   counter: { backgroundColor: colors.iconBackground, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   counterText: { fontSize: 12, fontWeight: '700', color: colors.bodyText },
 
+  rowGroup: { gap: spacing.xxs },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   nameInput: {
     flex: 1,

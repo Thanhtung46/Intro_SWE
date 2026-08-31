@@ -48,3 +48,6 @@ Thumbs.db
 .specify/
 specs/
 uploads/
+
+# Local manual-test infra (not shared)
+scripts/seed-tournament-manual.mjs

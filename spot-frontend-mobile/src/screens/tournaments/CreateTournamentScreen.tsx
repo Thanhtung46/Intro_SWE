@@ -364,7 +364,7 @@ export default function CreateTournamentScreen({
             <View style={styles.pickerField}>
               <TextInput
                 testID="create-tournament-venue-name"
-                style={styles.locationInput}
+                style={[styles.locationInput, locked && styles.readOnlyInput]}
                 placeholder="e.g. SPOT Arena"
                 placeholderTextColor={colors.outline}
                 value={venueName}
@@ -394,6 +394,7 @@ export default function CreateTournamentScreen({
               label="Province/City"
               placeholder="Select province"
               value={province}
+              disabled={locked}
               onChange={(v) => {
                 if (locked) return;
                 setProvince(v);
@@ -407,6 +408,7 @@ export default function CreateTournamentScreen({
               label="Ward/Commune"
               placeholder={province ? 'Select ward' : 'Pick province'}
               value={city}
+              disabled={locked}
               onChange={(v) => !locked && setCity(v)}
               options={cityOptions}
               error={fieldErrors.city}

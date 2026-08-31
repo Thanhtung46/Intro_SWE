@@ -49,7 +49,10 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
             message: `Squad must have 1–${maxSize} players`,
           });
         }
-        const seen = new Set<string>();
+        // Compare numerically — the payload sends Number(jerseyNumber), so "7"
+        // and "07" collide once submitted; catch that inline rather than
+        // letting the backend reject the duplicate.
+        const seen = new Set<number>();
         data.roster.forEach((row, index) => {
           if (!/^\d{1,3}$/.test(row.jerseyNumber)) {
             ctx.addIssue({
@@ -59,14 +62,15 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
             });
             return;
           }
-          if (seen.has(row.jerseyNumber)) {
+          const num = Number(row.jerseyNumber);
+          if (seen.has(num)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['roster', index, 'jerseyNumber'],
               message: 'Jersey numbers must be unique',
             });
           }
-          seen.add(row.jerseyNumber);
+          seen.add(num);
         });
       } else if (data.roster.length !== maxSize) {
         ctx.addIssue({

@@ -243,10 +243,16 @@ export default function TournamentDetailScreen({
     () => ROUND_ORDER.filter((r) => matches.some((m) => m.round === r)),
     [matches]
   );
-  const visibleMatches = useMemo(
-    () => (roundFilter === 'ALL' ? matches : matches.filter((m) => m.round === roundFilter)),
-    [matches, roundFilter]
-  );
+  const visibleMatches = useMemo(() => {
+    const filtered = roundFilter === 'ALL' ? matches : matches.filter((m) => m.round === roundFilter);
+    // Group by round (bracket order), then by kickoff — the API returns them in
+    // creation order, which doesn't match the round filter chips.
+    return [...filtered].sort((a, b) => {
+      const byRound = ROUND_ORDER.indexOf(a.round) - ROUND_ORDER.indexOf(b.round);
+      if (byRound !== 0) return byRound;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
+  }, [matches, roundFilter]);
 
   if (status === 'loading') {
     return (
@@ -410,7 +416,11 @@ export default function TournamentDetailScreen({
                     .map((w) => (
                       <View key={w.place} style={styles.winnerRow}>
                         <Text style={styles.winnerPlace}>{w.place}</Text>
-                        <Text style={styles.winnerTeam}>{w.teamName ?? `Team #${w.teamId}`}</Text>
+                        <Text style={styles.winnerTeam}>
+                          {w.teamName ??
+                            teams.find((t) => t.teamId === w.teamId)?.teamName ??
+                            `Team #${w.teamId}`}
+                        </Text>
                       </View>
                     ))}
                 </View>

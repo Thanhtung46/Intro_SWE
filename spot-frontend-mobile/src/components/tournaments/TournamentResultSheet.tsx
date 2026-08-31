@@ -88,6 +88,15 @@ export default function TournamentResultSheet({ visible, sport, match, onClose, 
         setError('Enter at least one set.');
         return;
       }
+      // Sets must be filled top-down and fully — otherwise a blank Set 2 with a
+      // filled Set 3 would be silently dropped and Set 3 re-sent as Set 2.
+      const filledCount = enteredSets.length;
+      const contiguous = sets.slice(0, filledCount).every((s) => s.a !== '' && s.b !== '');
+      const trailingBlank = sets.slice(filledCount).every((s) => s.a === '' && s.b === '');
+      if (!contiguous || !trailingBlank) {
+        setError('Fill each set fully, in order — no gaps.');
+        return;
+      }
       payload = { sets: enteredSets.map((s) => ({ teamAPoints: Number(s.a), teamBPoints: Number(s.b) })) };
     }
 
