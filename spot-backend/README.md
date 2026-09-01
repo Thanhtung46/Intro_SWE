@@ -17,7 +17,7 @@ Domain-driven layout under
 | Validation | Zod DTOs |
 | Agent notes | See [`CLAUDE.md`](./CLAUDE.md) |
 | **API cho FE / Tester** | See [`docs/API.md`](./docs/API.md) — request/response, lỗi, curl, checklist |
-| **Matchmaking plan** | See [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md) — kèo / skills / phases (chưa code) |
+| **Matchmaking plan** | See [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md) — kèo / skills / phases (**implemented**; post-phase P0–P3 Aug 2026) |
 
 ---
 
@@ -37,14 +37,14 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 | **Login** `POST /auth/login` | Access + refresh JWT (`sub`, `role`); lockout after 5 failed passwords / 15 min | Done |
 | **Refresh** `POST /auth/refresh` | Exchange refresh JWT → new access + refresh | Done |
 | **Me** `GET /auth/me` | Protected profile (`authenticate` + Bearer); includes `user.skills` | Done |
-| **Public user** `GET /users/:id` | Host profile card (no email/phone); `matchCount` live; `rating`/`reviewCount` stub | Done |
+| **Public user** `GET /users/:id` | Host profile (no email/phone); `matchCount`, `joinedMatches`, live `rating`/`reviewCount` | Done |
 | **Update me** `PATCH /auth/me` | Set/clear badminton + football skills | Done |
 | **Forgot password** `POST /auth/forgot-password` | OTP with `purpose=FORGOT_PASSWORD`; anti-enumeration (always same 200 message) | Done |
 | **Reset password** `POST /auth/reset-password` | Verify forgot OTP → update `password_hash`, clear lockout | Done |
 | **Email delivery** | `nodemailer` + Gmail SMTP; HTML + text; without SMTP in dev, OTP is logged | Done |
 | **Rate limiting** | IP + email limiters on OTP / login / forgot / reset (`express-rate-limit`) | Done |
 | **Zod validation** | DTOs: register, role, otp, login, refresh, forgot-password, update-me | Done |
-| **Migrations** | `001` auth, `002` skills, `003` matchmaking — tracked in `public.schema_migrations` | Done |
+| **Migrations** | `001`–`009` — tracked in `public.schema_migrations` | Done |
 | **Me** `GET /auth/me` | Protected; alias of `GET /users/me` | Done |
 | **Profile** `GET/PATCH /users/me` | View/update profile + prefs (`fullName`, `gender`, `avatarUrl`, `language`, `appearance`, push/location) | Done |
 | **Main Profile** `GET /users/me/profile` | `{ user, stats }` — hosted/joined matches, completed bookings, joinedAt | Done |
@@ -57,10 +57,13 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 | **Email delivery** | `nodemailer` + Gmail SMTP; HTML + text; without SMTP in dev, OTP is logged | Done |
 | **Rate limiting** | IP + email limiters on OTP / login / forgot / reset / profile change | Done |
 | **Zod validation** | DTOs: register, role, otp, login, forgot-password, update-profile, change-email/phone | Done |
-| **Migrations** | `001` auth, `002` prefs, `003`–`004` notifications | Done |
+| **Migrations** | `001`–`009` (see Schema section below) | Done |
 | **Notifications** | Inbox list/read/unread-count + T-24h/T-2h reminder jobs + email helper | Done |
 | **Docker ↔ Supabase** | Compose `env_file: spot-backend/.env`; `REDIS_HOST=redis`; Session pooler + SSL; optional local Postgres via profile `local-db` | Done |
-| **Smoke / unit tests** | DTO unit tests + smoke scripts (auth / profile / notifications) | Done |
+| **Smoke / unit tests** | DTO unit tests + smoke scripts (auth / profile / notifications / matches / reviews) | Done |
+| **Matchmaking (kèo)** | Browse/list/detail/join/mine/my-join-requests; bulk publish; favorites; geo filters; Manage Squad fields | Done |
+| **Match lifecycle** | Expiry worker; Completed tab rules; `outcome`; notify `MATCH_CANCELLED` / underfilled | Done |
+| **Host review (pickup kèo)** | `POST /matches/:id/review`; `summary` on detail; `GET /reviews/hosts/:userId/reviews` | Done |
 
 ### Schema decisions
 
@@ -83,8 +86,7 @@ Auth / onboarding foundation in `src/domains/auth/` plus shared infra under
 - Refresh-token rotation / Redis JWT blacklist (old refresh valid until TTL)
 - Admin approve `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`)
 - S3/CDN avatar hosting / FCM device tokens
-- Non-auth domains (`booking`, `venue`, `payment`, …) — empty scaffolds only
-  (booking will call `notificationService` later)
+- Non-auth domains (`booking`, `venue`, `payment`, …) — partial; booking CRUD / payment gateway not exposed
 
 ---
 
@@ -110,8 +112,12 @@ Profile routes: **`/users/*`** and **`/api/users/*`**.
 | `POST` | `/auth/reset-password` | `email`, `otp`, `newPassword`, `confirmPassword` | `200` password updated |
 | `POST` | `/matches` | Bearer + host body (`PLAYER`) | `201` `{ match }` |
 | `GET` | `/matches` | Bearer + query filters (`hostUserId` = kèo của host đó) | `200` `{ total, matches }` |
-| `GET` | `/matches/:id` | Bearer | `200` `{ match, canJoin, yourRequest, participants }` |
-| `POST` | `/matches/:id/join` | Bearer + `{ message?, guests? }` (`PLAYER`) | `201` `{ request, match }` |
+| `GET` | `/matches/:id` | Bearer | `200` `{ match, canJoin, yourRequest, participants, summary }` |
+| `POST` | `/matches/:id/join` | Bearer + `{ message?, phoneNumber?, guests? }` (`PLAYER`) | `201` `{ request, match }` |
+| `DELETE` | `/matches/:id/join` | Bearer (joiner) — hủy PENDING | `200` |
+| `GET` | `/matches/my-join-requests` | Bearer `?status=PENDING\|REJECTED` | `200` `{ total, pendingCount, requests }` |
+| `POST` | `/matches/:id/review` | Bearer (participant ACCEPTED) | `201` host rating aggregate |
+| `GET` | `/reviews/hosts/:userId/reviews` | Bearer | `200` pickup kèo reviews |
 | `GET` | `/matches/:id/requests` | Bearer (host) | `200` `{ requests }` |
 | `POST` | `/matches/:id/requests/:requestId/accept` | Bearer (host) | `200` |
 | `POST` | `/matches/:id/requests/:requestId/reject` | Bearer (host) | `200` |
@@ -252,6 +258,7 @@ npm run dev            # http://localhost:3000
 | `npm run smoke:otp` | Register → verify OTP |
 | `npm run smoke:login` | Register → role → verify → login |
 | `npm run smoke:matches` | Two PLAYERs: host / join / approve / kick / mine / cancel |
+| `npm run worker:match-expiry` | Process ended kèo (full → COMPLETED; underfilled → CANCELLED + notify) |
 | `npm run migrate:reset` | **Destructive** drop app schemas + re-apply squashed chain |
 | `npm test` | `node --test tests/unit/*.test.js` |
 | `npm run smoke:otp` | Register → verify OTP |
@@ -291,6 +298,9 @@ console instead of emailed.
 | `004_schema_venue_booking_social.sql` | venues, bookings, booking-linked matches |
 | `005_schema_review.sql` | reviews + owner replies |
 | `006_schema_matchmaking.sql` | pickup kèo + search fold + province/city |
+| `007_schema_venue_images.sql` | venue photo gallery (URL-only) |
+| `008_notification_match_types.sql` | inbox types for match cancel / underfilled expiry |
+| `009_schema_match_host_reviews.sql` | pickup kèo host reviews + aggregates |
 
 Applied migrations are recorded in `public.schema_migrations`
 (`scripts/migrate.js` skips already-applied files).
@@ -336,6 +346,9 @@ migrations/
 ├── 004_schema_venue_booking_social.sql
 ├── 005_schema_review.sql
 ├── 006_schema_matchmaking.sql
+├── 007_schema_venue_images.sql
+├── 008_notification_match_types.sql
+├── 009_schema_match_host_reviews.sql
 scripts/                          # migrate, check-db, smoke-*
 docs/
 ├── API.md                        # FE / tester contract
@@ -360,7 +373,9 @@ tests/unit/
 │   ├── entity/notification.entity.js
 │   ├── repository/{notification,reminder}.repository.js
 │   └── service/notification.service.js
-├── domains/{admin,booking,matchmaking,payment,referee,review,venue}/
+├── domains/matchmaking/          # Pickup kèo (implemented)
+├── domains/review/               # Venue + pickup host reviews
+├── domains/{admin,booking,payment,referee,venue}/
 │   └── …                         # empty scaffolds
 └── shared/
     ├── config/env.js
@@ -368,7 +383,7 @@ tests/unit/
     ├── database/{config,pool,redis}.js
     ├── middleware/{errorHandler,otpRateLimit,authenticate}.js
     └── utils/{logger,otp,password,jwt,mailer}.js
-migrations/                       # 001–006
+migrations/                       # 001–009
 scripts/
 ├── migrate.js / check-db.js
 ├── smoke-register.js
@@ -398,6 +413,7 @@ node scripts/smoke-register.js        # needs server up
 npm run smoke:otp                     # register → verify (OTP_DEBUG=true)
 npm run smoke:login                   # register → role → verify → login
 npm run smoke:matches                 # host / join / approve / kick / mine / cancel
+npm run worker:match-expiry           # lifecycle worker (prod/cron)
 npm run smoke:profile                 # GET/PATCH me + email/phone OTP change
 npm run smoke:notifications           # inbox + reminder tick
 npm run worker:reminders              # T-24h/T-2h worker loop

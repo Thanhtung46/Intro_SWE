@@ -8,10 +8,14 @@ import {
   VENUE_RATING_REDIS_TTL_SECONDS,
 } from '../../../shared/constants/review.js';
 import * as reviewRepository from '../repository/review.repository.js';
+import * as refereeReviewRepository from '../repository/referee-review.repository.js';
+import * as refereeProfileRepository from '../../referee/repository/referee-profile.repository.js';
 import {
   toPublicReview,
   toPublicReply,
   toPublicVenueRating,
+  toPublicRefereeReview,
+  toPublicRefereeRating,
 } from '../entity/review.entity.js';
 import * as bookingService from '../../booking/service/booking.service.js';
 
@@ -191,6 +195,87 @@ export async function getVenueRating(venueId) {
     }
     await cacheVenueRating(row);
     return { ...toPublicVenueRating(row), source: 'db' };
+  } finally {
+    client.release();
+  }
+}
+
+export async function createRefereeReview(userId, dto) {
+  const playerId = Number(userId);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const assignment = await refereeReviewRepository.findReviewableAssignmentForPlayer(
+      client,
+      { bookingId: dto.bookingId, playerId },
+    );
+    if (!assignment) {
+      throw new AppError(
+        'No officiated booking found for review, or match is not finished yet',
+        404,
+      );
+    }
+
+    const endsAt = new Date(assignment.ends_at);
+    if (endsAt.getTime() > Date.now()) {
+      throw new AppError('You can review the referee after the match ends', 400);
+    }
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentCount = await refereeReviewRepository.countPlayerRefereeReviewsSince(
+      client,
+      playerId,
+      since,
+    );
+    if (recentCount >= REVIEW_MAX_PER_PLAYER_PER_DAY) {
+      throw new AppError('Too many reviews in the last 24 hours', 429);
+    }
+
+    let review;
+    try {
+      review = await refereeReviewRepository.insertRefereeReview(client, {
+        assignmentId: assignment.assignment_id,
+        bookingId: assignment.booking_id,
+        refereeId: assignment.referee_id,
+        playerId,
+        rating: dto.rating,
+        reviewText: null,
+      });
+    } catch (err) {
+      if (err.code === '23505') {
+        throw new AppError('You already reviewed the referee for this booking', 409);
+      }
+      throw err;
+    }
+
+    const refereeRating = await refereeProfileRepository.refreshRefereeRating(
+      client,
+      assignment.referee_id,
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      review: toPublicRefereeReview(review),
+      refereeRating: toPublicRefereeRating(refereeRating),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getRefereeRating(refereeId) {
+  const client = await pool.connect();
+  try {
+    const row = await refereeProfileRepository.getRefereeRating(client, refereeId);
+    if (!row) {
+      throw new AppError('Referee profile not found', 404);
+    }
+    return toPublicRefereeRating(row);
   } finally {
     client.release();
   }

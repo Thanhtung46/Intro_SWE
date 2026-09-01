@@ -45,3 +45,22 @@ function resolveApiBaseUrl(): string {
 
 /** Backend REST base (includes `/api`). */
 export const API_URL = `${resolveApiBaseUrl()}/api`;
+
+/**
+ * Geoapify raster tile key (free tier — no billing account, unlike Google
+ * Maps). Read from process.env.EXPO_PUBLIC_* — Expo's built-in .env support
+ * (SDK 49+, no extra package): Metro inlines any EXPO_PUBLIC_-prefixed var
+ * from `.env` at build time. `.env` is gitignored, so the real key never
+ * hits source control (unlike the app.json `expo.extra` path this used
+ * before — .env.example documents the var name for a fresh checkout). This
+ * is still a client-embedded map-tile key, not a backend secret: every
+ * mobile map SDK key (Google's included) ships inside the app bundle the
+ * same way — protect it via Geoapify's dashboard domain/referrer allowlist,
+ * not by keeping it out of the built app.
+ */
+export const GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY;
+
+/** XYZ tile URL template for react-native-maps' <UrlTile> — undefined if no key is configured. */
+export const GEOAPIFY_TILE_URL_TEMPLATE = GEOAPIFY_API_KEY
+  ? `https://maps.geoapify.com/v1/tile/carto/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`
+  : undefined;

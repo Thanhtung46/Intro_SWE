@@ -10,7 +10,7 @@ import {
 export function toPublicMatch(
   row,
   courts = [],
-  { gender, includeHostPhone = false, participantAvatars = [] } = {},
+  { gender, includeHostPhone = false, participantAvatars = [], hostRating = null } = {},
 ) {
   if (!row) return null;
 
@@ -35,7 +35,8 @@ export function toPublicMatch(
       fullName: row.host_full_name ?? undefined,
       avatarUrl: row.host_avatar_url ?? null,
       matchCount: Number(row.host_match_count ?? 0),
-      rating: null,
+      rating: hostRating?.avgRating ?? null,
+      reviewCount: hostRating?.reviewCount ?? 0,
     },
     ...(includeHostPhone
       ? { hostPhoneNumber: row.host_phone_number ?? null }
@@ -102,13 +103,18 @@ export function toPublicGuest(row, { includePhone = true } = {}) {
   return guest;
 }
 
-export function toPublicJoinRequest(row, guests = [], { includePhone = true } = {}) {
+export function toPublicJoinRequest(
+  row,
+  guests = [],
+  { includePhone = true, skill = undefined } = {},
+) {
   if (!row) return null;
   const request = {
     requestId: row.request_id,
     matchId: row.match_id,
     userId: row.user_id,
     fullName: row.full_name ?? undefined,
+    avatarUrl: row.avatar_url ?? null,
     gender: row.gender ?? undefined,
     message: row.message ?? null,
     status: row.status,
@@ -119,6 +125,9 @@ export function toPublicJoinRequest(row, guests = [], { includePhone = true } = 
     guests: guests.map((guest) => toPublicGuest(guest, { includePhone })),
     createdAt: row.created_at,
   };
+  if (skill !== undefined) {
+    request.skill = skill ?? null;
+  }
   if (includePhone) {
     request.phoneNumber = row.contact_phone || row.phone_number || null;
   }

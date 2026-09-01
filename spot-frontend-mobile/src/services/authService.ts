@@ -1,7 +1,8 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 // import MockAdapter from 'axios-mock-adapter';
 import { API_URL } from '../config/env';
-import type { RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import type { CurrentUserProfile, RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import { getToken } from '@/utils/authStorage';
 
 export interface RegisterPayload {
   fullName: string;
@@ -438,4 +439,29 @@ export async function registerReferee(payload: RegisterRefereePayload): Promise<
     throw new Error("Couldn't submit registration. Check your network and try again.");
   }
   return { status: 'pending' };
+}
+
+/**
+ * REAL — GET /auth/me. Named in the original SPOT-76 API analysis as the
+ * Join Match sheet's second dependency (its "You" card, plan mục 2.2:
+ * Gender/Skill shown read-only, only Phone + Message are editable
+ * per-join). `seed` is kept in the signature for call-site compatibility
+ * (src/components/matches/JoinMatchSheet.tsx passes fullName/phoneNumber
+ * from useUser()) but is no longer used now that this hits the real
+ * endpoint — the backend response is the source of truth once signed in.
+ */
+export async function getMe(seed?: Pick<LoginUser, 'fullName' | 'phoneNumber'>): Promise<CurrentUserProfile> {
+  void seed;
+  const token = await getToken();
+  try {
+    // GET /auth/me responds { user: {...} }, not the profile flat at the
+    // top level — unwrap it here so callers get CurrentUserProfile directly.
+    const res = await client.get<{ user: CurrentUserProfile }>(`${API_URL}/auth/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.data.user;
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+    throw new Error(error.response?.data?.message || getErrorMessage(err));
+  }
 }

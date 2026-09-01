@@ -13,6 +13,9 @@ import reviewRoutes from './domains/review/routes.js';
 import venueRoutes from './domains/venue/routes.js';
 import bookingRoutes from './domains/booking/routes.js';
 import adminRoutes from './domains/admin/routes.js';
+import refereeRoutes from './domains/referee/routes.js';
+import groupRoutes from './domains/groups/routes.js';
+import tournamentRoutes from './domains/tournaments/routes.js';
 import ownerRoutes from './domains/owner/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
@@ -54,6 +57,12 @@ app.use('/bookings', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/referee', refereeRoutes);
+app.use('/api/referee', refereeRoutes);
+app.use('/groups', groupRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/tournaments', tournamentRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 app.use('/owner', ownerRoutes);
 app.use('/api/owner', ownerRoutes);
 

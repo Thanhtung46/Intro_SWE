@@ -32,6 +32,16 @@ router.post(
   authenticate,
   usersController.submitVerificationRequest,
 );
+router.post(
+  '/me/verification-requests/batch',
+  authenticate,
+  usersController.submitVerificationBatch,
+);
+router.post(
+  '/me/verification-requests/cert-update',
+  authenticate,
+  usersController.submitCertUpdate,
+);
 router.get('/me/schedule', authenticate, usersController.getMySchedule);
 
 if (config.node_env !== 'production') {

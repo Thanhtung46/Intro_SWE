@@ -22,18 +22,65 @@ export async function findPendingByUserId(client, userId) {
   return rows[0] || null;
 }
 
+export async function findPendingOwnerRequestByUserId(client, userId) {
+  const { rows } = await client.query(
+    `${SELECT_WITH_USER}
+     WHERE vr.user_id = $1 AND vr.status = $2 AND vr.document_kind IS NULL
+     LIMIT 1`,
+    [userId, VERIFICATION_STATUSES.PENDING],
+  );
+  return rows[0] || null;
+}
+
+export async function listPendingByUserId(client, userId) {
+  const { rows } = await client.query(
+    `${SELECT_WITH_USER}
+     WHERE vr.user_id = $1 AND vr.status = $2
+     ORDER BY vr.created_at ASC`,
+    [userId, VERIFICATION_STATUSES.PENDING],
+  );
+  return rows;
+}
+
+export async function findPendingByUserIdAndKind(client, userId, documentKind) {
+  const { rows } = await client.query(
+    `${SELECT_WITH_USER}
+     WHERE vr.user_id = $1 AND vr.status = $2 AND vr.document_kind = $3
+     LIMIT 1`,
+    [userId, VERIFICATION_STATUSES.PENDING, documentKind],
+  );
+  return rows[0] || null;
+}
+
+export async function listByUserId(client, userId, { status } = {}) {
+  const params = [userId];
+  let statusClause = '';
+  if (status) {
+    params.push(status);
+    statusClause = ` AND vr.status = $${params.length}`;
+  }
+  const { rows } = await client.query(
+    `${SELECT_WITH_USER}
+     WHERE vr.user_id = $1${statusClause}
+     ORDER BY vr.created_at DESC`,
+    params,
+  );
+  return rows;
+}
+
 export async function insertRequest(client, {
   userId,
   requestType,
   documentUrl,
+  documentKind = null,
 }) {
   const { rows } = await client.query(
     `INSERT INTO schema_auth.verification_requests
-       (user_id, request_type, document_url, status)
-     VALUES ($1, $2, $3, $4)
+       (user_id, request_type, document_url, document_kind, status)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING verification_req_id, user_id, request_type, document_url,
-               status, admin_notes, reviewed_by, reviewed_at, created_at`,
-    [userId, requestType, documentUrl, VERIFICATION_STATUSES.PENDING],
+               document_kind, status, admin_notes, reviewed_by, reviewed_at, created_at`,
+    [userId, requestType, documentUrl, documentKind, VERIFICATION_STATUSES.PENDING],
   );
   return rows[0];
 }
@@ -96,10 +143,24 @@ export async function updateReview(client, verificationReqId, {
          reviewed_at = CURRENT_TIMESTAMP
      WHERE verification_req_id = $1
      RETURNING verification_req_id, user_id, request_type, document_url,
-               status, admin_notes, reviewed_by, reviewed_at, created_at`,
+               document_kind, status, admin_notes, reviewed_by, reviewed_at, created_at`,
     [verificationReqId, status, adminNotes ?? null, reviewedBy],
   );
   return rows[0] || null;
+}
+
+export async function approveAllPendingForUser(client, userId, reviewedBy) {
+  const { rows } = await client.query(
+    `UPDATE schema_auth.verification_requests
+     SET status = $2,
+         reviewed_by = $3,
+         reviewed_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1 AND status = $4
+     RETURNING verification_req_id, user_id, request_type, document_url,
+               document_kind, status, admin_notes, reviewed_by, reviewed_at, created_at`,
+    [userId, VERIFICATION_STATUSES.APPROVED, reviewedBy, VERIFICATION_STATUSES.PENDING],
+  );
+  return rows;
 }
 
 export async function resetRejectedForResubmit(client, verificationReqId, {

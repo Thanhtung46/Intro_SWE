@@ -94,6 +94,16 @@ export const MY_MATCH_ROLES = Object.freeze({
 
 export const MY_MATCH_ROLE_CODES = Object.freeze(Object.values(MY_MATCH_ROLES));
 
+/** Manage Matches — Completed tab display + notifications. */
+export const MATCH_OUTCOMES = Object.freeze({
+  EXPIRED_UNDERFILLED: 'EXPIRED_UNDERFILLED',
+  CANCELLED: 'CANCELLED',
+  COMPLETED: 'COMPLETED',
+  ENDED: 'ENDED',
+});
+
+export const MATCH_OUTCOME_CODES = Object.freeze(Object.values(MATCH_OUTCOMES));
+
 /** Host listing duration: at least 1 hour, no maximum. */
 export const MATCH_MIN_DURATION_MINUTES = 60;
 

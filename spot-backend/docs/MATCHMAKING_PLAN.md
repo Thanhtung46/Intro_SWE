@@ -1,7 +1,8 @@
 # SPOT — Matchmaking plan (kèo)
 
 Plan for backend work after auth is done.  
-Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in this plan.
+Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in this plan.  
+**Tournaments:** see [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md) (locked Aug 2026, separate domain).
 
 | | |
 | :--- | :--- |
@@ -13,7 +14,7 @@ Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in th
 
 **Sources:** PA1 FR-3 / U033–U037, PA2 Match entity, Figma Matches screens, [Vmito](https://vmito.com/vi), [ALO Booking](https://datlich.alobo.vn/).
 
-When a phase is done: update [`API.md`](./API.md) and stop for review before the next phase.
+When a phase is done: update [`API.md`](./API.md) and [`CLAUDE.md`](../CLAUDE.md). Phases 1–5 + post-phase **P0–P3** (Aug 2026) are **done** — see §7.1.
 
 ---
 
@@ -202,15 +203,16 @@ Stop after each phase so Nguyễn can test.
 5. `PATCH` football `null` → football becomes `null`  
 6. Reject `badminton: "ELITE"` (wrong sport) → 400  
 
-### Phase 2 — Host + list + detail — **implemented, waiting review**
+### Phase 2 — Host + list + detail — **done**
 
 - `src/domains/matchmaking/` (full layering)  
 - Migrations for matches + courts  
 - `POST /matches` (auth)  
-- `GET /matches` filters: sport, date, timeFrom/timeTo, skill, priceMin/priceMax, location, favorited, hostUserId, lat/lng/radiusKm  
-- `GET /users/:id` — public host profile (`matchCount`, skills, `createdAt`; no email/phone; `rating` null)  
-- `GET /matches/:id` — squad `filled/max`, `spotsLeft`, `yourShare` by caller gender  
+- `GET /matches` filters: sport, date, timeFrom/timeTo, skill, priceMin/priceMax, location, favorited, hostUserId, lat/lng/radiusKm, province/city  
+- `GET /users/:id` — public host profile (`matchCount`, `joinedMatches`, skills, `createdAt`; live `rating`/`reviewCount`; no email/phone)  
+- `GET /matches/:id` — squad `filled/max`, `spotsLeft`, `yourShare`, `summary` (post-match)  
 - When `filled_count >= max_players` → `status FULL`, `spotsLeft: 0` (FE hides Join)  
+- `host.rating` / `host.reviewCount` on list cards from `match_host_reviews`
 
 **Verify:** create one football 7v7 and one badminton doubles; list/filter; detail shows capacity.
 
@@ -239,29 +241,51 @@ Stop after each phase so Nguyễn can test.
 Update [`API.md`](./API.md) (request/response/errors/curl/checklist).  
 Smoke script: `npm run smoke:matches` (`scripts/smoke-matches.js`).
 
+### Post-phase — Manage Matches lifecycle (Aug 2026) — **done**
+
+Figma Manage `101:98` + squad/requests/completed/profile. Contract: [`API.md`](./API.md) changelog + [`CLAUDE.md`](../CLAUDE.md).
+
+| Batch | Delivered |
+| :--- | :--- |
+| **P0 Lifecycle** | Browse/join chặn sau `endsAt`; `npm run worker:match-expiry`; tab **Completed** = đủ người + hết giờ only; `outcome`/`outcomeMessage`; notify `MATCH_CANCELLED` (`008`) |
+| **P1 Manage Squad** | Requests: `avatarUrl`, `skill`, `shareAmount`, `phoneNumber`. Squad: `shareAmount`, `paymentStatus`, `skill`. `DELETE /matches/:id/join` |
+| **P2 Requests badge** | `GET /matches/my-join-requests`: `pendingCount`, `?status=`, `hostAvatarUrl`; host `skill` in `participants[]` |
+| **P3 Review host** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews` (`009`) |
+
+**Completed tab rule (locked):** `ends_at <= now` + `filled_count >= max_players` + `status <> CANCELLED` + participant `ACCEPTED`. **Exclude:** host cancel, underfilled expiry, kicked.
+
+**Verify:** `npm run migrate` (008, 009) → `npm run smoke:matches` → manual: end kèo + worker → review host → profile rating updates.
+
 ---
 
-## 8. Suggested API map (target)
+## 8. API map (implemented)
 
-Prefix `/matches` and `/api/matches` (same pattern as auth).
+Prefix `/matches` and `/api/matches` (same pattern as auth). Reviews pickup host: `/reviews/hosts/:userId/reviews`.
 
-| Method | Path | Phase |
+| Method | Path | Notes |
 | :--- | :--- | :--- |
-| `PATCH` | `/auth/me` | 1 |
-| `GET` | `/users/:id` | 2 |
-| `POST` | `/matches` | 2 |
-| `GET` | `/matches` | 2 |
-| `GET` | `/matches/:id` | 2 |
-| `GET` | `/matches/mine` | 4 |
-| `PATCH` | `/matches/:id` | 4 |
-| `POST` | `/matches/:id/cancel` | 4 |
-| `POST` | `/matches/:id/join` | 3 |
-| `GET` | `/matches/:id/requests` | 3 |
-| `POST` | `/matches/:id/requests/:requestId/accept` | 3 |
-| `POST` | `/matches/:id/requests/:requestId/reject` | 3 |
-| `POST` | `/matches/:id/participants/:userId/kick` | 3 |
-
-Exact paths may be adjusted when coding; keep REST + existing error JSON (`message`, `errors[]`, `details`).
+| `PATCH` | `/auth/me` | Phase 1 — skills |
+| `GET` | `/users/:id` | Public host profile |
+| `POST` | `/matches` | Host create |
+| `POST` | `/matches/bulk` | Bulk publish |
+| `GET` | `/matches` | Browse + filters |
+| `GET` | `/matches/venue-suggestions` | Host location picker |
+| `GET` | `/matches/mine` | `?tab=active\|completed` |
+| `GET` | `/matches/my-join-requests` | Joiner tab + `pendingCount` |
+| `GET` | `/matches/:id` | Detail + `summary` |
+| `PATCH` | `/matches/:id` | Host edit (before start) |
+| `POST` | `/matches/:id/cancel` | Host cancel + notify |
+| `POST` | `/matches/:id/join` | Joiner |
+| `DELETE` | `/matches/:id/join` | Joiner hủy PENDING |
+| `GET` | `/matches/:id/requests` | Host pending list |
+| `POST` | `/matches/:id/requests/:requestId/accept` | Host |
+| `POST` | `/matches/:id/requests/:requestId/reject` | Host |
+| `POST` | `/matches/:id/participants/:userId/kick` | Host |
+| `POST` | `/matches/:id/favorite` / `DELETE` | Heart |
+| `POST` | `/matches/:id/review` | Participant rate host |
+| `POST` | `/matches/dev/process-expired` | Dev expiry tick |
+| `GET` | `/reviews/hosts/:userId/reviews` | Check Profile reviews |
+| `GET` | `/geo/vn` | Pre-2025 admin units |
 
 ---
 
@@ -279,17 +303,23 @@ Exact paths may be adjusted when coding; keep REST + existing error JSON (`messa
 - Admin approve OWNER/REFEREE (already listed under auth backlog)  
 - Recommendation / NLP chatbot (homepage search is **unaccent + fuzzy title/venue/address** via `GET /matches?location=`, plus `suggestions` while typing from our kèo — not AI / Geoapify)
 - Public browse hides `FULL` kèo (`OPEN` only + `spotsLeft > 0`); profile `hostUserId` list still shows `FULL`  
-- Notifications (bell + unread dot)  
-- Booking tab / Schedule tab  
-- **Host rating** (Figma card `4.9`): after the match is finished, each `ACCEPTED` player rates the **host** (one rating per user per match). `host.rating` stays `null` until domain `review` exists. `host.matchCount` is already live.  
+- Booking tab / Schedule tab (pickup kèo has no `booking_id`; schedule read exists for venue bookings)  
+- Football **position** on squad (Figma field — not stored)  
+- Verified-host badge  
+
+**Done (was backlog):**
+
+- Notifications (bell + match cancel types `MATCH_CANCELLED`)  
+- **Host rating** — `POST /matches/:id/review`; `host.rating` live on cards + `GET /users/:id`; `null` until first review  
 
 ---
 
 ## 10. How to review
 
-After **Phase 1**: only profile skills. Matches routes must not exist yet.  
-After **Phase 2**: can publish/browse kèo, cannot join.  
+After **Phase 1**: only profile skills.  
+After **Phase 2**: publish/browse kèo.  
 After **Phase 3**: full join loop.  
-After **Phase 4–5**: host manage + `API.md` + `npm run smoke:matches`.
+After **Phase 4–5**: host manage + `API.md` + `npm run smoke:matches`.  
+After **P0–P3 (Aug 2026)**: lifecycle worker, Completed rules, Manage Squad fields, host review — see [`API.md`](./API.md) changelog.
 
-Tester: Postman + `OTP_DEBUG=true` + existing auth smoke, then new match smoke.
+Tester: Postman + `OTP_DEBUG=true` + auth smoke, then `npm run smoke:matches`. Prod/cron: `npm run worker:match-expiry`.

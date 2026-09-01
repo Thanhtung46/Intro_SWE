@@ -36,6 +36,7 @@ import { SPORTS } from '../../../shared/constants/sports.js';
 import config from '../../../shared/config/env.js';
 import * as matchRepository from '../../matchmaking/repository/match.repository.js';
 import * as accountSecurityNotify from '../../notification/service/account-security-notify.js';
+import { getHostRatingForUser } from '../../review/service/match-host-review.service.js';
 
 async function ensureRedis() {
   if (redis.status === 'ready') {
@@ -559,8 +560,17 @@ export async function getPublicUserProfile(userId) {
       client,
       user.user_id,
     );
+    const joinedMatches = await matchRepository.countJoinedByUser(
+      client,
+      user.user_id,
+    );
+    const hostRating = await getHostRatingForUser(client, user.user_id);
     return {
-      user: toPublicHostProfile(user, skillRows, { matchCount }),
+      user: toPublicHostProfile(user, skillRows, {
+        matchCount,
+        joinedMatches,
+        hostRating,
+      }),
     };
   } finally {
     client.release();
