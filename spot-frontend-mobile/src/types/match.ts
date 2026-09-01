@@ -138,6 +138,7 @@ export type ListMatchesQuery = {
   timeFrom?: string; // HH:mm
   timeTo?: string; // HH:mm
   skill?: string[]; // skill codes for `sport`, max 10
+  format?: MatchFormat[]; // SINGLES/DOUBLES or FIVE_A_SIDE/… for `sport`
   priceMin?: number; // VND
   priceMax?: number; // VND
   location?: string; // substring match on venueName OR venueAddress — not geocoded

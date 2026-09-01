@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { ReactNode, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
 import BottomNavItem from '@/components/navigation/BottomNavItem';
@@ -26,6 +26,7 @@ const comingSoon = (feature: string) => showAlert('Coming soon', `${feature} is 
  */
 export function AppShell({ activeTab, children }: { activeTab: TabKey; children: ReactNode }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useUser();
   const [profileMenuVisible, setProfileMenuVisible] = useState(false);
   const [notificationMenuVisible, setNotificationMenuVisible] = useState(false);
@@ -47,7 +48,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <BlurView intensity={30} tint="light" style={styles.header}>
         <View style={styles.headerLeft}>
           <Image source={require('../../assets/logo.png')} style={styles.logo} />
@@ -84,7 +85,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
 
       <View style={styles.content}>{children}</View>
 
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <BottomNavItem icon="home" label="Home" active={activeTab === 'home'} onPress={() => goToTab('home', '/home')} />
         <BottomNavItem
           icon="ticket-outline"
@@ -201,12 +202,13 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    // paddingBottom set from safe-area inset so the white bar reaches the
+    // home-indicator edge (no separate gray strip under the tabs).
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: colors.white,
   },
 });

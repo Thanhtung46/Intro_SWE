@@ -4,8 +4,8 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -74,13 +74,14 @@ function getFabActions(subTab: SubTab, sport: Sport, props: Props): FabAction[] 
   ];
 }
 
-// FAB popover position/size — tied to clearing AppShell's bottom nav height
-// and the FAB's own 56px size, not the xs/sm/md/lg/xl content-spacing scale,
-// so these stay local constants rather than spacing.ts tokens. 192 matches
-// the Figma popover width (node 95:2927).
-const FAB_BOTTOM_OFFSET = 96;
-const FAB_MENU_BOTTOM_OFFSET = 160;
+// FAB sits in AppShell's content slot (already above bottom nav), so offset
+// is only a small gap from the content bottom — not nav height + FAB size.
+const FAB_BOTTOM_OFFSET = 24;
+const FAB_MENU_BOTTOM_OFFSET = 88;
 const FAB_MENU_WIDTH = 192;
+
+/** Matches list page size — mirrors GET /matches default/max-friendly batch. */
+const PAGE_SIZE = 20;
 
 // The map button reads noticeably smaller/tighter than the reference than
 // the xs/sm spacing scale gives — sized up a bit past the strict
@@ -108,9 +109,12 @@ export default function MatchesHomepageScreen(props: Props) {
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
+  const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [fabOpen, setFabOpen] = useState(false);
   const fabAnim = useRef(new Animated.Value(0)).current;
 
@@ -136,30 +140,41 @@ export default function MatchesHomepageScreen(props: Props) {
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
+  const buildListQuery = useCallback(
+    (offset: number) => {
+      // Distance mode (lat/lng/radiusKm) is XOR with free-text location and
+      // province/city at the API level — send only one set.
+      const distanceMode = filters.radiusKm != null && filters.latitude != null;
+      return {
+        sport,
+        location: distanceMode ? undefined : appliedLocation || undefined,
+        date: filters.date,
+        timeFrom: filters.timeFrom,
+        timeTo: filters.timeTo,
+        skill: filters.skill.length ? filters.skill : undefined,
+        format: filters.format.length ? filters.format : undefined,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        province: distanceMode ? undefined : filters.province,
+        city: distanceMode ? undefined : filters.city,
+        latitude: distanceMode ? filters.latitude : undefined,
+        longitude: distanceMode ? filters.longitude : undefined,
+        radiusKm: distanceMode ? filters.radiusKm : undefined,
+        favorited: filters.favorited,
+        limit: PAGE_SIZE,
+        offset,
+      };
+    },
+    [sport, appliedLocation, filters]
+  );
+
   const fetchMatches = useCallback(
     async (isRefresh = false) => {
       isRefresh ? setRefreshing(true) : setStatus('loading');
       try {
-        // Distance mode (lat/lng/radiusKm) is XOR with free-text location and
-        // province/city at the API level — send only one set.
-        const distanceMode = filters.radiusKm != null && filters.latitude != null;
-        const result = await listMatches({
-          sport,
-          location: distanceMode ? undefined : appliedLocation || undefined,
-          date: filters.date,
-          timeFrom: filters.timeFrom,
-          timeTo: filters.timeTo,
-          skill: filters.skill.length ? filters.skill : undefined,
-          priceMin: filters.priceMin,
-          priceMax: filters.priceMax,
-          province: distanceMode ? undefined : filters.province,
-          city: distanceMode ? undefined : filters.city,
-          latitude: distanceMode ? filters.latitude : undefined,
-          longitude: distanceMode ? filters.longitude : undefined,
-          radiusKm: distanceMode ? filters.radiusKm : undefined,
-          favorited: filters.favorited,
-        });
+        const result = await listMatches(buildListQuery(0));
         setMatches(result.matches);
+        setTotal(result.total);
         setStatus('ready');
       } catch (err) {
         setErrorMessage(getErrorMessage(err));
@@ -168,8 +183,27 @@ export default function MatchesHomepageScreen(props: Props) {
         if (isRefresh) setRefreshing(false);
       }
     },
-    [sport, appliedLocation, filters]
+    [buildListQuery]
   );
+
+  const loadMoreMatches = useCallback(async () => {
+    if (status !== 'ready' || loadingMoreRef.current || matches.length >= total) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const result = await listMatches(buildListQuery(matches.length));
+      setMatches((prev) => {
+        const seen = new Set(prev.map((m) => m.matchId));
+        return [...prev, ...result.matches.filter((m) => !seen.has(m.matchId))];
+      });
+      setTotal(result.total);
+    } catch {
+      // Keep what we already have; user can pull-to-refresh.
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [status, matches.length, total, buildListQuery]);
 
   useEffect(() => {
     fetchMatches();
@@ -241,6 +275,7 @@ export default function MatchesHomepageScreen(props: Props) {
 
   const matchFiltersActive =
     filters.skill.length > 0 ||
+    filters.format.length > 0 ||
     !!filters.date ||
     !!filters.timeFrom ||
     !!filters.timeTo ||
@@ -259,7 +294,7 @@ export default function MatchesHomepageScreen(props: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.sportToggle}>
         {(['FOOTBALL', 'BADMINTON'] as Sport[]).map((item) => {
           const isActive = item === sport;
@@ -268,7 +303,10 @@ export default function MatchesHomepageScreen(props: Props) {
               key={item}
               testID={`sport-toggle-${item.toLowerCase()}`}
               style={[styles.sportButton, isActive && styles.sportButtonActive]}
-              onPress={() => setSport(item)}
+              onPress={() => {
+                setSport(item);
+                setFilters((prev) => ({ ...prev, skill: [], format: [] }));
+              }}
             >
               {item === 'FOOTBALL' ? (
                 <Ionicons name="football-outline" size={16} color={isActive ? colors.white : colors.primaryDark} />
@@ -390,32 +428,42 @@ export default function MatchesHomepageScreen(props: Props) {
           onOpenTournament={props.onOpenTournament}
         />
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.list}
           contentContainerStyle={styles.listContent}
+          data={status === 'ready' ? matches : []}
+          keyExtractor={(item) => String(item.matchId)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} />}
-        >
-          {status === 'loading' ? (
-            <ActivityIndicator style={styles.spinner} color={colors.primary} />
-          ) : status === 'error' ? (
-            <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
-          ) : matches.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-              <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
-            </View>
-          ) : (
-            matches.map((match) => (
-              <MatchCard
-                key={match.matchId}
-                match={match}
-                onPress={() => props.onOpenMatch(match.matchId)}
-                onToggleFavorite={() => handleToggleFavorite(match)}
-                onDirections={() => openVenueDirections(router, match)}
-              />
-            ))
+          onEndReached={loadMoreMatches}
+          onEndReachedThreshold={0.4}
+          ListHeaderComponent={
+            status === 'loading' ? (
+              <ActivityIndicator style={styles.spinner} color={colors.primary} />
+            ) : status === 'error' ? (
+              <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
+            ) : null
+          }
+          ListEmptyComponent={
+            status === 'ready' ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="calendar-outline" size={28} color={colors.outline} />
+                <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={styles.loadMoreSpinner} color={colors.primary} /> : null
+          }
+          ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
+          renderItem={({ item: match }) => (
+            <MatchCard
+              match={match}
+              onPress={() => props.onOpenMatch(match.matchId)}
+              onToggleFavorite={() => handleToggleFavorite(match)}
+              onDirections={() => openVenueDirections(router, match)}
+            />
           )}
-        </ScrollView>
+        />
       )}
 
       {fabOpen && (
@@ -594,8 +642,10 @@ const styles = StyleSheet.create({
   subTabTextActive: { color: colors.white },
 
   list: { flex: 1 },
-  listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
+  listContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
+  listSeparator: { height: spacing.lg },
   spinner: { marginTop: spacing.xl },
+  loadMoreSpinner: { marginVertical: spacing.md },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
   emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
 

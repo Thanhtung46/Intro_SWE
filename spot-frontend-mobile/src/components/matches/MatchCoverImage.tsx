@@ -1,71 +1,98 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { MATCH_COVER_FALLBACK } from '@/constants/matchCover';
-import { colors } from '@/constants/colors';
 import type { Sport } from '@/types/match';
+
+/**
+ * Exact pixel size of assets/match-cover-badminton.png — keep card/hero
+ * aspectRatio in sync so `contain` shows the full original with no crop.
+ */
+export const BADMINTON_COVER_ASPECT = 800 / 447;
+
+const BADMINTON_DEFAULT_COVER = require('../../../assets/match-cover-badminton.png');
+
+const FOOTBALL_DEFAULT_COVER =
+  'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80';
 
 type Props = {
   sport: Sport;
-  coverUrl: string | null;
+  coverUrl: string | null | undefined;
   style?: StyleProp<ViewStyle>;
-  emojiSize?: number;
-  labelSize?: number;
 };
 
-/**
- * Match card / detail hero — real cover when available, otherwise a
- * sport-themed placeholder (gradient + emoji) instead of a flat tint.
- */
-export default function MatchCoverImage({
-  sport,
-  coverUrl,
-  style,
-  emojiSize = 52,
-  labelSize = 13,
-}: Props) {
-  if (coverUrl) {
-    return <Image source={{ uri: coverUrl }} style={[StyleSheet.absoluteFill, style]} resizeMode="cover" />;
+function usableRemoteCoverUri(value: string): string | null {
+  const uri = value.trim();
+  if (!/^https?:\/\//i.test(uri)) return null;
+  const lower = uri.toLowerCase();
+  if (
+    lower.includes('/avatars/') ||
+    lower.includes('/avatar/') ||
+    lower.includes('profile-covers') ||
+    lower.includes('profile_covers') ||
+    lower.includes('externalauthor') ||
+    lower.includes('fbcdn')
+  ) {
+    return null;
   }
+  return uri;
+}
 
-  const fallback = MATCH_COVER_FALLBACK[sport];
+/**
+ * Badminton default = the exact photo you supplied, full frame (`contain`).
+ * Never zoom/crop that asset. Scraped remotes still use `cover` to fill.
+ */
+export default function MatchCoverImage({ sport, coverUrl, style }: Props) {
+  const remoteUri = typeof coverUrl === 'string' ? usableRemoteCoverUri(coverUrl) : null;
+  const [remoteFailed, setRemoteFailed] = useState(false);
+
+  useEffect(() => {
+    setRemoteFailed(false);
+  }, [remoteUri]);
+
+  const showRemote = Boolean(remoteUri) && !remoteFailed;
+  const badmintonDefault = sport === 'BADMINTON';
+  const defaultSource = badmintonDefault
+    ? BADMINTON_DEFAULT_COVER
+    : { uri: FOOTBALL_DEFAULT_COVER };
 
   return (
-    <LinearGradient
-      colors={fallback.gradient}
-      style={[StyleSheet.absoluteFill, style]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <View style={styles.placeholderContent} pointerEvents="none">
-        <Text style={[styles.emoji, { fontSize: emojiSize }]}>{fallback.emoji}</Text>
-        <Text style={[styles.label, { fontSize: labelSize }]}>{fallback.label}</Text>
-      </View>
-    </LinearGradient>
+    <View style={[styles.fill, style]} pointerEvents="none">
+      <Image
+        source={defaultSource}
+        style={styles.image}
+        // Full original for bundled court photo; stock football may letterbox lightly.
+        resizeMode={badmintonDefault ? 'contain' : 'cover'}
+      />
+      {showRemote && remoteUri ? (
+        <Image
+          source={{ uri: remoteUri }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={() => setRemoteFailed(true)}
+        />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  placeholderContent: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+  fill: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 0,
+    overflow: 'hidden',
+    backgroundColor: '#0B3D2E',
   },
-  emoji: {
-    lineHeight: undefined,
-    textShadowColor: 'rgba(0, 0, 0, 0.15)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  label: {
-    fontWeight: '800',
-    color: colors.white,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+  image: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
   },
 });

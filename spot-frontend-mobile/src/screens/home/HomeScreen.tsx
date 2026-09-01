@@ -105,7 +105,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search bar */}
         <View style={styles.searchBarOuter}>

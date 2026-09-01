@@ -10,11 +10,12 @@ import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { formatsForSport } from '@/constants/matchFormats';
 import { formatVnd } from '@/utils/format';
 import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
 import { getVnAdminTree } from '@/services/matchService';
 import type { MatchFilters } from '@/types/matchFilters';
-import type { Sport } from '@/types/match';
+import type { MatchFormat, Sport } from '@/types/match';
 import type { VnProvince } from '@/types/geo';
 
 type Props = {
@@ -94,6 +95,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedFormats, setSelectedFormats] = useState<MatchFormat[]>([]);
   const [priceMin, setPriceMin] = useState(PRICE_MIN);
   const [priceMax, setPriceMax] = useState(PRICE_MAX);
   const [favoritedOnly, setFavoritedOnly] = useState(false);
@@ -117,6 +119,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setTimeFrom(initialFilters.timeFrom ?? '');
     setTimeTo(initialFilters.timeTo ?? '');
     setSelectedSkills(initialFilters.skill);
+    setSelectedFormats(initialFilters.format ?? []);
     setPriceMin(initialFilters.priceMin ?? PRICE_MIN);
     setPriceMax(initialFilters.priceMax ?? PRICE_MAX);
     setFavoritedOnly(initialFilters.favorited ?? false);
@@ -125,6 +128,12 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setRadiusKm(initialFilters.radiusKm ?? RADIUS_DEFAULT);
     setLocationMode(initialFilters.latitude != null ? 'distance' : 'location');
   }, [visible, initialFilters]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const allowed = new Set(formatsForSport(sport).map((opt) => opt.value));
+    setSelectedFormats((prev) => prev.filter((code) => allowed.has(code)));
+  }, [sport, visible]);
 
   useEffect(() => {
     if (!visible || provinces.length > 0) return;
@@ -142,11 +151,16 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setSelectedSkills((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
   };
 
+  const toggleFormat = (code: MatchFormat) => {
+    setSelectedFormats((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  };
+
   const handleReset = () => {
     setDate('');
     setTimeFrom('');
     setTimeTo('');
     setSelectedSkills([]);
+    setSelectedFormats([]);
     setPriceMin(PRICE_MIN);
     setPriceMax(PRICE_MAX);
     setFavoritedOnly(false);
@@ -162,6 +176,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
       timeFrom: timeFrom || undefined,
       timeTo: timeTo || undefined,
       skill: selectedSkills,
+      format: selectedFormats,
       priceMin: priceMin > PRICE_MIN ? priceMin : undefined,
       priceMax: priceMax < PRICE_MAX ? priceMax : undefined,
       favorited: favoritedOnly || undefined,
@@ -424,6 +439,28 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
             </View>
 
             <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Format</Text>
+              <View style={styles.skillGrid}>
+                {formatsForSport(sport).map((opt) => {
+                  const selected = selectedFormats.includes(opt.value);
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      testID={`filter-format-${opt.value}`}
+                      style={[styles.formatChip, selected && styles.formatChipSelected]}
+                      onPress={() => toggleFormat(opt.value)}
+                    >
+                      {selected && (
+                        <Ionicons name="checkmark" size={14} color={colors.white} style={styles.skillChipCheck} />
+                      )}
+                      <Text style={[styles.formatChipText, selected && styles.formatChipTextSelected]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.section}>
               <Text style={styles.sectionLabel}>Skill Level</Text>
               <View style={styles.skillGrid}>
                 {skillsForSport(sport).map((skill) => {
@@ -589,6 +626,22 @@ const styles = StyleSheet.create({
   skillChipSelected: { borderColor: colors.headingText, borderWidth: 2 },
   skillChipCheck: { marginRight: spacing.xxs },
   skillChipText: { fontSize: 13, fontWeight: '700', color: colors.white },
+  formatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.iconBackground,
+  },
+  formatChipSelected: {
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.primaryDark,
+  },
+  formatChipText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  formatChipTextSelected: { color: colors.white },
   priceHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   priceValue: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
   sliderWrap: { width: '100%', alignItems: 'center', paddingVertical: spacing.xs, paddingHorizontal: SLIDER_INSET },

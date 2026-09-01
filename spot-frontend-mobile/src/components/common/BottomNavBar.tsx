@@ -80,14 +80,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 56,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 12,
   },
   // Active tab is one pill wrapping the icon AND the label together (not
   // just a circle behind the icon) — pencil node CuOaD's t40hDT.
   tabActive: {
     backgroundColor: colors.primaryDark,
-    borderRadius: 12,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
   },
   icon: {
     marginBottom: 2,

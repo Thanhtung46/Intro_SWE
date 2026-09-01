@@ -6,13 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import JoinMatchSheet from '@/components/matches/JoinMatchSheet';
-import MatchCoverImage from '@/components/matches/MatchCoverImage';
+import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/MatchCoverImage';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
 import { cancelJoinRequest, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
 import type { MatchDetail, Participant } from '@/types/match';
-import { formatMatchWhen, formatVnd } from '@/utils/format';
+import { formatMatchWhenParts, formatVnd } from '@/utils/format';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -122,12 +122,13 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
   const openSlots = Math.max(0, match.maxPlayers - 1 - squadMembers.length);
   const minLabel = skillLabel(match.sport, match.skillMin);
   const maxLabel = skillLabel(match.sport, match.skillMax);
+  const whenParts = formatMatchWhenParts(match.startsAt, match.endsAt);
 
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
-          <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} emojiSize={64} labelSize={14} />
+          <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} />
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <View style={styles.sportBadge}>
@@ -140,8 +141,13 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
         </View>
 
         <View style={styles.infoStrip}>
-          <InfoStripItem icon="calendar-outline" label="Time" value={formatMatchWhen(match.startsAt, match.endsAt)} />
-          <InfoStripItem icon="stats-chart-outline" label="Skill" value={minLabel && maxLabel ? `${minLabel} - ${maxLabel}` : 'All levels'} />
+          <InfoStripItem
+            icon="calendar-outline"
+            label="Time"
+            value={whenParts.dayLabel}
+            valueSecondary={whenParts.timeRange}
+          />
+          <InfoStripItem icon="stats-chart-outline" label="Skill" value={minLabel && maxLabel ? (minLabel === maxLabel ? minLabel : `${minLabel} → ${maxLabel}`) : 'All levels'} />
           <InfoStripItem icon="cash-outline" label="Price" value={formatVnd(match.priceMin)} valueColor={colors.priceText} />
         </View>
 
@@ -315,11 +321,14 @@ function InfoStripItem({
   icon,
   label,
   value,
+  valueSecondary,
   valueColor,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  /** Optional second line (e.g. Time: "Tomorrow" then "16:00 - 18:00"). */
+  valueSecondary?: string;
   valueColor?: string;
 }) {
   return (
@@ -327,6 +336,9 @@ function InfoStripItem({
       <Ionicons name={icon} size={18} color={colors.bodyText} />
       <Text style={styles.infoStripLabel}>{label}</Text>
       <Text style={[styles.infoStripValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+      {valueSecondary ? (
+        <Text style={[styles.infoStripValueSecondary, valueColor ? { color: valueColor } : null]}>{valueSecondary}</Text>
+      ) : null}
     </View>
   );
 }
@@ -336,14 +348,36 @@ const styles = StyleSheet.create({
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
   scrollContent: { paddingBottom: 140 },
 
-  hero: { height: 260, overflow: 'hidden' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
-  heroContent: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.lg, gap: spacing.xs },
+  hero: {
+    width: '100%',
+    // Same ratio as assets/match-cover-badminton.png so the full original fits.
+    aspectRatio: BADMINTON_COVER_ASPECT,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 1,
+    backgroundColor: colors.heroScrim,
+  },
+  heroContent: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    // Near the cover's bottom edge (info strip no longer overlaps hero).
+    bottom: spacing.sm,
+    zIndex: 2,
+    gap: spacing.xs,
+  },
   sportBadge: { alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   sportBadgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   heroTitle: { color: colors.white, fontSize: 20, fontWeight: '700' },
 
-  heroTopBarWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
+  heroTopBarWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5, elevation: 5 },
   heroTopBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   heroIconButton: {
     width: 36,
@@ -357,7 +391,8 @@ const styles = StyleSheet.create({
   infoStrip: {
     flexDirection: 'row',
     marginHorizontal: spacing.md,
-    marginTop: -spacing.xl,
+    // Sit fully below the hero — no negative margin over the cover.
+    marginTop: spacing.md,
     backgroundColor: colors.cardBackground,
     borderRadius: 16,
     padding: spacing.md,
@@ -366,6 +401,7 @@ const styles = StyleSheet.create({
   infoStripItem: { flex: 1, alignItems: 'center', gap: spacing.xxs },
   infoStripLabel: { fontSize: 10, fontWeight: '700', color: colors.bodyText, textTransform: 'uppercase' },
   infoStripValue: { fontSize: 12, fontWeight: '800', color: colors.headingText, textAlign: 'center' },
+  infoStripValueSecondary: { fontSize: 11, fontWeight: '700', color: colors.headingText, textAlign: 'center' },
 
   body: { padding: spacing.md, gap: spacing.lg },
   locationCard: {

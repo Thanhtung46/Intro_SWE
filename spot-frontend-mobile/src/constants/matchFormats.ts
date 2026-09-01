@@ -8,9 +8,9 @@ const FORMATS_BY_SPORT: Record<Sport, { value: MatchFormat; label: string }[]> =
     { value: 'DOUBLES', label: 'Doubles' },
   ],
   FOOTBALL: [
-    { value: 'FIVE_A_SIDE', label: '5-a-side' },
-    { value: 'SEVEN_A_SIDE', label: '7-a-side' },
-    { value: 'ELEVEN_A_SIDE', label: '11-a-side' },
+    { value: 'FIVE_A_SIDE', label: '5v5' },
+    { value: 'SEVEN_A_SIDE', label: '7v7' },
+    { value: 'ELEVEN_A_SIDE', label: '11v11' },
   ],
 };
 

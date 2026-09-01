@@ -78,7 +78,7 @@ export default function ProfileScreen({ onBack, onEdit }: { onBack: () => void; 
   const displayName = user?.fullName || 'Guest';
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <TouchableOpacity testID="profile-back-button" style={styles.heroIconButton} onPress={onBack}>
