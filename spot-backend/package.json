@@ -29,6 +29,7 @@
     "smoke:admin-approvals": "node scripts/smoke-admin-approvals.js",
     "smoke:referee": "node scripts/smoke-referee.js",
     "smoke:account-notify": "node scripts/smoke-account-notify.js",
+    "smoke:owner-ops": "node scripts/smoke-owner-ops.js",
     "worker:reminders": "node scripts/reminder-worker.js",
     "worker:match-expiry": "node scripts/match-expiry-worker.js",
     "worker:tournament-lifecycle": "node scripts/tournament-lifecycle-worker.js",

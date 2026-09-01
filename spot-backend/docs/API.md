@@ -2786,6 +2786,60 @@ Hủy pool sân (**Plan A — My venues**).
 ```
 
 **Hành vi BE khi cancel**
+Schema: migration `008_schema_admin.sql` — `verification_requests`, `admin_audit_log`, `system_settings`.
+
+---
+
+## 13. Owner Console endpoints (Venue Owner)
+
+Prefix `/owner` + `/api/owner`. Cần `Authorization: Bearer` với `role = OWNER` và `status = ACTIVE` (admin phải duyệt trước). Figma: Dashboard `224:6044`, Revenue `224:2414`, Facility `224:2648`/`224:2893`, Reviews `224:4521`.
+
+### Dashboard KPI (`224:6044` / TC_OWNER_01)
+
+| Method | Path | Query |
+| :--- | :--- | :--- |
+| `GET` | `/owner/dashboard/summary` | `month?` (YYYY-MM), `venueId?`, `trendsWeeks?` (default 4), `recentLimit?` (default 10) |
+
+Trả về 4 KPI cards (`monthlyRevenue`, `occupancyRate`, `pendingBookings`, `newReviews`), `bookingTrends` (Mon–Sun), `recentActivities`, `facilityCards`.
+
+### Facility (`/owner/facilities`)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/facilities/venues` | List venue của owner (+ field counts) |
+| `POST` | `/owner/facilities/venues` | Tạo venue |
+| `GET` | `/owner/facilities/venues/:venueId` | Chi tiết + fields + images; field có `isAvailableNow` |
+| `PATCH` | `/owner/facilities/venues/:venueId` | Sửa venue profile |
+| `POST` | `/owner/facilities/venues/:venueId/fields` | Thêm field (`peakPricePerHour`, `offPeakPricePerHour`, `status`) |
+| `PATCH` | `/owner/facilities/venues/:venueId/fields/:fieldId` | Sửa field / maintenance |
+| `DELETE` | `/owner/facilities/venues/:venueId/fields/:fieldId` | Soft → `INACTIVE` |
+| `PUT` | `/owner/facilities/venues/:venueId/images` | `{ images: [{ imageUrl, displayOrder }] }` replace gallery |
+
+Migration `009`: `peak_price_per_hour`, `off_peak_price_per_hour`, `maintenance_note` trên `fields`.
+
+### Revenue (`/owner/revenue`)
+
+| Method | Path | Query |
+| :--- | :--- | :--- |
+| `GET` | `/owner/revenue/summary` | `from`, `to` (YYYY-MM-DD), `sport?`, `venueId?` |
+| `GET` | `/owner/revenue/timeseries` | + `granularity=week\|month` |
+| `GET` | `/owner/revenue/export` | + `format=csv` → file CSV |
+
+Aggregate từ booking `PAID`/`CHECKED_IN`/`COMPLETED` thuộc venue owner. Redis cache TTL 5 phút (`owner:revenue:*`).
+
+### Customer Reviews (`/owner/reviews`)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/reviews` | `venueId?`, `rating?`, `hasReply?`, `from?`, `to?`, `limit`, `offset` |
+| `GET` | `/owner/reviews/:reviewId` | Chi tiết + booking/field ref |
+| `POST` | `/owner/reviews/:reviewId/reply` | `{ replyText }` — reuse logic `/reviews/:id/reply` |
+
+Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
+
+---
+
+## 14. Chưa có / sắp làm
 
 - Registration → `CANCELLED`; sân có thể hiện lại Job Board.
 - Assignment **PENDING** tại sân đó → auto `CANCELLED`.

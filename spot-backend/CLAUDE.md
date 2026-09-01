@@ -191,10 +191,17 @@ Full contract: [`docs/TOURNAMENT_PLAN.md`](./docs/TOURNAMENT_PLAN.md) + **Tourna
 | Schedule | `GET /users/me/schedule` + dev seed |
 | Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`); match cancel/expiry; **group join types (G5)** |
 | Reviews | venue booking reviews + pickup kèo host reviews |
+| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
+| Reviews | create + owner reply; venue rating cache |
+| Owner console | `/owner/dashboard/summary` + `/owner/facilities/*`, `/owner/revenue/*`, `/owner/reviews/*` (OWNER + ACTIVE) — Figma 224-6044/2414/2648/2893/4521 |
 
 **Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment. Empty scaffolds: `booking`, `venue`, `payment` (partial schedule read only).
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
+
+**Admin console (BE):** `/admin` + `/api/admin` — dashboard, approvals, users, settings, audit log. Applicant docs: `POST /users/me/verification-requests`. OTP verify issues JWT for pending Owner/Referee (`nextStep: SUBMIT_VERIFICATION`).
+
+**Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`).
 
 ## Commands
 
@@ -214,6 +221,9 @@ npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
 npm run smoke:groups   # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
 npm run smoke:tournaments  # eligibility seed / create / join / match / standings / PATCH / complete
+npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
+npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
+npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -290,6 +300,9 @@ migrations/
 ├── 009_schema_match_host_reviews.sql   # pickup kèo participant → host rating
 ├── 010_schema_groups.sql               # sport groups (hội)
 ├── 011_notification_group_types.sql    # GROUP_* inbox types
+├── 007_schema_venue_images.sql   # venue gallery URLs
+├── 008_schema_admin.sql          # admin verification + settings
+├── 009_schema_owner_ops.sql      # owner field pricing + revenue indexes
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js

@@ -16,6 +16,7 @@ import adminRoutes from './domains/admin/routes.js';
 import refereeRoutes from './domains/referee/routes.js';
 import groupRoutes from './domains/groups/routes.js';
 import tournamentRoutes from './domains/tournaments/routes.js';
+import ownerRoutes from './domains/owner/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,8 @@ app.use('/groups', groupRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/tournaments', tournamentRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+app.use('/owner', ownerRoutes);
+app.use('/api/owner', ownerRoutes);
 
 app.use(errorHandler);
 
