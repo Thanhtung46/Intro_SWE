@@ -1,7 +1,7 @@
 # SPOT Backend — API Reference
 
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups (G0–G5)**, **tournaments (T0–T5)**, **notifications**, **reviews**, **schedule read**. Booking CRUD / payment chưa có API đầy đủ.
+Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups (G0–G5)**, **tournaments (T0–T5)**, **notifications**, **reviews**, **schedule read**, **booking create**, **payment (stub gateway)**. Player cancel booking / real VNPay-MoMo sandbox chưa có.
 
 | | |
 | :--- | :--- |
@@ -2172,7 +2172,7 @@ npm test
 | Logout | Chưa |
 | Avatar file upload (S3) | Chưa (URL + local `POST /users/me/avatar` đã có) |
 | FCM / device tokens | Chưa |
-| Booking create/pay/cancel, payment gateway | Chưa (schedule read + reviews only) |
+| Booking create/pay/cancel, payment gateway | **Payment stub done** (§18.1); real VNPay/MoMo sandbox phase 2 |
 | **Groups G0–G5** — full groups + inbox notifications | Done (`010`, `011`) — [`GROUP_PLAN.md`](./GROUP_PLAN.md) |
 | **Referee** — Job Board, invitations Plan A, hire-referee fan-out, rating, **board filter + favourite** | Done (`015`–`022`) — [`REFEREE_PLAN.md`](./REFEREE_PLAN.md) |
 | **Tournaments T0–T5** — full giải đấu + inbox notifications | Done (`012`–`014`, `013`) — [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md) |
@@ -2317,7 +2317,7 @@ Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Done — `/admin/approvals/*`, `/users/me/verification-requests` |
 | Logout | Chưa |
-| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; payment vẫn chưa có |
+| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; **payment stub** §18.1 |
 | Matchmaking host / list / detail | Done — `POST/GET /matches`, `GET /matches/:id` |
 | Join / guests / approve / kick | Done — Phase 3 |
 | Host mine / edit / cancel | Done — Phase 4 |
@@ -2335,7 +2335,7 @@ Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
 | Logout | Chưa |
 | Avatar file upload (S3) / stats | Chưa |
 | FCM / device tokens | Chưa |
-| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; pay/cancel, matchmaking lobby, payment gateway vẫn chưa có |
+| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; **pay via `/payments/*`** §18.1; cancel/player UI chưa |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 
@@ -2565,6 +2565,141 @@ curl -s -X POST http://localhost:3000/bookings/bulk \
   -H "Authorization: Bearer <accessToken>" -H "Content-Type: application/json" \
   -d '{"bookings":[{"fieldId":45,"bookingDate":"2026-08-20","startTime":"19:00","endTime":"20:00"},{"fieldId":46,"bookingDate":"2026-08-20","startTime":"10:00","endTime":"11:00"}]}'
 ```
+
+---
+
+## 18.1 Payment endpoints (Figma 102-5 / 102-121)
+
+Prefix `/payments` + `/api/payments`. Player Bearer required (except webhooks).
+
+**Env (dev stub):** `PAYMENT_DEBUG=true` — **ấn Pay = xác nhận ngay** (không redirect VNPay/MoMo). `POST /payments/dev/confirm` vẫn có để test tay nhưng FE **không cần** gọi.
+
+**Luồng FE (stub):** `POST /bookings` → `GET .../summary` → user ấn Pay → `POST /payments/create` → response `status: SUCCESS` + `bookingCode` → navigate Success screen.
+
+### `GET /payments/bookings/:bookingId/summary`
+
+Summary cho màn Payment (102-5): venue/field, slot, `totalAmount`, `depositAmount`, `payableAmountVnd` (= deposit + `refereeFeeVnd` nếu `hireReferee`), gateways enabled.
+
+**Success `200`**
+
+```json
+{
+  "summary": {
+    "bookingId": 501,
+    "bookingCode": null,
+    "status": "PENDING_PAYMENT",
+    "bookingDate": "2026-08-20",
+    "startTime": "19:00",
+    "endTime": "20:00",
+    "venue": { "venueId": 12, "name": "Saigon Sports Hub", "address": "123 Nguyen Van Linh" },
+    "field": { "fieldId": 45, "name": "Court A", "sportType": "football" },
+    "totalAmount": 250000,
+    "depositAmount": 75000,
+    "hireReferee": false,
+    "refereeFeeVnd": null,
+    "payableAmountVnd": 75000,
+    "paymentExpiresAt": null,
+    "gateways": { "momo": { "enabled": false }, "vnpay": { "enabled": true } }
+  }
+}
+```
+
+**Errors:** `404` · `409` booking không còn `PENDING_PAYMENT`
+
+---
+
+### `POST /payments/create`
+
+Tạo transaction và **xác nhận ngay** khi `PAYMENT_DEBUG=true` (stub — một bước duy nhất cho nút Pay).
+
+**Body:** `{ "bookingId": 501, "provider": "VNPAY" | "MOMO" }`
+
+**Success `200` (stub — instant confirm)**
+
+```json
+{
+  "message": "Payment confirmed",
+  "transaction": {
+    "transactionId": 88,
+    "bookingId": 501,
+    "provider": "VNPAY",
+    "amountVnd": 75000,
+    "status": "SUCCESS",
+    "bookingCode": "SPOT-000501",
+    "invoiceNumber": "INV-20260820-000501",
+    "paidAt": "2026-08-20T12:05:00.000Z"
+  },
+  "booking": {
+    "bookingId": 501,
+    "bookingCode": "SPOT-000501",
+    "status": "PAID"
+  }
+}
+```
+
+**Success `201` (prod gateway — chưa implement):** trả `PENDING` + `paymentUrl` redirect.
+
+**Errors:** `404` · `409` đã paid · `503` gateway disabled (prod) · `410` session expired (confirm path)
+
+---
+
+### `GET /payments/transactions/:transactionId`
+
+Poll cho màn Payment Success (102-121) — `status`, `bookingCode`, `invoiceNumber`.
+
+**Success `200`**
+
+```json
+{
+  "transaction": {
+    "transactionId": 88,
+    "bookingId": 501,
+    "provider": "VNPAY",
+    "amountVnd": 75000,
+    "status": "SUCCESS",
+    "bookingCode": "SPOT-000501",
+    "invoiceNumber": "INV-20260820-000501",
+    "bookingStatus": "PAID",
+    "paidAt": "2026-08-20T12:05:00.000Z",
+    "summary": {
+      "venueName": "Saigon Sports Hub",
+      "fieldName": "Court A",
+      "bookingDate": "2026-08-20",
+      "startTime": "19:00",
+      "endTime": "20:00"
+    }
+  }
+}
+```
+
+---
+
+### `POST /payments/dev/confirm` (non-prod, `PAYMENT_DEBUG=true`)
+
+Mock gateway success. Body: `{ "transactionId": 88 }`. Idempotent — gọi lại trả `duplicate: true`.
+
+Side effects: booking → `PAID` + `bookingCode`, invoice PDF (`uploads/invoices/`), email attachment (nếu SMTP), inbox `BOOKING_PAYMENT_SUCCESS`, referee fan-out nếu `hireReferee`.
+
+---
+
+### Webhooks (stub structure — phase 2: VNPay/MoMo sandbox)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `POST` | `/payments/webhooks/vnpay` | Public; idempotent via `provider_ref` |
+| `POST` | `/payments/webhooks/momo` | Public |
+
+Stub payload success: `{ "providerRef": "<ref from create>", "status": "SUCCESS" }`.
+
+---
+
+### Worker
+
+`npm run worker:payment-expiry` — expire transaction `PENDING` quá TTL → booking `CANCELLED`, giải phóng slot.
+
+**Smoke:** `npm run smoke:payment` (cần `OTP_DEBUG=true`, `PAYMENT_DEBUG=true`, server up).
+
+**Legacy dev:** `POST /bookings/:id/dev/mark-paid` vẫn hoạt động (bypass payment domain).
 
 ---
 

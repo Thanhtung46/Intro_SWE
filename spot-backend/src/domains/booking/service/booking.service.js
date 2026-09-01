@@ -375,15 +375,56 @@ export async function createBookingsBulk(playerId, { bookings }) {
   };
 }
 
+/** Mark booking PAID with booking code — used by payment confirm flow. */
+export async function confirmBookingPaidAfterPayment(client, { bookingId, playerId, bookingCode }) {
+  return bookingRepository.markBookingPaidWithCode(
+    client,
+    bookingId,
+    playerId,
+    bookingCode,
+  );
+}
+
+/** Post-commit side effects after booking is PAID (referee fan-out). */
+export async function runPostPaidSideEffects(booking, bookingId) {
+  if (!booking?.hire_referee) {
+    return { created: 0, notificationsSent: 0 };
+  }
+
+  const client = await pool.connect();
+  let fanOut = { created: 0, invitations: [] };
+  try {
+    fanOut = await fanOutRefereeInvitations(bookingId, client);
+  } finally {
+    client.release();
+  }
+
+  if (fanOut.invitations?.length) {
+    await dispatchInvitationNotifications(
+      fanOut.invitations,
+      fanOut.meta,
+      bookingId,
+    );
+    return {
+      created: fanOut.created,
+      notificationsSent: fanOut.invitations.length,
+    };
+  }
+
+  return { created: fanOut.created, notificationsSent: 0 };
+}
+
 /** Dev/smoke: mark booking PAID and fan-out referee invitations if hire_referee. */
 export async function markBookingPaidDev(playerId, bookingId) {
+  const bookingCode = `SPOT-${String(bookingId).padStart(6, '0')}`;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const booking = await bookingRepository.markBookingPaid(
+    const booking = await bookingRepository.markBookingPaidWithCode(
       client,
       bookingId,
       playerId,
+      bookingCode,
     );
     if (!booking) {
       throw new AppError('Booking not found or not pending payment', 404);

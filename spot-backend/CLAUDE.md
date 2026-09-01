@@ -202,7 +202,7 @@ Full contract: [`docs/TOURNAMENT_PLAN.md`](./docs/TOURNAMENT_PLAN.md) + **Tourna
 | Reviews | create + owner reply; venue rating cache |
 | Owner console | `/owner/dashboard/summary` + `/owner/facilities/*`, `/owner/revenue/*`, `/owner/reviews/*` (OWNER + ACTIVE) — Figma 224-6044/2414/2648/2893/4521 |
 
-**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment. Empty scaffolds: `booking`, `venue`, `payment` (partial schedule read only).
+**Not yet:** refresh-token rotate / JWT blacklist; real VNPay/MoMo sandbox keys; player cancel unpaid booking API. **Payment (BE):** `/payments/*` stub gateway + PDF invoice (migration `029`, Figma 102-5/102-121) — `PAYMENT_DEBUG=true` for dev confirm.
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
 
@@ -232,6 +232,7 @@ npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
 npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
 npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
 npm run smoke:owner-schedule   # owner schedule GET + manual booking + 409/422 (needs 010)
+npm run smoke:payment          # booking → payment create → dev confirm → invoice (PAYMENT_DEBUG)
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -239,6 +240,7 @@ node scripts/smoke-forgot-password.js  # register → role → verify → forgot
 npm run smoke:schedule|notifications|reviews
 npm run worker:reminders
 npm run worker:match-expiry   # auto COMPLETED (full) / CANCELLED (underfilled) + notify
+npm run worker:payment-expiry # expire PENDING payment + cancel unpaid bookings
 npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
 ```
 

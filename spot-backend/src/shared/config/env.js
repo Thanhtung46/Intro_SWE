@@ -122,6 +122,12 @@ const config = {
       'SPOT <noreply@spot.local>'
     ).trim(),
   },
+
+  payment: {
+    debug:
+      process.env.PAYMENT_DEBUG === 'true' || process.env.PAYMENT_DEBUG === '1',
+    ttlSeconds: Number(process.env.PAYMENT_TTL_SECONDS) || 900,
+  },
 };
 
 export default config;
