@@ -451,6 +451,7 @@ export async function listMatches(userId, query) {
       skillRanks: (query.skill || [])
         .map((code) => rankForSkill(query.sport, code))
         .filter((rank) => rank != null),
+      formats: query.format?.length ? query.format : undefined,
       priceMin: query.priceMin,
       priceMax: query.priceMax,
       location: query.location,

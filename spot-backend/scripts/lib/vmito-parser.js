@@ -380,15 +380,13 @@ function isHttpUrl(value) {
   return trimmed.startsWith('http://') || trimmed.startsWith('https://');
 }
 
-/** First usable cover URL from Vmito payload (session → venue → gallery → host). */
+/** First usable cover URL from Vmito — venue/session photos only (never host avatar). */
 export function resolveVmitoCoverUrl(session) {
   const candidates = [
     session?.coverPhoto,
     session?.venue?.coverPhoto,
     ...(Array.isArray(session?.images) ? session.images : []),
     ...(Array.isArray(session?.venue?.images) ? session.venue.images : []),
-    session?.host?.image,
-    session?.externalAuthorAvatar,
   ];
   for (const candidate of candidates) {
     if (isHttpUrl(candidate)) {

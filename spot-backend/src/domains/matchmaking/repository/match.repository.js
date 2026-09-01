@@ -200,6 +200,9 @@ function buildListMatchWhere(
   if (filters.sport) {
     where.push(`m.sport = ${add(filters.sport)}`);
   }
+  if (filters.formats?.length) {
+    where.push(`m.format = ANY(${add(filters.formats)}::text[])`);
+  }
   if (filters.date && (filters.timeFrom || filters.timeTo)) {
     const dateSlot = add(filters.date);
     const fromSlot = add(filters.timeFrom || '00:00:00');

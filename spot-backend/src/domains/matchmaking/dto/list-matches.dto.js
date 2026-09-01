@@ -5,6 +5,10 @@ import {
 } from '../../../shared/constants/sports.js';
 import { PG_INT4_MAX } from '../../../shared/constants/auth.js';
 import {
+  MATCH_FORMATS,
+  isFormatForSport,
+} from '../../../shared/constants/matchmaking.js';
+import {
   isVnCityInProvince,
   isVnProvince,
 } from '../../../shared/constants/vn-admin.js';
@@ -26,7 +30,8 @@ function optionalBoolean(value) {
   return next;
 }
 
-function skillQueryToList(value) {
+/** Comma / repeated query keys → unique string list (skill, format, …). */
+function csvQueryToList(value) {
   const next = blankToUndefined(value);
   if (next === undefined) {
     return undefined;
@@ -82,8 +87,21 @@ export const listMatchesQuerySchema = z
         .optional(),
     ),
     skill: z.preprocess(
-      skillQueryToList,
+      csvQueryToList,
       z.array(z.string().min(1)).max(10, 'At most 10 skill filters').optional(),
+    ),
+    format: z.preprocess(
+      csvQueryToList,
+      z
+        .array(
+          z.enum(MATCH_FORMATS, {
+            errorMap: () => ({
+              message: `format must be one of: ${MATCH_FORMATS.join(', ')}`,
+            }),
+          }),
+        )
+        .max(5, 'At most 5 format filters')
+        .optional(),
     ),
     priceMin: z.preprocess(
       blankToUndefined,
@@ -172,6 +190,25 @@ export const listMatchesQuerySchema = z
             code: z.ZodIssueCode.custom,
             path: ['skill', index],
             message: `skill is not valid for ${data.sport}`,
+          });
+        }
+      });
+    }
+    const formats = data.format || [];
+    if (formats.length && !data.sport) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sport'],
+        message: 'sport is required when filtering by format',
+      });
+    }
+    if (formats.length && data.sport) {
+      formats.forEach((code, index) => {
+        if (!isFormatForSport(data.sport, code)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['format', index],
+            message: `format is not valid for ${data.sport}`,
           });
         }
       });

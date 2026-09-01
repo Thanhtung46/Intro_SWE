@@ -73,6 +73,29 @@ describe('listMatchesQuerySchema', () => {
     assert.deepEqual(parsed.skill, ['REC_BASIC', 'ELITE']);
   });
 
+  it('accepts format filters for badminton', () => {
+    const parsed = listMatchesQuerySchema.parse({
+      sport: 'BADMINTON',
+      format: 'SINGLES,DOUBLES',
+    });
+    assert.deepEqual(parsed.format, ['SINGLES', 'DOUBLES']);
+  });
+
+  it('rejects football format when sport is badminton', () => {
+    const result = listMatchesQuerySchema.safeParse({
+      sport: 'BADMINTON',
+      format: 'FIVE_A_SIDE',
+    });
+    assert.equal(result.success, false);
+  });
+
+  it('requires sport when filtering by format', () => {
+    const result = listMatchesQuerySchema.safeParse({
+      format: 'SINGLES',
+    });
+    assert.equal(result.success, false);
+  });
+
   it('accepts favorited=true from query string', () => {
     const parsed = listMatchesQuerySchema.parse({ favorited: 'true' });
     assert.equal(parsed.favorited, true);

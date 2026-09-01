@@ -156,6 +156,7 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 | **Sync** | Đọc snapshot → shadow hosts + INSERT kèo Postgres | `sync:vmito` → `data/vmito-sync-report.json` |
 | **Live** | Fetch + sync một lệnh | `sync:vmito:live:50` → **cả hai** file JSON |
 | **Reset** | Xóa **chỉ** kèo/host Vmito trên DB (giữ kèo/user cũ) | `reset:vmito` — xem section **Vmito import → Reset dữ liệu test** |
+| **Football demo seed** | ~50 kèo bóng đá HCM (synthetic — Vmito không có FOOTBALL feed) | `seed:football` / `reset:football` |
 | **Scope** | Chỉ **TP.HCM (`79`) + Hà Nội (`01`)** | Chi tiết: section **Vmito import** |
 
 **Tournaments product locks (do not revert):** tách biệt kèo + Groups; **1 giải = 1 hạng mục**; join **APPROVAL-only** (captain); create gate **80 COMPLETED host + rating ≥ 4.5**; **`hostedByLabel = SPOT`**; cancel **before startsAt only**; sau **ACTIVE** lock venue/schedule; winners + in-team ranks **manual** on PATCH.
@@ -252,6 +253,13 @@ npm run sync:vmito:live:500            # fetch 500 kèo rồi sync
 npm run sync:vmito:live:1000           # fetch 1000 kèo rồi sync
 npm run sync:vmito -- --dry-run        # mô phỏng sync, không ghi DB
 
+# Football demo seed (synthetic HCM kèo — không cào Vmito)
+npm run seed:football                  # mặc định 50 kèo
+npm run seed:football -- --count 30
+npm run seed:football -- --dry-run
+npm run reset:football -- --dry-run
+npm run reset:football                 # xóa chỉ kèo/host football.*@import.spot.local
+
 # Reset chỉ dữ liệu Vmito (sau khi đã sync) — không xóa kèo/user cũ trên DB
 npm run reset:vmito -- --dry-run       # đếm kèo + shadow host sẽ xóa
 npm run reset:vmito                    # xóa thật → có thể sync:vmito lại
@@ -262,6 +270,9 @@ Docker from **repo root** `Intro_SWE/`:
 ```bash
 docker compose up -d --build redis backend
 docker compose run --rm backend npm run migrate
+docker compose run --rm backend npm run seed:football              # đẩy 50 kèo bóng đá demo vào DB
+docker compose run --rm backend npm run reset:football -- --dry-run
+docker compose run --rm backend npm run reset:football             # xóa chỉ seed bóng đá
 docker compose run --rm backend npm run reset:vmito -- --dry-run   # preview (Vmito only)
 docker compose run --rm backend npm run reset:vmito                # delete Vmito import only
 docker compose run --rm backend npm run reset:matches              # TRUNCATE all kèo — destructive
@@ -556,7 +567,7 @@ Sau `reset:vmito`, `sync:vmito` coi mọi slug là mới → **INSERT** lại (k
 | **Trùng tên sân + trùng giờ** (DB hoặc cùng batch import) | **Skip** — không đẩy 2 kèo cùng venue + overlapping time |
 | Trùng pitch + giờ + sân con (409 occupancy SPOT) | **Skip** — fallback nếu lọc trên chưa bắt |
 | `startsAt` quá khứ | Bump +7 ngày/lần tối đa 52 tuần |
-| `coverUrl` | Fallback: `session.coverPhoto` → `venue.coverPhoto` → `images[]` / `venue.images[]` → `host.image` → `externalAuthorAvatar`; invalid URL → bỏ field (mobile shows sport placeholder) |
+| `coverUrl` | Giữ ảnh thật từ Vmito (`session`/`venue`/`images`) nếu có. **Không** dùng avatar host. Badminton thiếu cover → ảnh sân bundled trên mobile; Football thiếu → stock photo |
 | Skill thiếu khi `allLevels=false` | → `allLevels: true` |
 | Tên sân trùng trên 1 kèo | Suffix `(2)`, `(3)`… |
 | Validation Zod fail | **Skip** + ghi reason trong report |
