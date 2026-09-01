@@ -79,6 +79,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
         avatarInitial={avatarInitial}
         onNotificationsPress={onNotificationsPress}
         unreadCount={unreadCount}
+        onAssistantPress={() => router.push(ROUTES.ASSISTANT)}
       />
 
       {/* Sport toggle (Figma node 79:1392) */}

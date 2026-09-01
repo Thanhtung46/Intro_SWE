@@ -10,7 +10,7 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 Implemented so far:
 
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`, `/assistant`+`/api/assistant`, `/recommendations`+`/api/recommendations`.
 
 ## Status (done vs not)
 
@@ -48,6 +48,13 @@ Implemented so far:
 | Accept / reject / kick | Done — `UPDATE` same `requestId`; kick cannot rejoin **that** kèo |
 | `PATCH /matches/:id` | Done — host edit before `startsAt` |
 | `POST /matches/:id/cancel` | Done — pending → `REJECTED`; status `CANCELLED` (frees pitch) |
+
+**AI-service proxies — thin pass-through domains, own no table**
+
+| Area | Status |
+| :--- | :--- |
+| `POST/GET/DELETE /assistant/conversations/:id(/messages)` | Done — proxies to `spot-ai-services/nlp-assistant` (`:5003`), forwarding both `X-Internal-Service-Key` and the calling player's own access token as `X-Player-Access-Token` so the AI service can act on the matchmaking API as that player. See `specs/003-nlp-assistant/`. |
+| `GET /recommendations` | Done — proxies to `spot-ai-services/recommendation` (`:5001`) with `X-Internal-Service-Key`; `userId` is always derived from the authenticated JWT, never accepted from the client. See `specs/004-ai-features-frontend-integration/`. |
 
 **Infra / conventions**
 
@@ -150,6 +157,15 @@ src/
 │   ├── entity/match.entity.js
 │   ├── repository/{match,match-court,join-request,match-favorite}.repository.js
 │   └── service/match.service.js
+├── domains/assistant/             # POST/GET/DELETE /assistant/conversations/:id(/messages) — proxies nlp-assistant
+│   ├── routes.js
+│   ├── controller/assistant.controller.js
+│   ├── dto/assistant.dto.js
+│   └── service/assistant.service.js   # no entity/repository — owns no table
+├── domains/recommendation/        # GET /recommendations — proxies spot-ai-services/recommendation
+│   ├── routes.js
+│   ├── controller/recommendation.controller.js
+│   └── service/recommendation.service.js   # no dto/entity/repository — owns no table
 ├── domains/{admin,booking,notification,payment,referee,review,venue}/
 ├── events/{handlers,topics}/     # empty
 └── shared/

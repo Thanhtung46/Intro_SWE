@@ -5,6 +5,7 @@ import React, { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ROUTES } from '@/constants/routes';
 import BottomNavItem from '@/components/navigation/BottomNavItem';
 import { showAlert } from '@/utils/showAlert';
 import { useLanguage } from '@/context/LanguageContext';
@@ -62,7 +63,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => comingSoon(t('header.aiAssistant'))}
+            onPress={() => router.push(ROUTES.ASSISTANT)}
             accessibilityRole="button"
             accessibilityLabel={t('header.aiAssistant')}
           >

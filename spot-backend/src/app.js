@@ -14,6 +14,8 @@ import venueRoutes from './domains/venue/routes.js';
 import bookingRoutes from './domains/booking/routes.js';
 import adminRoutes from './domains/admin/routes.js';
 import ownerRoutes from './domains/owner/routes.js';
+import assistantRoutes from './domains/assistant/routes.js';
+import recommendationRoutes from './domains/recommendation/routes.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,7 +25,10 @@ const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors());
-app.use(express.json());
+// 15mb: express.json()'s 100kb default rejects the assistant's voice-message
+// bodies before they reach assistant.dto.js's own MAX_AUDIO_BASE64_CHARS
+// (14M chars) check — the limit here must be at least that large.
+app.use(express.json({ limit: '15mb' }));
 app.use('/uploads', express.static(uploadsRoot));
 
 app.get('/health', (req, res) => {
@@ -56,6 +61,10 @@ app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/owner', ownerRoutes);
 app.use('/api/owner', ownerRoutes);
+app.use('/assistant', assistantRoutes);
+app.use('/api/assistant', assistantRoutes);
+app.use('/recommendations', recommendationRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 
 app.use(errorHandler);
 

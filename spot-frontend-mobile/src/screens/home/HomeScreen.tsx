@@ -23,6 +23,8 @@ import VenueCard, { Venue } from '@/components/home/VenueCard';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import { listVenues, PublicVenue } from '@/services/venueService';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
+import { getRecommendations, RecommendationItem } from '@/services/recommendationService';
+import { venueDetailRoute } from '@/constants/routes';
 
 const CAROUSEL_IMAGES = [
   require('../../../assets/home/carousel-football.png'),
@@ -62,6 +64,20 @@ function mapVenueToCard(venue: PublicVenue): Venue {
   };
 }
 
+// GET /recommendations has no per-venue photo/price either (data-model.md
+// Suggestion mapping table) — same placeholder convention as mapVenueToCard.
+function mapRecommendationToCard(item: RecommendationItem): Venue {
+  return {
+    id: String(item.venueId),
+    name: item.venueName,
+    image: VENUE_PLACEHOLDER_IMAGE,
+    distanceLabel: item.distanceKm !== undefined ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    priceLabel: NOT_AVAILABLE_LABEL,
+    rating: 0,
+    tag: 'Suggested for you',
+  };
+}
+
 type Sport = 'football' | 'badminton';
 
 type Props = {
@@ -83,6 +99,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
+  const [suggestions, setSuggestions] = useState<Venue[]>([]);
 
   useEffect(() => {
     listVenues(sport).then((result) => {
@@ -93,6 +110,14 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         setVenues([]);
         setVenuesError(result.message ?? t('common.genericError'));
       }
+    });
+  }, [sport]);
+
+  useEffect(() => {
+    // A failed/unavailable fetch just leaves this section empty — never a
+    // visible error, per FR-004 (spec 004-ai-features-frontend-integration).
+    getRecommendations(sport).then((result) => {
+      setSuggestions(result.success ? (result.items ?? []).map(mapRecommendationToCard) : []);
     });
   }, [sport]);
 
@@ -206,6 +231,29 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
             )}
           </View>
         </View>
+
+        {/* Suggested for you — personalized recommendations (spec 004); omitted
+            entirely when unavailable, never a visible error (FR-004). */}
+        {suggestions.length > 0 ? (
+          <View style={styles.venuesSection}>
+            <View style={styles.venuesHeader}>
+              <Text style={styles.venuesHeading}>Suggested for you</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.venuesList}
+            >
+              {suggestions.map((venue) => (
+                <VenueCard
+                  key={venue.id}
+                  venue={venue}
+                  onPress={() => router.push(venueDetailRoute(venue.id))}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Recommended venues */}
         <View style={styles.venuesSection}>
