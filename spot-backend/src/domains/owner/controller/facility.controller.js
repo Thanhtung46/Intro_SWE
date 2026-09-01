@@ -1,4 +1,6 @@
 import * as facilityService from '../service/facility.service.js';
+import config from '../../../shared/config/env.js';
+import { AppError } from '../../../shared/middleware/errorHandler.js';
 import {
   parseCreateVenueDto,
   parsePatchVenueDto,
@@ -7,6 +9,7 @@ import {
   parseCreateFieldDto,
   parsePatchFieldDto,
   parseReplaceVenueImagesDto,
+  parseReplaceFieldImagesDto,
 } from '../dto/facility.dto.js';
 
 export async function listVenues(req, res, next) {
@@ -90,6 +93,22 @@ export async function deleteField(req, res, next) {
   }
 }
 
+export async function replaceFieldImages(req, res, next) {
+  try {
+    const { venueId, fieldId } = parseFieldIdParam(req.params);
+    const dto = parseReplaceFieldImagesDto(req.body);
+    const result = await facilityService.replaceFieldImages(
+      req.user.userId,
+      venueId,
+      fieldId,
+      dto,
+    );
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function replaceImages(req, res, next) {
   try {
     const { venueId } = parseVenueIdParam(req.params);
@@ -100,6 +119,19 @@ export async function replaceImages(req, res, next) {
       dto,
     );
     return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function uploadImages(req, res, next) {
+  try {
+    const files = req.files ?? [];
+    if (!files.length) {
+      throw new AppError('At least one photo is required (field name: images)', 400);
+    }
+    const urls = files.map((file) => `${config.publicBaseUrl}/uploads/facilities/${file.filename}`);
+    return res.status(200).json({ urls });
   } catch (err) {
     return next(err);
   }

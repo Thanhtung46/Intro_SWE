@@ -14,6 +14,9 @@ export interface PublicVenue {
   avgRating: number;
   ratingCount: number;
   distanceKm?: number;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  ownerPhone: string | null;
 }
 
 export interface PublicField {
@@ -21,6 +24,7 @@ export interface PublicField {
   venueId: number;
   name: string;
   sportType: string;
+  footballVariant: 'FIVE_A_SIDE' | 'SEVEN_A_SIDE' | null;
   pricePerHour: number;
   capacity: number;
   status: string;
@@ -79,7 +83,18 @@ function errorMessage(err: unknown): string {
 /** GET /venues?sport=...(&lat=&long=&radiusKm=) */
 export async function listVenues(
   sport: string,
-  opts?: { lat?: number; long?: number; radiusKm?: number },
+  opts?: {
+    lat?: number;
+    long?: number;
+    radiusKm?: number;
+    province?: string;
+    city?: string;
+    priceMin?: number;
+    priceMax?: number;
+    date?: string;
+    timeFrom?: string;
+    timeTo?: string;
+  },
 ): Promise<ListVenuesResult> {
   try {
     const token = await getToken();
@@ -92,6 +107,13 @@ export async function listVenues(
         params.radiusKm = opts.radiusKm;
       }
     }
+    if (opts?.province !== undefined) params.province = opts.province;
+    if (opts?.city !== undefined) params.city = opts.city;
+    if (opts?.priceMin !== undefined) params.priceMin = opts.priceMin;
+    if (opts?.priceMax !== undefined) params.priceMax = opts.priceMax;
+    if (opts?.date !== undefined) params.date = opts.date;
+    if (opts?.timeFrom !== undefined) params.timeFrom = opts.timeFrom;
+    if (opts?.timeTo !== undefined) params.timeTo = opts.timeTo;
     const res = await client.get<{ venues: PublicVenue[] }>(`${API_URL}/venues`, {
       headers,
       params,

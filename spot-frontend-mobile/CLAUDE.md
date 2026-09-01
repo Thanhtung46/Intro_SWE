@@ -71,8 +71,21 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   around `src/screens/home/HomeScreen.tsx` — a "Football Dashboard" (Figma
   node `8:2`) with a sport toggle (football/badminton), an image carousel,
   a "Book Field" quick action (→ `/booking`), and a venue list built from
-  `src/components/home/VenueCard.tsx` and assets under `assets/home/`. Not
-  yet wired to a live venues API.
+  `src/components/home/VenueCard.tsx` and assets under `assets/home/`,
+  wired to the real `GET /venues` via `venueService.ts`. A "Suggested for
+  you" section (spec `004-ai-features-frontend-integration`) sits above it,
+  backed by `GET /recommendations` via `src/services/recommendationService.ts`
+  — reuses `VenueCard` as-is, and is simply omitted (not an error state)
+  when the recommendation service is unavailable.
+- **AI Assistant** (`app/assistant/index.tsx` → `src/screens/assistant/AssistantScreen.tsx`,
+  spec `004-ai-features-frontend-integration`): chat screen reached from the
+  AI icon in the shared header — text + voice search, join/host confirmation
+  cards. Calls `src/services/assistantService.ts`
+  (`POST/GET/DELETE /assistant/conversations/:id(/messages)`); voice capture
+  uses `expo-audio` + `expo-file-system` (`src/components/assistant/VoiceRecorderButton.tsx`).
+  Tapping a chat result currently falls back to `comingSoon()` — no
+  match-detail screen exists yet (only `/venue/[id]`, and a `matchId` isn't
+  a `venueId`).
 - **Booking** (`app/booking/index.tsx`, `app/booking/map.tsx`): reached from
   Home's "Book Field" quick action. `BookingScreen.tsx` is a venue list
   (Figma node `79:1390`) with its own search/filter bar and a map-view
@@ -81,9 +94,13 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   real map SDK (`react-native-maps`) or `GOOGLE_MAPS_KEY` wiring exists
   yet, so pan/zoom/location controls are `comingSoon()` placeholders.
   Venue data for both is local mock arrays, not an API call.
-- The top app bar (logo + AI/notification/avatar) is shared between Home
-  and Booking via `src/components/layout/AppHeader.tsx`
-  (`variant="blurred"` on Home, `variant="plain"` on Booking);
+- The top app bar (logo + AI/notification/avatar) is **not** actually one
+  shared component today: `src/components/layout/AppHeader.tsx` (with
+  `onAssistantPress`/`onAvatarPress` props) is only used by `BookingScreen.tsx`;
+  Home/Schedule/Settings instead go through `src/components/AppShell.tsx`,
+  which has its own separately duplicated inline copy of the same header
+  markup (own `onPress={() => router.push(ROUTES.ASSISTANT)}` wiring for
+  the AI icon — kept in sync by hand, not by sharing code).
   `BookingMapScreen` has no header (full-bleed map). The
   football/badminton segmented toggle is shared via
   `src/components/venue/SportSegmentedToggle.tsx` (Home/Booking only —
@@ -215,22 +232,25 @@ app/                       # expo-router routes (file-based) — every feature
 │   ├── index.tsx              # thin route → src/screens/booking/BookingScreen.tsx (venue list)
 │   └── map.tsx                 # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup)
 ├── venue/[id].tsx            # "/venue/:id" → src/screens/venue/VenueDetailScreen.tsx (venue detail)
+├── assistant/index.tsx        # thin route → src/screens/assistant/AssistantScreen.tsx (AI chat, spec 004)
 └── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
-├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,profile,settings,schedule}/   # presentational screen components
+├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,assistant,profile,settings,schedule}/   # presentational screen components
 ├── components/
 │   ├── navigation/{BottomNav,BottomNavItem}.tsx   # shared bottom nav (5-tab array + wiring)
-│   ├── layout/AppHeader.tsx                        # shared top app bar (Home + Booking)
+│   ├── layout/AppHeader.tsx                        # top app bar — Booking only, see note above (AppShell duplicates it for Home)
 │   ├── venue/SportSegmentedToggle.tsx               # shared football/badminton toggle (Home + Booking)
+│   ├── assistant/{ChatMessageBubble,PendingActionCard,VoiceRecorderButton}.tsx   # AI chat UI (spec 004)
 │   ├── {onboarding,common,home,booking}/ + top-level *.tsx  # shared UI (forms, OTP input, RoleCard, VenueCard, ...)
 ├── services/authService.ts   # axios; the axios-mock-adapter block is dead code, USE_MOCK_API doesn't gate anything
+├── services/{recommendationService,assistantService}.ts   # spec 004 — both call the shared apiClient, not their own axios instance
 ├── schemas/                  # zod validation per form, each with a co-located *.test.ts
 ├── context/UserContext.tsx   # session state, wraps app in _layout.tsx
 ├── config/env.ts             # API_URL / USE_MOCK_API / etc. via expo-constants
 ├── utils/{authStorage,onboardingStorage,comingSoon}.ts   # secure-store token, AsyncStorage onboarding flag, shared "coming soon" alert
 ├── hooks/useFloatingAnimation.ts
 ├── constants/{colors,routes}.ts   # single color-token source (src/theme/colors.ts was merged in and deleted) + centralized route paths
-└── state/ types/               # state/ still empty; types/ has auth.ts + venue.ts (shared VenueBase type)
+└── state/ types/               # state/ still empty; types/ has auth.ts + venue.ts (shared VenueBase type) + assistant.ts (ChatMessage, spec 004)
 ```
 
 Convention: each screen is a thin `app/<route>.tsx` (owns navigation, calls

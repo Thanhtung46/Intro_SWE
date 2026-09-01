@@ -2246,6 +2246,101 @@ Schema: migration `008_schema_admin.sql` — `verification_requests`, `admin_aud
 
 ---
 
+## 13. Owner Console endpoints (Venue Owner)
+
+Prefix `/owner` + `/api/owner`. Cần `Authorization: Bearer` với `role = OWNER` và `status = ACTIVE` (admin phải duyệt trước). Figma: Dashboard `224:6044`, Revenue `224:2414`, Facility `224:2648`/`224:2893`, Reviews `224:4521`.
+
+### Dashboard KPI (`224:6044` / TC_OWNER_01)
+
+| Method | Path | Query |
+| :--- | :--- | :--- |
+| `GET` | `/owner/dashboard/summary` | `month?` (YYYY-MM), `venueId?`, `trendsWeeks?` (default 4), `recentLimit?` (default 10) |
+
+Trả về 4 KPI cards (`monthlyRevenue`, `occupancyRate`, `pendingBookings`, `newReviews`), `bookingTrends` (Mon–Sun), `recentActivities`, `facilityCards`.
+
+### Schedule (`/owner/schedule`) — spec `006-owner-booking-web`
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/schedule?venueId=&date=&sport?` | Timeline grid: every field on the venue as a row, 30-min slots with `state` = `AVAILABLE`\|`BOOKED`\|`UNPAID`\|`MAINTENANCE`. `UNPAID` = booking `status = PENDING_PAYMENT` (no separate approve/reject workflow — see `specs/006-owner-booking-web/research.md` R3). `404` if `venueId` isn't owned by the caller. |
+| `POST` | `/owner/schedule/bookings` | Owner-created walk-in/phone booking: `{ fieldId, bookingDate, startTime, endTime, customerName, customerPhone?, totalAmount, markPaid? }`. `409` on slot overlap (`EXCLUDE USING gist`); `422` if the field is `MAINTENANCE`/`INACTIVE`. `markPaid: true` creates as `PAID`, else `PENDING_PAYMENT`. |
+| `POST` | `/owner/schedule/bookings/:bookingId/cancel` | Frees the slot (`status → CANCELLED`); used to resolve `UNPAID` bookings instead of a separate approve/reject step. |
+
+Migration `010`: `guest_name`, `guest_phone` nullable columns on `schema_booking.bookings` for owner-created bookings without a registered player account. Smoke: `npm run smoke:owner-schedule`.
+
+### Facility (`/owner/facilities`)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/facilities/venues` | List venue của owner (+ field counts) |
+| `POST` | `/owner/facilities/venues` | Tạo venue |
+| `GET` | `/owner/facilities/venues/:venueId` | Chi tiết + fields + images; field có `isAvailableNow` |
+| `PATCH` | `/owner/facilities/venues/:venueId` | Sửa venue profile |
+| `POST` | `/owner/facilities/venues/:venueId/fields` | Thêm field (`peakPricePerHour`, `offPeakPricePerHour`, `status`) |
+| `PATCH` | `/owner/facilities/venues/:venueId/fields/:fieldId` | Sửa field / maintenance |
+| `DELETE` | `/owner/facilities/venues/:venueId/fields/:fieldId` | Soft → `INACTIVE` |
+| `PUT` | `/owner/facilities/venues/:venueId/images` | `{ images: [{ imageUrl, displayOrder }] }` replace gallery |
+
+Migration `009`: `peak_price_per_hour`, `off_peak_price_per_hour`, `maintenance_note` trên `fields`.
+
+### Revenue (`/owner/revenue`)
+
+| Method | Path | Query |
+| :--- | :--- | :--- |
+| `GET` | `/owner/revenue/summary` | `from`, `to` (YYYY-MM-DD), `sport?`, `venueId?` |
+| `GET` | `/owner/revenue/timeseries` | + `granularity=week\|month` |
+| `GET` | `/owner/revenue/export` | + `format=csv` → file CSV |
+
+Aggregate từ booking `PAID`/`CHECKED_IN`/`COMPLETED` thuộc venue owner. Redis cache TTL 5 phút (`owner:revenue:*`).
+
+### Customer Reviews (`/owner/reviews`)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/reviews` | `venueId?`, `rating?`, `hasReply?`, `from?`, `to?`, `limit`, `offset` |
+| `GET` | `/owner/reviews/:reviewId` | Chi tiết + booking/field ref |
+| `POST` | `/owner/reviews/:reviewId/reply` | `{ replyText }` — reuse logic `/reviews/:id/reply` |
+
+Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
+
+---
+
+## 14. Chưa có / sắp làm
+
+| Hạng mục | Status |
+| :--- | :--- |
+| `authenticate` / `requireRole` middleware | Done |
+| `POST /auth/refresh` | Done |
+| `GET /auth/me` | Done — kèm `user.skills` |
+| `GET /users/:id` | Done — public host profile (không email/SĐT); `rating`/`reviewCount` stub |
+| `PATCH /auth/me` | Done — set/clear skill per sport |
+| Refresh token rotate / Redis blacklist | Chưa |
+| Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Done — `/admin/approvals/*`, `/users/me/verification-requests` |
+| Logout | Chưa |
+| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; payment vẫn chưa có |
+| Matchmaking host / list / detail | Done — `POST/GET /matches`, `GET /matches/:id` |
+| Join / guests / approve / kick | Done — Phase 3 |
+| Host mine / edit / cancel | Done — Phase 4 |
+| Matchmaking smoke (`npm run smoke:matches`) | Done — Phase 5 |
+| Host rating (`host.rating` / Figma `4.9`) | **Hoãn.** Sau kèo `COMPLETED` (hoặc `endsAt` đã qua), player `ACCEPTED` rate host → trung bình. Chưa có bảng review, chưa có `POST` complete/rate. Field API giữ `null`. |
+| Figma homepage: AI chatbot, notification (chuông), Booking, Schedule, Groups, Tournaments | **Khóa / chưa đụng** — không có route |
+| `GET /auth/me` / `GET /users/me` | Done |
+| `PATCH /users/me` + OTP email/phone change | Done |
+| Prefs / `avatar_url` (`001` `user_profiles`) | Done |
+| Notifications inbox + reminders (`003`) | Done |
+| `GET /users/me/schedule` + venue/booking/social schema (`004`) | Done |
+| `POST /reviews` + reply + venue rating (`005`) | Done |
+| Refresh token rotate / Redis blacklist | Chưa |
+| Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Done — `/admin/approvals/*`, `/users/me/verification-requests` |
+| Logout | Chưa |
+| Avatar file upload (S3) / stats | Chưa |
+| FCM / device tokens | Chưa |
+| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; pay/cancel, matchmaking lobby, payment gateway vẫn chưa có |
+
+Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
+
+---
+
 ## 18. Venues & Booking endpoints
 
 Browse real venues + book a field (Home dashboard, SPOT `001-home-booking-api`). Schema: `schema_venue.venues`/`fields`/`venue_images`, `schema_booking.bookings` (`004`, `007`). Alias `/api/venues/*`, `/api/bookings/*`. Cần Bearer access.

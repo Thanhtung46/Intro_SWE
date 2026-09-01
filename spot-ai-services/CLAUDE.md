@@ -9,28 +9,35 @@ Three planned Python/FastAPI microservices for SPOT: `recommendation`
 (port 5001), `noshow-prediction` (port 5002), `nlp-assistant` (port 5003).
 No nested `.git` here — tracked directly by the repo-root git repo.
 
-**Status: `recommendation/` is implemented; `noshow-prediction/` and
-`nlp-assistant/` are still empty directory scaffolds.** `recommendation/`
-now has real FastAPI app code, `requirements.txt`, a `Dockerfile`, and
-`tests/` — see `recommendation/README.md` and
-`../specs/002-venue-recommendations/` (spec/plan/research/data-model/
-contracts) for the full design. `noshow-prediction/` and `nlp-assistant/`
-still have empty `app/`, `models/`, `services/` (and `data/` for
-`noshow-prediction/`) — no Python source, no `requirements.txt`, no
-`Dockerfile`, in either. `README.md` at this level still describes the
-original all-empty status (Vietnamese, ~1.6KB) and is now stale for
-`recommendation/` — don't treat it as current for that service.
+**Status: `recommendation/` and `nlp-assistant/` are implemented;
+`noshow-prediction/` is still an empty directory scaffold.**
+`recommendation/` and `nlp-assistant/` both have real FastAPI app code,
+`requirements.txt`, a `Dockerfile`, and `tests/` — see
+`recommendation/README.md` / `nlp-assistant/README.md` and
+`../specs/002-venue-recommendations/` /
+`../specs/003-nlp-assistant/` (spec/plan/research/data-model/contracts)
+for the full design. `noshow-prediction/` still has empty `app/`,
+`models/`, `services/`, `data/` — no Python source, no
+`requirements.txt`, no `Dockerfile`. `README.md` at this level still
+describes the original all-empty status (Vietnamese, ~1.6KB) and is now
+stale for `recommendation/` and `nlp-assistant/` — don't treat it as
+current for either.
 
-`docker compose build noshow` / `nlp` still fail immediately (`failed to
-read dockerfile: open Dockerfile: no such file or directory`) — nothing to
-build yet for those two. `docker compose build recommendation` now has a
-`Dockerfile` to build from (not verified end-to-end against a live Supabase
-instance in this environment — see Known Limitations below).
+`docker compose build noshow` still fails immediately (`failed to read
+dockerfile: open Dockerfile: no such file or directory`) — nothing to
+build yet there. `nlp` now has a `docker-compose.yml` service block that
+is uncommented and live (`docker compose up -d --build redis nlp`
+builds), though not verified end-to-end against live Redis/Gemini in
+this environment. `recommendation` has a `Dockerfile` and real app code
+to build from, but `docker-compose.yml` has no `recommendation` service
+block at all yet (never added — not the same as commented out; see
+Known Limitations below). `noshow` has neither a `Dockerfile` nor a
+compose service block.
 
 ## Common Commands
 
-**`recommendation/` is runnable**; `noshow-prediction/`/`nlp-assistant/`
-are not (no Python code, no `requirements.txt` in either).
+**`recommendation/` and `nlp-assistant/` are runnable**; `noshow-prediction/`
+is not (no Python code, no `requirements.txt`).
 
 ```bash
 cd recommendation
@@ -41,22 +48,36 @@ uvicorn app.main:app --reload --port 5001
 pytest tests/unit tests/integration
 ```
 
+```bash
+cd nlp-assistant
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env   # GEMINI_API_KEY, REDIS_URL, BACKEND_URL, INTERNAL_SERVICE_KEY
+uvicorn app.main:app --reload --port 5003
+pytest tests/unit tests/integration
+```
+
 ## Architecture & Project Structure
 
 ```
 recommendation/       app/{routers,schemas}, services/, models/, data/, tests/{unit,integration}
                        requirements.txt, requirements-dev.txt, pyproject.toml
                        Dockerfile, .env.example, README.md               # implemented
+nlp-assistant/         app/{routers,schemas}, services/, models/, tests/{unit,integration}
+                       requirements.txt, requirements-dev.txt, pyproject.toml
+                       Dockerfile, .env.example, README.md               # implemented
 noshow-prediction/    {app,models,services,data}/    # all empty
-nlp-assistant/         {app,models,services}/          # all empty
 logs/                                                  # empty
-README.md                                              # stale for recommendation/, still accurate for the other two
+README.md                                              # stale for recommendation/ and nlp-assistant/
 .gitignore
 ```
 
 `recommendation/models/` and `recommendation/data/` are intentionally still
 empty/reserved — v1 uses a deterministic weighted score, not a trained
 model (see research.md decision 2 under `specs/002-venue-recommendations/`).
+`nlp-assistant/models/` is likewise intentionally empty/reserved — v1 uses
+Gemini calls directly, no locally trained model (see research.md decision 3
+under `specs/003-nlp-assistant/`).
 
 Target layout per root `CLAUDE.md`/`PROJECT_RULES.md`: FastAPI apps under
 `app/`, ML models under `models/`, business logic under `services/`, training
@@ -65,9 +86,9 @@ data under `data/`.
 ## Code Style & Conventions
 
 Per root `CLAUDE.md`: PEP8 via `black` (line length 88) + `isort`.
-`recommendation/pyproject.toml` configures both; formatted at delivery time.
-Nothing to enforce yet in `noshow-prediction/`/`nlp-assistant/` — no Python
-files exist there.
+`recommendation/pyproject.toml` and `nlp-assistant/pyproject.toml` both
+configure both; formatted at delivery time. Nothing to enforce yet in
+`noshow-prediction/` — no Python files exist there.
 
 ## Known Limitations (`recommendation/`)
 
@@ -84,18 +105,44 @@ files exist there.
 - No "favorited venues" personalization signal — no such table exists yet
   (research.md decision 4).
 
+## Known Limitations (`nlp-assistant/`)
+
+- Built and unit/integration-tested (`pytest`, 23 tests) with Gemini,
+  Redis, and the `spot-backend` matchmaking client all mocked/faked —
+  **not** exercised end-to-end against a live Gemini API key, a running
+  Redis, or a live `spot-backend` in this environment (no network egress /
+  no API key available here). Follow
+  `specs/003-nlp-assistant/quickstart.md` with real credentials to close
+  that gap.
+- `spot-backend` now has a matching `assistant` domain
+  (`spot-backend/src/domains/assistant/`) mounted at `/assistant` +
+  `/api/assistant` that proxies to this service, forwarding both
+  `X-Internal-Service-Key` and the calling player's own access token as
+  `X-Player-Access-Token` (research.md decision 2) — this is a different,
+  additional auth header beyond what `recommendation/` needs, since this
+  service acts on a specific player's behalf (search + join/host), not
+  just reads on the backend's behalf.
+- No client-side (mobile/web) chat/voice UI yet — this feature's contracts
+  stop at the HTTP API `spot-backend` exposes; building the actual chat
+  screen is a separate, not-yet-done frontend effort (plan.md Project
+  Type).
+- Formal, paid venue-booking (as opposed to kèo join/host) is out of scope
+  until that platform capability exists (spec.md Assumptions).
+
 ## Important Guidelines
 
-- **`noshow-prediction/` and `nlp-assistant/` are still fully empty** —
-  check for actual `.py` files before assuming any endpoint, model, or
-  service is implemented in either.
-- **No `Dockerfile` in `noshow-prediction/`/`nlp-assistant/`** —
-  `docker-compose.yml`'s `noshow`/`nlp` entries point their build `context`
-  here, but the build will fail at the very first step until a `Dockerfile`
-  (and real app code) is added. `recommendation/` now has one.
+- **`noshow-prediction/` is still fully empty** — check for actual `.py`
+  files before assuming any endpoint, model, or service is implemented
+  there. `recommendation/` and `nlp-assistant/` both have real code now.
+- **No `Dockerfile` in `noshow-prediction/`** — `docker-compose.yml`'s
+  `noshow` entry points its build `context` here, but the build will fail
+  at the very first step until a `Dockerfile` (and real app code) is
+  added. `recommendation/` and `nlp-assistant/` now both have one, though
+  neither compose service block is uncommented yet.
 - `spot-backend`'s `.env.example` references
   `RECOMMENDATION_SERVICE_URL`/`NOSHOW_SERVICE_URL`/`NLP_SERVICE_URL`
-  pointing at these services — `spot-backend` doesn't actually call any of
-  them yet (including `recommendation`, despite it now being implemented).
+  pointing at these services — `spot-backend` calls `nlp-assistant` (via
+  its new `assistant` domain) but still does not call `recommendation` or
+  `noshow` yet.
 - This directory is tracked by the root repo (no nested `.git`), same as
   `spot-backend`.

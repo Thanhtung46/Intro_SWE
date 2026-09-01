@@ -10,7 +10,7 @@ Node.js/Express REST API (ESM, Node ≥ 18), domain-driven `controller/dto/entit
 
 Implemented so far:
 
-**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/groups`+`/api/groups`, `/tournaments`+`/api/tournaments`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`.
+**Mounts:** `/auth`+`/api/auth`, `/users`+`/api/users`, `/matches`+`/api/matches`, `/groups`+`/api/groups`, `/tournaments`+`/api/tournaments`, `/geo`+`/api/geo`, `/notifications`+`/api/notifications`, `/reviews`+`/api/reviews`, `/assistant`+`/api/assistant`, `/recommendations`+`/api/recommendations`.
 
 ## Status (done vs not)
 
@@ -92,6 +92,13 @@ Implemented so far:
 | **T3 Standings** | Done — `GET /tournaments/:id/standings` (PTS + tie-break) |
 | **T4 Completed** | Done — winners, player in-team ranks |
 | **T5 Docs + smoke** | Done — `docs/API.md` §9, `npm run smoke:tournaments` |
+
+**AI-service proxies — thin pass-through domains, own no table**
+
+| Area | Status |
+| :--- | :--- |
+| `POST/GET/DELETE /assistant/conversations/:id(/messages)` | Done — proxies to `spot-ai-services/nlp-assistant` (`:5003`), forwarding both `X-Internal-Service-Key` and the calling player's own access token as `X-Player-Access-Token` so the AI service can act on the matchmaking API as that player. See `specs/003-nlp-assistant/`. |
+| `GET /recommendations` | Done — proxies to `spot-ai-services/recommendation` (`:5001`) with `X-Internal-Service-Key`; `userId` is always derived from the authenticated JWT, never accepted from the client. See `specs/004-ai-features-frontend-integration/`. |
 
 **Infra / conventions**
 
@@ -201,7 +208,7 @@ Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`
 
 **Admin console (BE):** `/admin` + `/api/admin` — dashboard, approvals, users, settings, audit log. Applicant docs: `POST /users/me/verification-requests`. OTP verify issues JWT for pending Owner/Referee (`nextStep: SUBMIT_VERIFICATION`).
 
-**Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`).
+**Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`), booking schedule timeline + owner-created walk-in bookings (migration `010`, spec `006-owner-booking-web`). Frontend lives in `spot-admin-console` (`src/pages/Owner*Page.tsx`).
 
 ## Commands
 
@@ -224,6 +231,7 @@ npm run smoke:tournaments  # eligibility seed / create / join / match / standing
 npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
 npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
 npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
+npm run smoke:owner-schedule   # owner schedule GET + manual booking + 409/422 (needs 010)
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
@@ -268,6 +276,15 @@ src/
 │   ├── entity/match.entity.js
 │   ├── repository/{match,match-court,join-request,match-favorite}.repository.js
 │   └── service/match.service.js
+├── domains/assistant/             # POST/GET/DELETE /assistant/conversations/:id(/messages) — proxies nlp-assistant
+│   ├── routes.js
+│   ├── controller/assistant.controller.js
+│   ├── dto/assistant.dto.js
+│   └── service/assistant.service.js   # no entity/repository — owns no table
+├── domains/recommendation/        # GET /recommendations — proxies spot-ai-services/recommendation
+│   ├── routes.js
+│   ├── controller/recommendation.controller.js
+│   └── service/recommendation.service.js   # no dto/entity/repository — owns no table
 ├── domains/groups/
 │   ├── routes.js
 │   ├── controller/group.controller.js
@@ -303,6 +320,7 @@ migrations/
 ├── 007_schema_venue_images.sql   # venue gallery URLs
 ├── 008_schema_admin.sql          # admin verification + settings
 ├── 009_schema_owner_ops.sql      # owner field pricing + revenue indexes
+├── 010_schema_owner_schedule.sql # guest_name/guest_phone on bookings (owner walk-ins)
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js

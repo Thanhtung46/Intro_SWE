@@ -66,3 +66,6 @@ Default backend DB is **Supabase** (not compose postgres). Full guide: [`DOCKER.
 ## Contributing
 
 Read root `CLAUDE.md` before cross-cutting changes — it tracks what is implemented vs scaffolded. Backend work: follow `spot-backend/CLAUDE.md`.
+
+
+<!-- : ui-test-owner@example.com / Password1! ( -->

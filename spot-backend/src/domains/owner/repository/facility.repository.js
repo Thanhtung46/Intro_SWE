@@ -115,7 +115,7 @@ export async function updateVenue(client, venueId, ownerId, dto) {
 export async function listFieldsForVenue(client, venueId) {
   const { rows } = await client.query(
     `SELECT
-       f.field_id, f.venue_id, f.name, f.sport_type, f.price_per_hour,
+       f.field_id, f.venue_id, f.name, f.sport_type, f.football_variant, f.price_per_hour,
        f.peak_price_per_hour, f.off_peak_price_per_hour, f.capacity, f.status,
        f.maintenance_note,
        (
@@ -152,17 +152,18 @@ export async function insertField(client, venueId, dto) {
   const offPeak = dto.offPeakPricePerHour ?? dto.pricePerHour;
   const { rows } = await client.query(
     `INSERT INTO schema_venue.fields (
-       venue_id, name, sport_type, price_per_hour,
+       venue_id, name, sport_type, football_variant, price_per_hour,
        peak_price_per_hour, off_peak_price_per_hour,
        capacity, status, maintenance_note
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING field_id, venue_id, name, sport_type, price_per_hour,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING field_id, venue_id, name, sport_type, football_variant, price_per_hour,
        peak_price_per_hour, off_peak_price_per_hour, capacity, status, maintenance_note`,
     [
       venueId,
       dto.name,
       dto.sportType,
+      dto.footballVariant ?? null,
       dto.pricePerHour,
       peak,
       offPeak,
@@ -181,6 +182,7 @@ export async function updateField(client, fieldId, dto) {
   const map = {
     name: 'name',
     sportType: 'sport_type',
+    footballVariant: 'football_variant',
     pricePerHour: 'price_per_hour',
     peakPricePerHour: 'peak_price_per_hour',
     offPeakPricePerHour: 'off_peak_price_per_hour',
@@ -202,7 +204,7 @@ export async function updateField(client, fieldId, dto) {
     `UPDATE schema_venue.fields
      SET ${sets.join(', ')}
      WHERE field_id = $1
-     RETURNING field_id, venue_id, name, sport_type, price_per_hour,
+     RETURNING field_id, venue_id, name, sport_type, football_variant, price_per_hour,
        peak_price_per_hour, off_peak_price_per_hour, capacity, status, maintenance_note`,
     params,
   );
@@ -218,6 +220,41 @@ export async function softDeleteField(client, fieldId) {
     [fieldId],
   );
   return rows[0] ?? null;
+}
+
+export async function listImagesByFieldIds(client, fieldIds) {
+  if (!fieldIds.length) return [];
+  const { rows } = await client.query(
+    `SELECT image_id, field_id, image_url, display_order
+     FROM schema_venue.field_images
+     WHERE field_id = ANY($1)
+     ORDER BY field_id ASC, display_order ASC, image_id ASC`,
+    [fieldIds],
+  );
+  return rows;
+}
+
+export async function replaceFieldImages(client, fieldId, images) {
+  await client.query(
+    `DELETE FROM schema_venue.field_images WHERE field_id = $1`,
+    [fieldId],
+  );
+  if (!images.length) return [];
+
+  const values = [];
+  const placeholders = images.map((img, idx) => {
+    const base = idx * 3;
+    values.push(fieldId, img.imageUrl, img.displayOrder ?? idx);
+    return `($${base + 1}, $${base + 2}, $${base + 3})`;
+  });
+
+  const { rows } = await client.query(
+    `INSERT INTO schema_venue.field_images (field_id, image_url, display_order)
+     VALUES ${placeholders.join(', ')}
+     RETURNING image_id, field_id, image_url, display_order`,
+    values,
+  );
+  return rows;
 }
 
 export async function listImagesByVenueId(client, venueId) {

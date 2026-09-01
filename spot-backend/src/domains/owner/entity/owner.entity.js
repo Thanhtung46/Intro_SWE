@@ -35,13 +35,24 @@ export function toOwnerVenueDetail(row) {
   };
 }
 
-export function toOwnerField(row) {
+export function toOwnerFieldImage(row) {
+  if (!row) return null;
+  return {
+    imageId: row.image_id,
+    fieldId: row.field_id,
+    imageUrl: row.image_url,
+    displayOrder: row.display_order,
+  };
+}
+
+export function toOwnerField(row, imageRows = []) {
   if (!row) return null;
   return {
     fieldId: row.field_id,
     venueId: row.venue_id,
     name: row.name,
     sportType: row.sport_type,
+    footballVariant: row.football_variant ?? null,
     pricePerHour: Number(row.price_per_hour),
     peakPricePerHour:
       row.peak_price_per_hour != null
@@ -55,6 +66,7 @@ export function toOwnerField(row) {
     status: row.status,
     maintenanceNote: row.maintenance_note ?? null,
     isAvailableNow: Boolean(row.is_available_now),
+    images: imageRows.map(toOwnerFieldImage),
   };
 }
 
@@ -107,5 +119,20 @@ export function toOwnerReviewDetail(row) {
           createdAt: row.reply_created_at,
         }
       : null,
+  };
+}
+
+export function toScheduleBooking(row) {
+  if (!row) return null;
+  return {
+    bookingId: row.booking_id,
+    fieldId: row.field_id,
+    bookingDate: row.booking_date,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    totalAmount: row.total_amount != null ? Number(row.total_amount) : null,
+    customerName: row.guest_name ?? row.player_full_name ?? null,
+    customerPhone: row.guest_phone ?? null,
   };
 }

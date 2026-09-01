@@ -1,9 +1,27 @@
 import { z } from 'zod';
-import { SPORT_TYPES } from '../../../shared/constants/venue.js';
+import { SPORT_TYPES, FOOTBALL_VARIANTS } from '../../../shared/constants/venue.js';
 import { FIELD_STATUSES } from '../../../shared/constants/owner.js';
 
 const sportValues = Object.values(SPORT_TYPES);
+const footballVariantValues = Object.values(FOOTBALL_VARIANTS);
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function assertFootballVariantConsistency(sportType, footballVariant, ctx) {
+  if (sportType === SPORT_TYPES.FOOTBALL && !footballVariant) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'footballVariant is required for Football fields (FIVE_A_SIDE or SEVEN_A_SIDE)',
+      path: ['footballVariant'],
+    });
+  }
+  if (sportType === SPORT_TYPES.BADMINTON && footballVariant) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'footballVariant is only valid for Football fields',
+      path: ['footballVariant'],
+    });
+  }
+}
 
 const venueBaseSchema = z.object({
   name: z.string().trim().min(1).max(150),
@@ -56,6 +74,7 @@ export const createFieldSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     sportType: z.enum(sportValues),
+    footballVariant: z.enum(footballVariantValues).optional().nullable(),
     capacity: z.coerce.number().int().min(1).max(500).optional().default(10),
     status: z
       .enum([
@@ -68,7 +87,8 @@ export const createFieldSchema = z
     maintenanceNote: z.string().trim().max(500).optional().nullable(),
   })
   .merge(pricingSchema)
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => assertFootballVariantConsistency(v.sportType, v.footballVariant, ctx));
 
 export function parseCreateFieldDto(body) {
   return createFieldSchema.parse(body ?? {});
@@ -78,6 +98,7 @@ export const patchFieldSchema = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
     sportType: z.enum(sportValues).optional(),
+    footballVariant: z.enum(footballVariantValues).optional().nullable(),
     pricePerHour: z.coerce.number().positive().max(100_000_000).optional(),
     peakPricePerHour: z.coerce.number().positive().max(100_000_000).optional(),
     offPeakPricePerHour: z.coerce.number().positive().max(100_000_000).optional(),
@@ -94,10 +115,32 @@ export const patchFieldSchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, {
     message: 'Provide at least one field to update',
+  })
+  .superRefine((v, ctx) => {
+    // Only cross-checked when sportType is present in this same PATCH — a
+    // lone footballVariant update on an existing Football field is fine.
+    if (v.sportType !== undefined) {
+      assertFootballVariantConsistency(v.sportType, v.footballVariant, ctx);
+    }
   });
 
 export function parsePatchFieldDto(body) {
   return patchFieldSchema.parse(body ?? {});
+}
+
+export const replaceFieldImagesSchema = z.object({
+  images: z
+    .array(
+      z.object({
+        imageUrl: z.string().trim().url().max(2048),
+        displayOrder: z.coerce.number().int().min(0).max(100).optional().default(0),
+      }),
+    )
+    .max(20),
+});
+
+export function parseReplaceFieldImagesDto(body) {
+  return replaceFieldImagesSchema.parse(body ?? {});
 }
 
 export const replaceVenueImagesSchema = z.object({

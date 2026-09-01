@@ -4,7 +4,10 @@ import { normalizeSportType } from '../../../shared/constants/venue.js';
 import * as venueRepository from '../repository/venue.repository.js';
 import { toPublicVenue, toPublicField, toPublicVenueImage } from '../entity/venue.entity.js';
 
-export async function listVenues(sportInput, { lat, long, radiusKm } = {}) {
+export async function listVenues(
+  sportInput,
+  { lat, long, radiusKm, province, city, priceMin, priceMax, date, timeFrom, timeTo } = {},
+) {
   const sportType = normalizeSportType(sportInput);
   if (!sportType) {
     throw new AppError('Unsupported sport', 400);
@@ -15,7 +18,7 @@ export async function listVenues(sportInput, { lat, long, radiusKm } = {}) {
     const rows = await venueRepository.listActiveVenuesBySport(
       client,
       sportType,
-      { lat, long, radiusKm },
+      { lat, long, radiusKm, province, city, priceMin, priceMax, date, timeFrom, timeTo },
     );
     return rows.map(toPublicVenue);
   } finally {

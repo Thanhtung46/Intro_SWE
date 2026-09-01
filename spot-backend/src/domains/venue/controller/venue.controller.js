@@ -8,6 +8,13 @@ export async function list(req, res, next) {
       lat: dto.lat,
       long: dto.long,
       radiusKm: dto.radiusKm,
+      province: dto.province,
+      city: dto.city,
+      priceMin: dto.priceMin,
+      priceMax: dto.priceMax,
+      date: dto.date,
+      timeFrom: dto.timeFrom,
+      timeTo: dto.timeTo,
     });
     return res.status(200).json({ venues });
   } catch (err) {

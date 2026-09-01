@@ -14,6 +14,8 @@ type Props = {
   unreadCount: number;
   /** 'blurred' = Home's frosted-glass look (Figma 8:124); 'plain' (default) = Booking's flat look (Figma 79:1521). */
   variant?: 'blurred' | 'plain';
+  /** Opens the AI assistant (spec 004). Falls back to the "coming soon" alert if not provided. */
+  onAssistantPress?: () => void;
 };
 
 /** Shared top app bar — logo + AI/notification/avatar buttons — used by Home and Booking. */
@@ -23,6 +25,7 @@ export default function AppHeader({
   onNotificationsPress,
   unreadCount,
   variant = 'plain',
+  onAssistantPress,
 }: Props) {
   const { t } = useLanguage();
   const content = (
@@ -34,7 +37,7 @@ export default function AppHeader({
       <View style={styles.headerRight}>
         <TouchableOpacity
           style={styles.headerButton}
-          onPress={() => comingSoon(t('header.aiAssistant'))}
+          onPress={onAssistantPress ?? (() => comingSoon(t('header.aiAssistant')))}
           accessibilityRole="button"
           accessibilityLabel={t('header.aiAssistant')}
         >

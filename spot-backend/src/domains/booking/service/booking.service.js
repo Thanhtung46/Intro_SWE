@@ -14,6 +14,9 @@ import * as scheduleRepository from '../repository/schedule.repository.js';
 import * as bookingRepository from '../repository/booking.repository.js';
 import * as venueRepository from '../../venue/repository/venue.repository.js';
 import { fanOutRefereeInvitations, dispatchInvitationNotifications } from '../../referee/service/assignment-fanout.service.js';
+import * as notificationService from '../../notification/service/notification.service.js';
+import { NOTIFICATION_TYPES } from '../../../shared/constants/notification.js';
+import logger from '../../../shared/utils/logger.js';
 import {
   toPublicScheduleItem,
 } from '../entity/schedule.entity.js';
@@ -290,10 +293,38 @@ export async function createBooking(playerId, dto) {
       throw err;
     }
 
+    notifyOwnerOfNewBooking(field, booking, rangeStart).catch((err) => {
+      logger.warn('Owner booking-created notification failed', {
+        error: err.message,
+        bookingId: booking.booking_id,
+      });
+    });
+
     return toPublicBooking(booking);
   } finally {
     client.release();
   }
+}
+
+/**
+ * Best-effort: tells the venue owner a customer just booked one of their
+ * fields, and schedules the owner's own T-24h/T-2h "match starting soon"
+ * reminders (separate from the player's own reminders on the same booking).
+ */
+async function notifyOwnerOfNewBooking(field, booking, startAt) {
+  await notificationService.createNotification({
+    userId: field.owner_id,
+    type: NOTIFICATION_TYPES.OWNER_BOOKING_CREATED,
+    title: 'New booking',
+    body: `${field.field_name} at ${field.venue_name} was just booked for ${booking.booking_date}.`,
+    data: { bookingId: booking.booking_id, fieldId: field.field_id },
+  });
+  await notificationService.scheduleBookingReminders({
+    userId: field.owner_id,
+    bookingId: booking.booking_id,
+    startAt,
+    audience: 'OWNER',
+  });
 }
 
 /**

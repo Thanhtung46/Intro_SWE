@@ -16,8 +16,9 @@ export async function listBookedRangesForFieldOnDate(client, fieldId, date) {
 export async function findFieldWithVenueForBooking(client, fieldId) {
   const { rows } = await client.query(
     `SELECT
-       f.field_id, f.venue_id, f.price_per_hour, f.status AS field_status,
-       v.opening_hours, v.closing_hours
+       f.field_id, f.venue_id, f.name AS field_name, f.sport_type,
+       f.price_per_hour, f.status AS field_status,
+       v.opening_hours, v.closing_hours, v.name AS venue_name, v.owner_id
      FROM schema_venue.fields f
      INNER JOIN schema_venue.venues v ON v.venue_id = f.venue_id
      WHERE f.field_id = $1`,

@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -15,7 +16,6 @@ import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemeColors } from '@/constants/theme';
@@ -23,15 +23,34 @@ import VenueCard, { Venue } from '@/components/home/VenueCard';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import { listVenues, PublicVenue } from '@/services/venueService';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
+import { getRecommendations, RecommendationItem } from '@/services/recommendationService';
+import { venueDetailRoute } from '@/constants/routes';
+import useUserLocation from '@/hooks/useUserLocation';
 
-const CAROUSEL_IMAGES = [
-  require('../../../assets/home/carousel-football.png'),
-  require('../../../assets/home/carousel-stadium.png'),
-];
+type Sport = 'football' | 'badminton';
+
+const CAROUSEL_IMAGES_BY_SPORT: Record<Sport, number[]> = {
+  football: [
+    require('../../../assets/home/carousel-football.png'),
+    require('../../../assets/home/carousel-stadium.png'),
+  ],
+  badminton: [
+    require('../../../assets/home/carousel-badminton-1.png'),
+    require('../../../assets/home/carousel-badminton-2.png'),
+  ],
+};
+
+const UPCOMING_MATCH_IMAGE_BY_SPORT: Record<Sport, number> = {
+  football: require('../../../assets/home/upcoming-match.png'),
+  badminton: require('../../../assets/home/upcoming-match-badminton.png'),
+};
 
 // GET /venues has no per-venue photo/price at list level (data-model.md
 // PublicVenue) — this is a static placeholder image/price, not real data.
-const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/home/venue-skyline-arena.png');
+const VENUE_PLACEHOLDER_IMAGE_BY_SPORT: Record<Sport, number> = {
+  football: require('../../../assets/home/venue-skyline-arena.png'),
+  badminton: require('../../../assets/home/venue-badminton-elite.png'),
+};
 const NOT_AVAILABLE_LABEL = '—';
 
 function formatUpcomingTime(startsAt: string): string {
@@ -49,11 +68,11 @@ function formatUpcomingTime(startsAt: string): string {
   return `${dateLabel}, ${timeLabel}`;
 }
 
-function mapVenueToCard(venue: PublicVenue): Venue {
+function mapVenueToCard(venue: PublicVenue, placeholderImage: number): Venue {
   return {
     id: String(venue.venueId),
     name: venue.name,
-    image: VENUE_PLACEHOLDER_IMAGE,
+    image: placeholderImage,
     distanceLabel:
       venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
     priceLabel: NOT_AVAILABLE_LABEL,
@@ -62,7 +81,19 @@ function mapVenueToCard(venue: PublicVenue): Venue {
   };
 }
 
-type Sport = 'football' | 'badminton';
+// GET /recommendations has no per-venue photo/price either (data-model.md
+// Suggestion mapping table) — same placeholder convention as mapVenueToCard.
+function mapRecommendationToCard(item: RecommendationItem, placeholderImage: number): Venue {
+  return {
+    id: String(item.venueId),
+    name: item.venueName,
+    image: placeholderImage,
+    distanceLabel: item.distanceKm !== undefined ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    priceLabel: NOT_AVAILABLE_LABEL,
+    rating: 0,
+    tag: 'Suggested for you',
+  };
+}
 
 type Props = {
   /** "Upcoming Match" card's View Schedule pill — Booking/Matches/Home/
@@ -80,19 +111,40 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [sport, setSport] = useState<Sport>('football');
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
+  const carouselScrollRef = useRef<ScrollView>(null);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
+  const [venuesLoading, setVenuesLoading] = useState(true);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
+  const [suggestions, setSuggestions] = useState<Venue[]>([]);
+  const userLocation = useUserLocation();
 
   useEffect(() => {
-    listVenues(sport).then((result) => {
+    setVenuesLoading(true);
+    const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
+    listVenues(sport, opts).then((result) => {
       if (result.success) {
-        setVenues((result.venues ?? []).map(mapVenueToCard));
+        setVenues((result.venues ?? []).map((v) => mapVenueToCard(v, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport])));
         setVenuesError(null);
       } else {
         setVenues([]);
         setVenuesError(result.message ?? t('common.genericError'));
       }
+      setVenuesLoading(false);
+    });
+  }, [sport, userLocation]);
+
+  useEffect(() => {
+    // A failed/unavailable fetch just leaves this section empty — never a
+    // visible error, per FR-004 (spec 004-ai-features-frontend-integration).
+    getRecommendations(sport).then((result) => {
+      setSuggestions(
+        result.success
+          ? (result.items ?? []).map((item) =>
+              mapRecommendationToCard(item, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport]),
+            )
+          : [],
+      );
     });
   }, [sport]);
 
@@ -101,6 +153,11 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
       setUpcomingBooking(result.success ? (result.items?.[0] ?? null) : null);
     });
   }, []);
+
+  useEffect(() => {
+    setCarouselIndex(0);
+    carouselScrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [sport]);
 
   const handleCarouselScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!carouselWidth) return;
@@ -111,15 +168,20 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Search bar */}
+        {/* Search bar — opens the AI assistant chat (nlp-assistant), same
+            screen as AppShell's header sparkle icon; voice capture lives
+            inside AssistantScreen itself (VoiceRecorderButton), not here. */}
         <View style={styles.searchBarOuter}>
-          <View style={styles.searchBarInner}>
+          <TouchableOpacity
+            style={styles.searchBarInner}
+            onPress={() => router.push(ROUTES.ASSISTANT)}
+            accessibilityRole="button"
+            accessibilityLabel={t('header.aiAssistant')}
+          >
             <MaterialCommunityIcons name="creation" size={18} color={themeColors.primary} />
             <Text style={styles.searchPlaceholder}>{t('home.searchPlaceholder')}</Text>
-            <TouchableOpacity onPress={() => comingSoon('Voice search')} accessibilityRole="button" accessibilityLabel="Voice search">
-              <Ionicons name="mic-outline" size={18} color={themeColors.primary} />
-            </TouchableOpacity>
-          </View>
+            <Ionicons name="mic-outline" size={18} color={themeColors.primary} />
+          </TouchableOpacity>
         </View>
 
         {/* Sport toggle */}
@@ -136,12 +198,13 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         {/* Photo carousel */}
         <View style={styles.carouselWrap} onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}>
           <ScrollView
+            ref={carouselScrollRef}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleCarouselScroll}
           >
-            {CAROUSEL_IMAGES.map((source, index) => (
+            {CAROUSEL_IMAGES_BY_SPORT[sport].map((source, index) => (
               <Image
                 key={index}
                 source={source}
@@ -151,7 +214,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
             ))}
           </ScrollView>
           <View style={styles.carouselDots}>
-            {CAROUSEL_IMAGES.map((_, index) => (
+            {CAROUSEL_IMAGES_BY_SPORT[sport].map((_, index) => (
               <View
                 key={index}
                 style={[styles.carouselDot, index === carouselIndex && styles.carouselDotActive]}
@@ -168,12 +231,9 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
             </View>
             <Text style={styles.quickActionLabel}>{t('home.bookField')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon(t('home.findMatch'))}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
             <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionSecondaryBg }]}>
               <Ionicons name="trophy-outline" size={22} color={themeColors.quickActionSecondaryIcon} />
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
-            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 112, 228, 0.2)' }]}>
-              <Ionicons name="trophy-outline" size={22} color="#2170E4" />
             </View>
             <Text style={styles.quickActionLabel}>{t('home.findMatch')}</Text>
           </TouchableOpacity>
@@ -182,7 +242,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         {/* Upcoming match */}
         <View style={styles.upcomingCard}>
           <Image
-            source={require('../../../assets/home/upcoming-match.png')}
+            source={UPCOMING_MATCH_IMAGE_BY_SPORT[sport]}
             style={StyleSheet.absoluteFill}
             resizeMode="cover"
           />
@@ -210,15 +270,40 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
           </View>
         </View>
 
+        {/* Suggested for you — personalized recommendations (spec 004); omitted
+            entirely when unavailable, never a visible error (FR-004). */}
+        {suggestions.length > 0 ? (
+          <View style={styles.venuesSection}>
+            <View style={styles.venuesHeader}>
+              <Text style={styles.venuesHeading}>Suggested for you</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.venuesList}
+            >
+              {suggestions.map((venue) => (
+                <VenueCard
+                  key={venue.id}
+                  venue={venue}
+                  onPress={() => router.push(venueDetailRoute(venue.id))}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {/* Recommended venues */}
         <View style={styles.venuesSection}>
           <View style={styles.venuesHeader}>
             <Text style={styles.venuesHeading}>{t('home.venuesHeading')}</Text>
-            <TouchableOpacity onPress={() => comingSoon(t('home.exploreAll'))}>
+            <TouchableOpacity onPress={() => router.push(ROUTES.BOOKING)}>
               <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
             </TouchableOpacity>
           </View>
-          {venuesError ? (
+          {venuesLoading ? (
+            <ActivityIndicator style={styles.venuesLoading} color={themeColors.primary} />
+          ) : venuesError ? (
             <Text style={styles.venuesEmptyText}>{venuesError}</Text>
           ) : venues.length === 0 ? (
             <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
@@ -229,7 +314,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
               contentContainerStyle={styles.venuesList}
             >
               {venues.map((venue) => (
-                <VenueCard key={venue.id} venue={venue} onPress={() => comingSoon(venue.name)} />
+                <VenueCard key={venue.id} venue={venue} onPress={() => router.push(venueDetailRoute(venue.id))} />
               ))}
             </ScrollView>
           )}
@@ -428,6 +513,9 @@ function getStyles(c: ThemeColors) {
     marginHorizontal: 20,
     fontSize: 14,
     color: c.textSecondaryAlt,
+  },
+  venuesLoading: {
+    marginTop: 8,
   },
   });
 }
