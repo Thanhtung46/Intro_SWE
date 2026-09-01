@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { ROUTES } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemeColors } from '@/constants/theme';
@@ -47,7 +46,6 @@ export default function BottomNav({ active }: Props) {
         icon="trophy-outline"
         label={t('nav.matches')}
         active={active === 'matches'}
-        onPress={active === 'matches' ? noop : () => comingSoon(t('nav.matches'))}
         onPress={active === 'matches' ? noop : () => router.push(ROUTES.MATCHES)}
       />
       <BottomNavItem
