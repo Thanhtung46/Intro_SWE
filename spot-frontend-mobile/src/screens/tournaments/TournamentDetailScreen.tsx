@@ -52,6 +52,12 @@ type Props = {
   onBack: () => void;
   onJoin: (tournamentId: number) => void;
   onManage: () => void;
+  onOpenVenueMap: (venue: {
+    venueName: string;
+    venueAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
   // Organizer-only navigation — passed by the route; undefined for pure viewers.
   onManageRequests?: () => void;
   onAddMatch?: () => void;
@@ -98,6 +104,7 @@ export default function TournamentDetailScreen({
   onBack,
   onJoin,
   onManage,
+  onOpenVenueMap,
   onManageRequests,
   onAddMatch,
   onEditMatch,
@@ -432,25 +439,39 @@ export default function TournamentDetailScreen({
                   <Text style={styles.venueName} numberOfLines={1} ellipsizeMode="tail">
                     {tournament.venueName}
                   </Text>
-                  <View style={styles.venueMap}>
-                    <AppMap
-                      markers={[
-                        {
-                          id: String(tournament.tournamentId),
+                  {tournament.latitude != null && tournament.longitude != null ? (
+                    <TouchableOpacity
+                      testID="tournament-detail-map"
+                      style={styles.venueMap}
+                      onPress={() =>
+                        onOpenVenueMap({
+                          venueName: tournament.venueName,
+                          venueAddress: tournament.venueAddress,
                           latitude: tournament.latitude,
                           longitude: tournament.longitude,
-                          tintColor: colors.primaryDark,
-                          emoji: '📍',
-                        },
-                      ]}
-                      initialRegion={{
-                        latitude: tournament.latitude,
-                        longitude: tournament.longitude,
-                        latitudeDelta: 0.02,
-                        longitudeDelta: 0.02,
-                      }}
-                    />
-                  </View>
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <AppMap
+                        markers={[
+                          {
+                            id: String(tournament.tournamentId),
+                            latitude: tournament.latitude,
+                            longitude: tournament.longitude,
+                            tintColor: colors.primaryDark,
+                            emoji: '📍',
+                          },
+                        ]}
+                        initialRegion={{
+                          latitude: tournament.latitude,
+                          longitude: tournament.longitude,
+                          latitudeDelta: 0.02,
+                          longitudeDelta: 0.02,
+                        }}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
                   <View style={styles.venueAddressRow}>
                     <Ionicons name="location-outline" size={14} color={colors.bodyText} />
                     <Text style={styles.venueAddressText} numberOfLines={2} ellipsizeMode="tail">
@@ -546,7 +567,8 @@ export default function TournamentDetailScreen({
                     </View>
                     {team.roster.map((p) => (
                       <View key={p.rosterPlayerId} style={styles.playerRow}>
-                        {p.rank != null && <Text style={styles.playerRank}>{p.rank}</Text>}
+                        {/* Always reserve the rank column so unranked rows stay aligned with ranked ones. */}
+                        <Text style={styles.playerRank}>{p.rank != null ? p.rank : ''}</Text>
                         <Text style={styles.playerName} numberOfLines={1} ellipsizeMode="tail">
                           {p.name}
                         </Text>

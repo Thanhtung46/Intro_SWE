@@ -19,7 +19,12 @@ type Status = 'loading' | 'ready' | 'error';
 type Props = {
   matchId: number;
   onBack: () => void;
-  onOpenMap: () => void;
+  onOpenVenueMap: (venue: {
+    venueName: string;
+    venueAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
   onOpenHostProfile: (hostUserId: number) => void;
   onManageSquad?: () => void;
 };
@@ -45,11 +50,12 @@ function buildSquadMembers(participants: Participant[]): SquadMember[] {
 /**
  * Match Detail (Figma node 100:401, SPOT-76). Presentation-only per
  * .claude/rules/code-style.md — matchId + navigation callbacks come from
- * app/matches/[id].tsx. Map (venue-focused) is a separate destination from
- * the browse-all Join Match - Map screen (task #6) — both deferred behind
- * "coming soon" until Geoapify key wiring lands (plan mục 3b).
+ * app/matches/[id].tsx. The venue-focused map (location card / "Map"
+ * button) opens the shared VenueMapScreen via `onOpenVenueMap`; that's a
+ * separate destination from the browse-all Join Match - Map screen
+ * (`/matches/map`).
  */
-export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHostProfile, onManageSquad }: Props) {
+export default function MatchDetailScreen({ matchId, onBack, onOpenVenueMap, onOpenHostProfile, onManageSquad }: Props) {
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -152,7 +158,19 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenMap, onOpenHo
         </View>
 
         <View style={styles.body}>
-          <TouchableOpacity testID="match-detail-location" style={styles.locationCard} onPress={onOpenMap} activeOpacity={0.85}>
+          <TouchableOpacity
+            testID="match-detail-location"
+            style={styles.locationCard}
+            onPress={() =>
+              onOpenVenueMap({
+                venueName: match.venueName,
+                venueAddress: match.venueAddress,
+                latitude: match.latitude,
+                longitude: match.longitude,
+              })
+            }
+            activeOpacity={0.85}
+          >
             <View style={styles.locationIconWrap}>
               <Ionicons name="location-outline" size={20} color={colors.primaryDark} />
             </View>

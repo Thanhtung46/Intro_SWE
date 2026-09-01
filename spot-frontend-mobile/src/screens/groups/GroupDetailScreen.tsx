@@ -49,7 +49,12 @@ type DetailTab = 'about' | 'schedule' | 'members' | 'gallery';
 type Props = {
   groupId: number;
   onBack: () => void;
-  onOpenMap: () => void;
+  onOpenVenueMap: (venue: {
+    venueName: string;
+    venueAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
   onManageRequests: () => void; // admin-only, shown when myRole==='ADMIN'
   onEditGroup: () => void; // admin-only
 };
@@ -66,7 +71,7 @@ type Props = {
  * does — pending-request state is derived by cross-referencing
  * listMyGroupJoinRequests() against this groupId (see fetchDetail below).
  */
-export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManageRequests, onEditGroup }: Props) {
+export default function GroupDetailScreen({ groupId, onBack, onOpenVenueMap, onManageRequests, onEditGroup }: Props) {
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -393,7 +398,19 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
                     {group.venueName}
                   </Text>
                   {group.latitude != null && group.longitude != null ? (
-                    <TouchableOpacity testID="group-detail-map" style={styles.venueMap} onPress={onOpenMap} activeOpacity={0.9}>
+                    <TouchableOpacity
+                      testID="group-detail-map"
+                      style={styles.venueMap}
+                      onPress={() =>
+                        onOpenVenueMap({
+                          venueName: group.venueName,
+                          venueAddress: group.venueAddress,
+                          latitude: group.latitude,
+                          longitude: group.longitude,
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
                       <AppMap
                         markers={[
                           {
@@ -419,7 +436,18 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
                       {group.venueAddress}
                     </Text>
                   </View>
-                  <TouchableOpacity testID="group-detail-directions" style={styles.directionsButton} onPress={onOpenMap}>
+                  <TouchableOpacity
+                    testID="group-detail-directions"
+                    style={styles.directionsButton}
+                    onPress={() =>
+                      onOpenVenueMap({
+                        venueName: group.venueName,
+                        venueAddress: group.venueAddress,
+                        latitude: group.latitude,
+                        longitude: group.longitude,
+                      })
+                    }
+                  >
                     <Ionicons name="navigate-outline" size={15} color={colors.primaryDark} />
                     <Text style={styles.directionsButtonText}>Get Directions</Text>
                   </TouchableOpacity>

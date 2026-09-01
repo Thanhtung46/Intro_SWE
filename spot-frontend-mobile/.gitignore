@@ -43,3 +43,10 @@ src/schemas/joinGroupSchema.test.ts
 src/screens/groups/*.test.tsx
 src/components/groups/*.test.tsx
 __tests__/groups-*.test.tsx
+
+# SPOT-76 Map feature test files — same local-only convention. Shared bits
+# (VenueMapScreen promoted to screens/common, AppMap) live outside the
+# per-domain folders, so list them explicitly.
+src/screens/common/VenueMapScreen.test.tsx
+src/components/common/AppMap.test.tsx
+__tests__/venue-map.test.tsx

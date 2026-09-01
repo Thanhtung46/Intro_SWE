@@ -10,7 +10,7 @@ type Venue = {
 
 /**
  * Opens the device's default maps app with GPS turn-by-turn directions to a
- * match's venue. Google Maps' universal `/maps/dir/?api=1` link opens the
+ * venue. Google Maps' universal `/maps/dir/?api=1` link opens the
  * native Google/Apple Maps app when installed, falling back to the browser
  * otherwise. Used as the fallback action inside VenueMapScreen (real
  * turn-by-turn needs the user's GPS + a routing API call — not built yet)
@@ -26,17 +26,19 @@ export function openDirections(venue: Venue): void {
 }
 
 /**
- * The paper-plane icon's actual handler (MatchCard, Check Profile, Join
- * Match Map — Figma "Paper-plane = directions, not share"). Always opens
- * SPOT's own venue map (app/matches/venue-map.tsx) first — never jumps
- * straight to the external Maps app. VenueMapScreen itself shows an
- * "Open in Google Maps" button (openDirections(), above) for when the host
- * actually wants turn-by-turn directions; without lat/lng it falls back to
- * a text-only view there instead of a pin (see VenueMapScreen.tsx).
+ * The shared "open the venue on SPOT's map" handler — the paper-plane icon
+ * (MatchCard, Check Profile, Join Match Map — Figma "Paper-plane =
+ * directions, not share") and the venue mini-map on Match / Group /
+ * Tournament detail. Always opens SPOT's own venue map (app/venue-map.tsx)
+ * first — never jumps straight to the external Maps app. VenueMapScreen
+ * itself shows an "Open in Google Maps" button (openDirections(), above)
+ * for when the user actually wants turn-by-turn directions; without lat/lng
+ * it falls back to a text-only view there instead of a pin (see
+ * VenueMapScreen.tsx).
  */
 export function openVenueDirections(router: ImperativeRouter, venue: Venue): void {
   router.push({
-    pathname: '/matches/venue-map',
+    pathname: '/venue-map',
     params: {
       venueName: venue.venueName,
       venueAddress: venue.venueAddress,
