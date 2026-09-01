@@ -109,3 +109,18 @@ export function toOwnerReviewDetail(row) {
       : null,
   };
 }
+
+export function toScheduleBooking(row) {
+  if (!row) return null;
+  return {
+    bookingId: row.booking_id,
+    fieldId: row.field_id,
+    bookingDate: row.booking_date,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    totalAmount: row.total_amount != null ? Number(row.total_amount) : null,
+    customerName: row.guest_name ?? row.player_full_name ?? null,
+    customerPhone: row.guest_phone ?? null,
+  };
+}

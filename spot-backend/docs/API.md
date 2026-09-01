@@ -2008,6 +2008,16 @@ Prefix `/owner` + `/api/owner`. Cần `Authorization: Bearer` với `role = OWNE
 
 Trả về 4 KPI cards (`monthlyRevenue`, `occupancyRate`, `pendingBookings`, `newReviews`), `bookingTrends` (Mon–Sun), `recentActivities`, `facilityCards`.
 
+### Schedule (`/owner/schedule`) — spec `006-owner-booking-web`
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `GET` | `/owner/schedule?venueId=&date=&sport?` | Timeline grid: every field on the venue as a row, 30-min slots with `state` = `AVAILABLE`\|`BOOKED`\|`UNPAID`\|`MAINTENANCE`. `UNPAID` = booking `status = PENDING_PAYMENT` (no separate approve/reject workflow — see `specs/006-owner-booking-web/research.md` R3). `404` if `venueId` isn't owned by the caller. |
+| `POST` | `/owner/schedule/bookings` | Owner-created walk-in/phone booking: `{ fieldId, bookingDate, startTime, endTime, customerName, customerPhone?, totalAmount, markPaid? }`. `409` on slot overlap (`EXCLUDE USING gist`); `422` if the field is `MAINTENANCE`/`INACTIVE`. `markPaid: true` creates as `PAID`, else `PENDING_PAYMENT`. |
+| `POST` | `/owner/schedule/bookings/:bookingId/cancel` | Frees the slot (`status → CANCELLED`); used to resolve `UNPAID` bookings instead of a separate approve/reject step. |
+
+Migration `010`: `guest_name`, `guest_phone` nullable columns on `schema_booking.bookings` for owner-created bookings without a registered player account. Smoke: `npm run smoke:owner-schedule`.
+
 ### Facility (`/owner/facilities`)
 
 | Method | Path | Notes |

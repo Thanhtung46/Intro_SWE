@@ -6,6 +6,7 @@ import * as dashboardController from './controller/dashboard.controller.js';
 import * as facilityController from './controller/facility.controller.js';
 import * as revenueController from './controller/revenue.controller.js';
 import * as reviewsController from './controller/reviews.controller.js';
+import * as scheduleController from './controller/schedule.controller.js';
 
 const router = Router();
 
@@ -14,6 +15,10 @@ router.use(requireRole(USER_ROLES.OWNER));
 router.use(requireActiveOwner());
 
 router.get('/dashboard/summary', dashboardController.dashboardSummary);
+
+router.get('/schedule', scheduleController.getSchedule);
+router.post('/schedule/bookings', scheduleController.createBooking);
+router.post('/schedule/bookings/:bookingId/cancel', scheduleController.cancelBooking);
 
 router.get('/facilities/venues', facilityController.listVenues);
 router.post('/facilities/venues', facilityController.createVenue);

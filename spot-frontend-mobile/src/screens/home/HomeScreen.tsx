@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -98,10 +99,12 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [carouselWidth, setCarouselWidth] = useState(0);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
+  const [venuesLoading, setVenuesLoading] = useState(true);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
   const [suggestions, setSuggestions] = useState<Venue[]>([]);
 
   useEffect(() => {
+    setVenuesLoading(true);
     listVenues(sport).then((result) => {
       if (result.success) {
         setVenues((result.venues ?? []).map(mapVenueToCard));
@@ -110,6 +113,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         setVenues([]);
         setVenuesError(result.message ?? t('common.genericError'));
       }
+      setVenuesLoading(false);
     });
   }, [sport]);
 
@@ -263,7 +267,9 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
               <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
             </TouchableOpacity>
           </View>
-          {venuesError ? (
+          {venuesLoading ? (
+            <ActivityIndicator style={styles.venuesLoading} color={themeColors.primary} />
+          ) : venuesError ? (
             <Text style={styles.venuesEmptyText}>{venuesError}</Text>
           ) : venues.length === 0 ? (
             <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
@@ -473,6 +479,9 @@ function getStyles(c: ThemeColors) {
     marginHorizontal: 20,
     fontSize: 14,
     color: c.textSecondaryAlt,
+  },
+  venuesLoading: {
+    marginTop: 8,
   },
   });
 }

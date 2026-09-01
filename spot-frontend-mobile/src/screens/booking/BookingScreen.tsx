@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -58,8 +58,10 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [venues, setVenues] = useState<BookingVenue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
+  const [venuesLoading, setVenuesLoading] = useState(true);
 
   useEffect(() => {
+    setVenuesLoading(true);
     listVenues(sport).then((result) => {
       if (result.success) {
         setVenues((result.venues ?? []).map(mapVenueToCard));
@@ -68,6 +70,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
         setVenues([]);
         setVenuesError(result.message ?? t('common.genericError'));
       }
+      setVenuesLoading(false);
     });
   }, [sport]);
 
@@ -107,7 +110,9 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {venuesError ? (
+        {venuesLoading ? (
+          <ActivityIndicator style={styles.venuesLoading} color={c.primary} />
+        ) : venuesError ? (
           <Text style={styles.venuesEmptyText}>{venuesError}</Text>
         ) : venues.length === 0 ? (
           <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
@@ -187,6 +192,9 @@ function getStyles(c: ThemeColors) {
       marginHorizontal: 16,
       fontSize: 14,
       color: c.textSecondaryAlt,
+    },
+    venuesLoading: {
+      marginTop: 16,
     },
   });
 }
