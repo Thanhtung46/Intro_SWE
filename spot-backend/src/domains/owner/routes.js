@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, requireRole } from '../../shared/middleware/authenticate.js';
 import { USER_ROLES } from '../../shared/constants/auth.js';
 import { requireActiveOwner } from './middleware/requireActiveOwner.js';
+import { runFacilityImageUpload } from '../../shared/middleware/facilityImageUpload.js';
 import * as dashboardController from './controller/dashboard.controller.js';
 import * as facilityController from './controller/facility.controller.js';
 import * as revenueController from './controller/revenue.controller.js';
@@ -33,7 +34,16 @@ router.delete(
   '/facilities/venues/:venueId/fields/:fieldId',
   facilityController.deleteField,
 );
+router.put(
+  '/facilities/venues/:venueId/fields/:fieldId/images',
+  facilityController.replaceFieldImages,
+);
 router.put('/facilities/venues/:venueId/images', facilityController.replaceImages);
+router.post(
+  '/facilities/images/upload',
+  runFacilityImageUpload,
+  facilityController.uploadImages,
+);
 
 router.get('/revenue/summary', revenueController.revenueSummary);
 router.get('/revenue/timeseries', revenueController.revenueTimeseries);

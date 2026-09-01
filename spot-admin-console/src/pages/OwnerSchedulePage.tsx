@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ScheduleGrid } from '../components/bookings/ScheduleGrid'
 import { CreateBookingDialog } from '../components/bookings/CreateBookingDialog'
 import { EmptyState } from '../components/common/EmptyState'
@@ -6,18 +6,16 @@ import { getSchedule } from '../services/ownerApi'
 import { useOwnerStore } from '../state/ownerStore'
 import type { Schedule, ScheduleField, ScheduleSlot } from '../types/owner'
 
-const LEGEND: { state: string; label: string; className: string }[] = [
-  { state: 'AVAILABLE', label: 'Available', className: 'owner-legend__dot' },
-  { state: 'BOOKED', label: 'Booked', className: 'owner-legend__dot' },
-  { state: 'UNPAID', label: 'Unpaid', className: 'owner-legend__dot' },
-  { state: 'MAINTENANCE', label: 'Maintenance', className: 'owner-legend__dot' },
+const LEGEND: { state: string; label: string; color: string }[] = [
+  { state: 'AVAILABLE', label: 'Available', color: '#ffffff' },
+  { state: 'BOOKED', label: 'Booked / Paid', color: '#eff6ff' },
+  { state: 'UNPAID', label: 'Unpaid', color: '#f8fafc' },
+  { state: 'MAINTENANCE', label: 'Maintenance', color: '#fffbeb' },
 ]
 
-const LEGEND_COLORS: Record<string, string> = {
-  AVAILABLE: '#fff',
-  BOOKED: '#15803d',
-  UNPAID: '#b45309',
-  MAINTENANCE: '#94a3b8',
+function todayLocal(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
 export function OwnerSchedulePage() {
@@ -45,6 +43,25 @@ export function OwnerSchedulePage() {
     void reload()
   }, [reload])
 
+  const currentTimeOffset = useMemo(() => {
+    if (selectedDate !== todayLocal() || !schedule) return undefined
+    const referenceSlots = schedule.fields.find((f) => f.slots.length > 0)?.slots
+    if (!referenceSlots || referenceSlots.length === 0) return undefined
+    const now = new Date()
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+    const index = referenceSlots.findIndex((slot) => {
+      const [h, m] = slot.startTime.split(':').map(Number)
+      const [eh, em] = slot.endTime.split(':').map(Number)
+      const start = h * 60 + m
+      const end = eh * 60 + em
+      return nowMinutes >= start && nowMinutes < end
+    })
+    if (index === -1) return undefined
+    const [h, m] = referenceSlots[index].startTime.split(':').map(Number)
+    const fraction = (nowMinutes - (h * 60 + m)) / 30
+    return index + fraction
+  }, [schedule, selectedDate])
+
   if (!venue) {
     return <EmptyState title="No venue yet" description="Create a venue on the Facilities page first." />
   }
@@ -52,28 +69,22 @@ export function OwnerSchedulePage() {
   const hasAnyBooking = schedule?.fields.some((f) => f.slots.some((s) => s.state !== 'AVAILABLE'))
 
   return (
-    <div>
+    <>
       <div className="owner-page-header">
         <div>
-          <h1>Schedule</h1>
+          <h1>Booking Schedule</h1>
           <p>{venue.name}</p>
         </div>
       </div>
 
       <div className="owner-schedule-toolbar">
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="owner-field"
-          style={{ padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 6 }}
-        />
+        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
         <div className="owner-legend">
           {LEGEND.map((item) => (
-            <span key={item.state}>
+            <span className="owner-legend__item" key={item.state}>
               <span
-                className={item.className}
-                style={{ background: LEGEND_COLORS[item.state], border: '1px solid #cbd5e1' }}
+                className="owner-legend__dot"
+                style={{ background: item.color, border: '1px solid #cbd5e1' }}
               />
               {item.label}
             </span>
@@ -99,6 +110,7 @@ export function OwnerSchedulePage() {
         <ScheduleGrid
           fields={schedule.fields}
           onSelectSlot={(field, slot) => setPending({ field, slot })}
+          currentTimeOffset={currentTimeOffset}
         />
       )}
 
@@ -114,6 +126,6 @@ export function OwnerSchedulePage() {
           }}
         />
       )}
-    </div>
+    </>
   )
 }

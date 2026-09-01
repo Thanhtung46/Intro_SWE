@@ -20,38 +20,50 @@ export function ReviewItem({ review, onReplied }: { review: Review; onReplied: (
     }
   }
 
+  const initial = (review.playerName ?? 'P').charAt(0).toUpperCase()
+
   return (
     <div className="owner-review-item">
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <strong>{review.playerName ?? 'Player'}</strong>
-        <span>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+      <div className="owner-review-item__head">
+        <div className="owner-review-item__avatar">{initial}</div>
+        <div style={{ flex: 1 }}>
+          <p className="owner-review-item__name">{review.playerName ?? 'Player'}</p>
+          <span className="owner-review-item__stars">
+            {'★'.repeat(review.rating)}
+            {'☆'.repeat(5 - review.rating)}
+          </span>
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--owner-text-muted)' }}>
+          {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </span>
       </div>
-      <p style={{ margin: '4px 0' }}>{review.reviewText}</p>
-      <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
-        {new Date(review.createdAt).toLocaleDateString('vi-VN')}
-      </p>
+
+      <p className="owner-review-item__text">&ldquo;{review.reviewText}&rdquo;</p>
 
       {review.hasReply && review.replyText && (
         <div className="owner-review-item__reply">
-          <strong>Your reply</strong>
+          <div className="owner-review-item__reply-label">Your reply</div>
           <p style={{ margin: '4px 0 0' }}>{review.replyText}</p>
         </div>
       )}
 
       {!review.hasReply && !replying && (
-        <button className="owner-btn owner-btn--secondary" style={{ marginTop: 8 }} onClick={() => setReplying(true)}>
+        <button
+          className="owner-btn owner-btn--secondary"
+          style={{ marginLeft: 60 }}
+          onClick={() => setReplying(true)}
+        >
           Reply
         </button>
       )}
 
       {!review.hasReply && replying && (
-        <form onSubmit={handleSubmit} style={{ marginTop: 8 }}>
+        <form onSubmit={handleSubmit} style={{ marginLeft: 60 }}>
           <div className="owner-field">
             <textarea
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               rows={3}
-              style={{ width: '100%', padding: 8, border: '1px solid #e2e8f0', borderRadius: 6 }}
               required
             />
           </div>

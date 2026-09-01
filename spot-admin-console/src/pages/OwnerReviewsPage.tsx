@@ -42,7 +42,7 @@ export function OwnerReviewsPage() {
   }
 
   return (
-    <div>
+    <>
       <div className="owner-page-header">
         <div>
           <h1>Customer Reviews & Feedback</h1>
@@ -78,6 +78,6 @@ export function OwnerReviewsPage() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }

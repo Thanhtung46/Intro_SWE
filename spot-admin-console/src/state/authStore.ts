@@ -7,6 +7,7 @@ export interface AuthUser {
   fullName: string
   role: string
   status: string
+  avatarUrl?: string | null
 }
 
 interface AuthState {

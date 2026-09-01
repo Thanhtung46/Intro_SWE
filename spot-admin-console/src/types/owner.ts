@@ -1,4 +1,5 @@
 export type SportType = 'Football' | 'Badminton'
+export type FootballVariant = 'FIVE_A_SIDE' | 'SEVEN_A_SIDE'
 export type FieldStatus = 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE'
 export type BookingStatus =
   | 'PENDING_PAYMENT'
@@ -16,6 +17,8 @@ export interface Venue {
   amenities: string | null
   openingHours: string | null
   closingHours: string | null
+  latitude?: number | null
+  longitude?: number | null
   avgRating: number
   ratingCount: number
   fieldCount?: number
@@ -23,11 +26,19 @@ export interface Venue {
   maintenanceFieldCount?: number
 }
 
+export interface VenueImage {
+  imageId: number
+  venueId: number
+  imageUrl: string
+  displayOrder: number
+}
+
 export interface Field {
   fieldId: number
   venueId: number
   name: string
   sportType: SportType
+  footballVariant: FootballVariant | null
   pricePerHour: number
   peakPricePerHour: number
   offPeakPricePerHour: number
@@ -35,6 +46,14 @@ export interface Field {
   status: FieldStatus
   maintenanceNote: string | null
   isAvailableNow: boolean
+  images: FieldImage[]
+}
+
+export interface FieldImage {
+  imageId: number
+  fieldId: number
+  imageUrl: string
+  displayOrder: number
 }
 
 export interface ScheduleBooking {
@@ -73,7 +92,7 @@ export interface Schedule {
 }
 
 export interface RevenuePoint {
-  periodStart: string
+  period: string
   revenue: number
   bookingCount: number
 }

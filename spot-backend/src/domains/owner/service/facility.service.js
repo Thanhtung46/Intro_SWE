@@ -6,15 +6,16 @@ import {
   toOwnerVenueDetail,
   toOwnerField,
   toOwnerVenueImage,
+  toOwnerFieldImage,
 } from '../entity/owner.entity.js';
 
 async function getFieldWithAvailability(client, fieldRow) {
-  const fields = await facilityRepository.listFieldsForVenue(
-    client,
-    fieldRow.venue_id,
-  );
+  const [fields, images] = await Promise.all([
+    facilityRepository.listFieldsForVenue(client, fieldRow.venue_id),
+    facilityRepository.listImagesByFieldIds(client, [fieldRow.field_id]),
+  ]);
   const match = fields.find((f) => f.field_id === fieldRow.field_id);
-  return toOwnerField(match ?? fieldRow);
+  return toOwnerField(match ?? fieldRow, images);
 }
 
 export async function listVenues(ownerId) {
@@ -55,9 +56,19 @@ export async function getVenueDetail(ownerId, venueId) {
       facilityRepository.listFieldsForVenue(client, venueId),
       facilityRepository.listImagesByVenueId(client, venueId),
     ]);
+    const fieldImages = await facilityRepository.listImagesByFieldIds(
+      client,
+      fields.map((f) => f.field_id),
+    );
+    const fieldImagesByFieldId = new Map();
+    for (const row of fieldImages) {
+      const list = fieldImagesByFieldId.get(row.field_id) ?? [];
+      list.push(row);
+      fieldImagesByFieldId.set(row.field_id, list);
+    }
     return {
       venue: toOwnerVenueDetail(venue),
-      fields: fields.map(toOwnerField),
+      fields: fields.map((f) => toOwnerField(f, fieldImagesByFieldId.get(f.field_id) ?? [])),
       images: images.map(toOwnerVenueImage),
     };
   } finally {
@@ -145,6 +156,40 @@ export async function deleteField(ownerId, venueId, fieldId) {
     }
     await facilityRepository.softDeleteField(client, fieldId);
     return { message: 'Field marked inactive successfully' };
+  } finally {
+    client.release();
+  }
+}
+
+export async function replaceFieldImages(ownerId, venueId, fieldId, dto) {
+  const client = await pool.connect();
+  try {
+    const field = await facilityRepository.findFieldForOwner(
+      client,
+      fieldId,
+      venueId,
+      ownerId,
+    );
+    if (!field) {
+      throw new AppError('Field not found', 404);
+    }
+
+    await client.query('BEGIN');
+    try {
+      const images = await facilityRepository.replaceFieldImages(
+        client,
+        fieldId,
+        dto.images,
+      );
+      await client.query('COMMIT');
+      return {
+        message: 'Field images updated successfully',
+        images: images.map(toOwnerFieldImage),
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
   } finally {
     client.release();
   }

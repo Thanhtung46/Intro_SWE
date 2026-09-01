@@ -18,6 +18,9 @@ export function toPublicVenue(row) {
     longitude: row.longitude != null ? Number(row.longitude) : null,
     avgRating: Number(row.avg_rating),
     ratingCount: Number(row.rating_count),
+    ownerName: row.owner_name ?? null,
+    ownerAvatarUrl: row.owner_avatar_url ?? null,
+    ownerPhone: row.owner_phone ?? null,
   };
 
   // Only present when the repository computed a distance (lat/long query) —
@@ -48,6 +51,7 @@ export function toPublicField(row) {
     venueId: row.venue_id,
     name: row.name,
     sportType: row.sport_type,
+    footballVariant: row.football_variant ?? null,
     pricePerHour: Number(row.price_per_hour),
     capacity: row.capacity,
     status: row.status,

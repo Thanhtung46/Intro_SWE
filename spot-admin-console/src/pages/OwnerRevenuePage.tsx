@@ -46,7 +46,7 @@ export function OwnerRevenuePage() {
   const hasRevenue = summary && summary.totalRevenue > 0
 
   return (
-    <div>
+    <>
       <div className="owner-page-header">
         <div>
           <h1>Revenue & Payouts</h1>
@@ -60,14 +60,14 @@ export function OwnerRevenuePage() {
         <>
           <div className="owner-two-col">
             <RevenueChart points={points} />
-            <SportBreakdown bySport={summary!.bySport} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <SportBreakdown bySport={summary!.bySport} />
+              <PayoutCard points={points} />
+            </div>
           </div>
-          <div className="owner-two-col" style={{ marginTop: 16 }}>
-            <PayoutHistoryTable points={points} />
-            <PayoutCard points={points} />
-          </div>
+          <PayoutHistoryTable points={points} />
         </>
       )}
-    </div>
+    </>
   )
 }

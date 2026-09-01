@@ -2,24 +2,18 @@ import type { ScheduleSlot } from '../../types/owner'
 
 interface SlotCellProps {
   slot: ScheduleSlot
-  onSelect?: (slot: ScheduleSlot) => void
+  width: number
+  onSelect?: () => void
 }
 
-export function SlotCell({ slot, onSelect }: SlotCellProps) {
-  const clickable = slot.state === 'AVAILABLE' && Boolean(onSelect)
-  const title =
-    slot.state === 'AVAILABLE'
-      ? `${slot.startTime}–${slot.endTime} · Available`
-      : `${slot.startTime}–${slot.endTime} · ${slot.state}${slot.customerName ? ` · ${slot.customerName}` : ''}`
-
+export function SlotCell({ slot, width, onSelect }: SlotCellProps) {
   return (
     <div
       className={`owner-slot owner-slot--${slot.state}`}
-      title={title}
-      role={clickable ? 'button' : undefined}
-      onClick={clickable ? () => onSelect?.(slot) : undefined}
-    >
-      {slot.state === 'AVAILABLE' ? '' : slot.startTime}
-    </div>
+      style={{ width, minWidth: width }}
+      title={slot.state === 'AVAILABLE' ? `${slot.startTime} — Available` : undefined}
+      role={onSelect ? 'button' : undefined}
+      onClick={onSelect}
+    />
   )
 }

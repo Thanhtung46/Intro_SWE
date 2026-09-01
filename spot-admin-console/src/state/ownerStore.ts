@@ -22,11 +22,11 @@ interface OwnerState {
 export const useOwnerStore = create<OwnerState>((set, get) => ({
   venue: null,
   selectedDate: todayLocal(),
-  loading: false,
+  loading: true,
   error: null,
   setSelectedDate: (date) => set({ selectedDate: date }),
   loadVenue: async () => {
-    if (get().venue || get().loading) return
+    if (get().venue) return
     set({ loading: true, error: null })
     try {
       const venues = await listOwnerVenues()

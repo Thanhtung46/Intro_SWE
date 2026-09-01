@@ -15,6 +15,8 @@ import AppHeader from '@/components/layout/AppHeader';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import BottomNav from '@/components/navigation/BottomNav';
 import { listVenues, PublicVenue } from '@/services/venueService';
+import useUserLocation from '@/hooks/useUserLocation';
+import { EMPTY_VENUE_FILTERS, VenueFilters } from '@/types/venueFilters';
 
 // GET /venues has no per-venue photo/price at list level (data-model.md
 // PublicVenue) — this is a static placeholder image/price, not real data.
@@ -56,13 +58,46 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
   const styles = useMemo(() => getStyles(c), [c]);
   const [sport, setSport] = useState<Sport>('football');
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [filters, setFilters] = useState<VenueFilters>(EMPTY_VENUE_FILTERS);
   const [venues, setVenues] = useState<BookingVenue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [venuesLoading, setVenuesLoading] = useState(true);
+  const userLocation = useUserLocation();
+  const filtersActive =
+    !!filters.date ||
+    !!filters.timeFrom ||
+    !!filters.timeTo ||
+    filters.priceMin != null ||
+    filters.priceMax != null ||
+    !!filters.province ||
+    !!filters.city ||
+    filters.radiusKm != null;
 
   useEffect(() => {
     setVenuesLoading(true);
-    listVenues(sport).then((result) => {
+    // Explicit filter location (province/city or a chosen radius) takes over
+    // from the silent device-GPS default (see useUserLocation) used only
+    // when the user hasn't opened the filter sheet yet.
+    const opts =
+      filters.province || (filters.radiusKm != null && filters.latitude != null)
+        ? {
+            lat: filters.latitude,
+            long: filters.longitude,
+            radiusKm: filters.radiusKm,
+            province: filters.province,
+            city: filters.city,
+          }
+        : userLocation
+          ? { lat: userLocation.latitude, long: userLocation.longitude }
+          : undefined;
+    listVenues(sport, {
+      ...opts,
+      priceMin: filters.priceMin,
+      priceMax: filters.priceMax,
+      date: filters.date,
+      timeFrom: filters.timeFrom,
+      timeTo: filters.timeTo,
+    }).then((result) => {
       if (result.success) {
         setVenues((result.venues ?? []).map(mapVenueToCard));
         setVenuesError(null);
@@ -72,7 +107,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       }
       setVenuesLoading(false);
     });
-  }, [sport]);
+  }, [sport, userLocation, filters]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -96,7 +131,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
           <Ionicons name="search" size={18} color={c.textSecondaryAlt} />
           <Text style={styles.searchPlaceholder}>{t('booking.searchPlaceholder')}</Text>
           <TouchableOpacity onPress={() => setFiltersVisible(true)} accessibilityRole="button" accessibilityLabel={t('booking.filtersLabel')}>
-            <Ionicons name="options-outline" size={20} color={c.textSecondaryAlt} />
+            <Ionicons name="options-outline" size={20} color={filtersActive ? c.primary : c.textSecondaryAlt} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
@@ -132,7 +167,12 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       {/* Bottom navigation */}
       <BottomNav active="booking" />
 
-      <FiltersSheet visible={filtersVisible} onClose={() => setFiltersVisible(false)} />
+      <FiltersSheet
+        visible={filtersVisible}
+        initialFilters={filters}
+        onClose={() => setFiltersVisible(false)}
+        onApply={setFilters}
+      />
     </SafeAreaView>
   );
 }

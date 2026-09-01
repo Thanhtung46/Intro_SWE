@@ -7,12 +7,18 @@ import { useRouter } from 'expo-router';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
+import { openVenueDirections } from '@/utils/directions';
 import { ROUTES } from '@/constants/routes';
 import { useLanguage } from '@/context/LanguageContext';
 import { TranslationKey } from '@/i18n/translations';
 import SelectPitchTimeModal, { Pitch } from '@/components/booking/SelectPitchTimeModal';
+import AppMap, { AppMapMarker, Region } from '@/components/common/AppMap';
 import { getVenueDetail, getVenueImages, PublicField, PublicVenueImage } from '@/services/venueService';
 import { getVenueRating } from '@/services/reviewService';
+
+// Ho Chi Minh City center — same fallback BookingMapScreen uses when a venue
+// has no pinned coords yet, so the map still renders instead of blank/text.
+const DEFAULT_MAP_REGION: Region = { latitude: 10.7769, longitude: 106.7009, latitudeDelta: 0.1, longitudeDelta: 0.1 };
 
 type VenueDetail = {
   name: string;
@@ -23,10 +29,11 @@ type VenueDetail = {
   verified: boolean;
   hours: string;
   capacityLabel: string;
-  amenities: string | null;
+  latitude: number | null;
+  longitude: number | null;
   schedule: { dateLabel: string; timeLabel: string; pitchLabel: string };
   extraService: { label: string; priceLabel: string };
-  contact: { name: string; phone: string };
+  contact: { name: string; phone: string; avatarUrl: string | null };
   pitches: Pitch[];
   price: string;
   priceUnit: string;
@@ -41,7 +48,7 @@ const DEFAULT_VENUE_EXTRAS = {
   verified: false,
   schedule: { dateLabel: 'No upcoming booking', timeLabel: '', pitchLabel: 'Pick a pitch below to book one' },
   extraService: { label: 'Hire a Referee', priceLabel: '+ 150,000 VND' },
-  contact: { name: 'Venue Management', phone: '' },
+  contact: { name: 'Venue Management', phone: '', avatarUrl: null },
 };
 
 const EMPTY_VENUE_DETAIL: VenueDetail = {
@@ -51,7 +58,8 @@ const EMPTY_VENUE_DETAIL: VenueDetail = {
   reviewCount: 0,
   hours: '— - —',
   capacityLabel: '0 Pitches',
-  amenities: null,
+  latitude: null,
+  longitude: null,
   pitches: [],
   price: '—',
   priceUnit: 'VND / hr',
@@ -60,6 +68,16 @@ const EMPTY_VENUE_DETAIL: VenueDetail = {
 
 function formatVnd(amount: number): string {
   return amount.toLocaleString('en-US');
+}
+
+const FOOTBALL_VARIANT_LABEL: Record<string, string> = {
+  FIVE_A_SIDE: 'Sân 5',
+  SEVEN_A_SIDE: 'Sân 7',
+};
+
+function fieldSportLabel(field: PublicField): string {
+  const variantLabel = field.footballVariant ? FOOTBALL_VARIANT_LABEL[field.footballVariant] : null;
+  return variantLabel ? `${field.sportType} · ${variantLabel}` : field.sportType;
 }
 
 /**
@@ -124,11 +142,17 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             ? `${apiVenue.openingHours} - ${apiVenue.closingHours}`
             : '— - —',
         capacityLabel: `${apiFields.length} ${apiFields.length === 1 ? t('venueDetail.pitchSingular') : t('venueDetail.pitchPlural')}`,
-        amenities: apiVenue.amenities,
+        latitude: apiVenue.latitude,
+        longitude: apiVenue.longitude,
         pitches: apiFields.map((f) => ({ fieldId: f.fieldId, name: f.name, format: f.sportType })),
         price: prices.length ? formatVnd(Math.min(...prices)) : '—',
         priceUnit: 'VND / hr',
         ...DEFAULT_VENUE_EXTRAS,
+        contact: {
+          name: apiVenue.ownerName ?? DEFAULT_VENUE_EXTRAS.contact.name,
+          phone: apiVenue.ownerPhone ?? DEFAULT_VENUE_EXTRAS.contact.phone,
+          avatarUrl: apiVenue.ownerAvatarUrl,
+        },
       });
     });
 
@@ -154,14 +178,21 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
   }, [numericVenueId]);
 
   const parsedHours = parseHours(venue.hours);
+  const hasCoords = venue.latitude != null && venue.longitude != null;
+  const mapMarkers: AppMapMarker[] = hasCoords
+    ? [{ id: 'venue', latitude: venue.latitude as number, longitude: venue.longitude as number, tintColor: colors.primaryDark, emoji: '📍' }]
+    : [];
+  const mapRegion: Region = hasCoords
+    ? { ...DEFAULT_MAP_REGION, latitude: venue.latitude as number, longitude: venue.longitude as number, latitudeDelta: 0.01, longitudeDelta: 0.01 }
+    : DEFAULT_MAP_REGION;
 
-  const openInMaps = () => {
-    const query = encodeURIComponent(`${venue.name}, ${venue.address}`);
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-  };
-
-  const callVenue = () => {
-    Linking.openURL(`tel:${venue.contact.phone.replace(/\s/g, '')}`);
+  const openVenueMap = () => {
+    openVenueDirections(router, {
+      latitude: venue.latitude,
+      longitude: venue.longitude,
+      venueName: venue.name,
+      venueAddress: venue.address,
+    });
   };
 
   const selectTab = (tab: Tab) => {
@@ -252,24 +283,6 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             </View>
           </View>
 
-          {/* Amenities */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <Ionicons name="sparkles-outline" size={18} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>{t('venueDetail.amenities')}</Text>
-            </View>
-            <View style={styles.amenitiesRow}>
-              {venue.amenities ? (
-                <View style={styles.amenityChip}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.bodyText} />
-                  <Text style={styles.amenityText}>{venue.amenities}</Text>
-                </View>
-              ) : (
-                <Text style={styles.amenityText}>{t('venueDetail.noAmenities')}</Text>
-              )}
-            </View>
-          </View>
-
           {/* Location */}
           <View style={styles.section}>
             <View style={styles.sectionHeading}>
@@ -277,19 +290,17 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               <Text style={styles.sectionTitle}>{t('venueDetail.location')}</Text>
             </View>
             <View style={styles.locationCard}>
-              <View style={styles.mapPreview}>
-                <Image
-                  source={require('../../../assets/booking/map-background.jpg')}
-                  style={StyleSheet.absoluteFill}
-                  resizeMode="cover"
-                />
-                <View style={styles.mapPin}>
-                  <Ionicons name="location" size={20} color={colors.white} />
+              <TouchableOpacity
+                style={styles.mapArea}
+                onPress={openVenueMap}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={t('venueDetail.location')}
+              >
+                <AppMap markers={mapMarkers} initialRegion={mapRegion} />
+                <View style={styles.mapExpandHint} pointerEvents="none">
+                  <Ionicons name="expand-outline" size={16} color={colors.white} />
                 </View>
-              </View>
-              <TouchableOpacity style={styles.mapsButton} onPress={openInMaps} accessibilityRole="button">
-                <Ionicons name="navigate-outline" size={18} color={colors.primaryDark} />
-                <Text style={styles.mapsButtonText}>{t('venueDetail.openInMaps')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -351,27 +362,14 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
             </View>
             <View style={styles.contactCard}>
               <View style={styles.contactRow}>
-                <View style={styles.contactAvatar}>
-                  <Text style={styles.contactAvatarText}>{venue.contact.name.charAt(0)}</Text>
-                </View>
-                <View>
-                  <Text style={styles.contactName}>{venue.contact.name}</Text>
-                  <Text style={styles.contactPhone}>{venue.contact.phone}</Text>
-                </View>
-              </View>
-              <View style={styles.contactButtons}>
-                <TouchableOpacity
-                  style={styles.contactButton}
-                  onPress={() => comingSoon('Zalo')}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="chatbubble-outline" size={18} color={colors.primaryDark} />
-                  <Text style={styles.contactButtonText}>Zalo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.contactButton} onPress={callVenue} accessibilityRole="button">
-                  <Ionicons name="call-outline" size={18} color={colors.primaryDark} />
-                  <Text style={styles.contactButtonText}>{t('venueDetail.callNow')}</Text>
-                </TouchableOpacity>
+                {venue.contact.avatarUrl ? (
+                  <Image source={{ uri: venue.contact.avatarUrl }} style={styles.contactAvatarImage} />
+                ) : (
+                  <View style={styles.contactAvatar}>
+                    <Text style={styles.contactAvatarText}>{venue.contact.name.charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={styles.contactName}>{venue.contact.name}</Text>
               </View>
             </View>
           </View>
@@ -392,7 +390,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                   <View key={field.fieldId} style={styles.scheduleCard}>
                     <View style={styles.scheduleInfo}>
                       <Text style={styles.scheduleDateTime}>{field.name}</Text>
-                      <Text style={styles.schedulePitch}>{field.sportType}</Text>
+                      <Text style={styles.schedulePitch}>{fieldSportLabel(field)}</Text>
                     </View>
                     <Text style={styles.priceValue}>{formatVnd(field.pricePerHour)}</Text>
                     <Text style={styles.priceUnit}>{t('venueDetail.priceUnit')}</Text>
@@ -685,22 +683,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.cardBorder,
   },
-  amenitiesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  amenityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 17,
-    paddingVertical: 9,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
   parkingBadge: {
     width: 20,
     height: 20,
@@ -727,39 +709,22 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 12,
   },
-  mapPreview: {
+  mapArea: {
     height: 160,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#DCE9FF',
+  },
+  mapExpandHint: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  mapPin: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
-    borderWidth: 4,
-    borderColor: colors.white,
-  },
-  mapsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 74, 198, 0.05)',
-    borderWidth: 2,
-    borderColor: 'rgba(0, 74, 198, 0.2)',
-  },
-  mapsButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.primaryDark,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
   },
   scheduleHeader: {
     flexDirection: 'row',
@@ -865,6 +830,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#D3E4FE',
   },
+  contactAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   contactAvatarText: {
     fontSize: 18,
     fontWeight: '700',
@@ -874,31 +844,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.headingText,
-  },
-  contactPhone: {
-    fontSize: 16,
-    color: colors.bodyText,
-  },
-  contactButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  contactButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderWidth: 2,
-    borderColor: 'rgba(0, 74, 198, 0.2)',
-  },
-  contactButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.primaryDark,
   },
   bottomBar: {
     flexDirection: 'row',

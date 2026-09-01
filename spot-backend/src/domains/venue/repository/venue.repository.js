@@ -31,24 +31,72 @@ function venueSearchPredicate(qSlot) {
 export async function listActiveVenuesBySport(
   client,
   sportType,
-  { lat, long, radiusKm } = {},
+  { lat, long, radiusKm, province, city, priceMin, priceMax, date, timeFrom, timeTo } = {},
 ) {
   const hasDistance = lat != null && long != null;
+  const hasAvailability = date != null && timeFrom != null && timeTo != null;
   const values = [sportType];
+  let paramIdx = 2;
+  const add = (value) => {
+    values.push(value);
+    const slot = `$${paramIdx}`;
+    paramIdx += 1;
+    return slot;
+  };
+
   let distanceSelect = '';
-  let distanceFilter = '';
+  const where = [];
   let orderClause = 'ORDER BY v.avg_rating DESC';
 
   if (hasDistance) {
-    values.push(long, lat, radiusKm ?? 20);
-    // $2 = long, $3 = lat, $4 = radiusKm
+    const longSlot = add(long);
+    const latSlot = add(lat);
+    const radiusSlot = add(radiusKm ?? 20);
     distanceSelect = `,
-       ST_Distance(v.location, ST_MakePoint($2, $3)::geography) / 1000 AS distance_km`;
-    distanceFilter = `
-       AND v.location IS NOT NULL
-       AND ST_DWithin(v.location, ST_MakePoint($2, $3)::geography, $4 * 1000)`;
+       ST_Distance(v.location, ST_MakePoint(${longSlot}, ${latSlot})::geography) / 1000 AS distance_km`;
+    where.push(
+      `v.location IS NOT NULL
+       AND ST_DWithin(v.location, ST_MakePoint(${longSlot}, ${latSlot})::geography, ${radiusSlot} * 1000)`,
+    );
     orderClause = 'ORDER BY distance_km ASC';
   }
+
+  if (province) {
+    where.push(`v.province = ${add(province)}`);
+  }
+  if (city) {
+    where.push(`v.city = ${add(city)}`);
+  }
+
+  let priceFilter = '';
+  if (priceMin != null) {
+    priceFilter += `\n         AND f.price_per_hour >= ${add(priceMin)}`;
+  }
+  if (priceMax != null) {
+    priceFilter += `\n         AND f.price_per_hour <= ${add(priceMax)}`;
+  }
+
+  let availabilityFilter = '';
+  if (hasAvailability) {
+    const startSlot = add(new Date(`${date}T${timeFrom}:00+07:00`));
+    const endSlot = add(new Date(`${date}T${timeTo}:00+07:00`));
+    const dateSlot = add(date);
+    availabilityFilter = `
+         AND NOT EXISTS (
+           SELECT 1 FROM schema_booking.bookings b
+           WHERE b.field_id = f.field_id
+             AND b.booking_date = ${dateSlot}::date
+             AND b.status <> 'CANCELLED'
+             AND b.booking_time_range && tstzrange(${startSlot}::timestamptz, ${endSlot}::timestamptz, '[)')
+         )`;
+  }
+
+  where.push(`EXISTS (
+       SELECT 1 FROM schema_venue.fields f
+       WHERE f.venue_id = v.venue_id
+         AND f.sport_type = $1
+         AND f.status = 'ACTIVE'${priceFilter}${availabilityFilter}
+     )`);
 
   const { rows } = await client.query(
     `SELECT
@@ -59,13 +107,7 @@ export async function listActiveVenuesBySport(
        v.avg_rating, v.rating_count
        ${distanceSelect}
      FROM schema_venue.venues v
-     WHERE EXISTS (
-       SELECT 1 FROM schema_venue.fields f
-       WHERE f.venue_id = v.venue_id
-         AND f.sport_type = $1
-         AND f.status = 'ACTIVE'
-     )
-     ${distanceFilter}
+     WHERE ${where.join('\n       AND ')}
      ${orderClause}`,
     values,
   );
@@ -79,8 +121,12 @@ export async function findVenueById(client, venueId) {
        v.opening_hours, v.closing_hours,
        ST_Y(v.location::geometry) AS latitude,
        ST_X(v.location::geometry) AS longitude,
-       v.avg_rating, v.rating_count
+       v.avg_rating, v.rating_count,
+       u.user_id AS owner_id, p.full_name AS owner_name,
+       p.avatar_url AS owner_avatar_url, u.phone_number AS owner_phone
      FROM schema_venue.venues v
+     JOIN schema_auth.users u ON u.user_id = v.owner_id
+     LEFT JOIN schema_auth.user_profiles p ON p.user_id = u.user_id
      WHERE v.venue_id = $1`,
     [venueId],
   );
@@ -89,7 +135,7 @@ export async function findVenueById(client, venueId) {
 
 export async function listFieldsByVenueId(client, venueId) {
   const { rows } = await client.query(
-    `SELECT field_id, venue_id, name, sport_type, price_per_hour, capacity, status
+    `SELECT field_id, venue_id, name, sport_type, football_variant, price_per_hour, capacity, status
      FROM schema_venue.fields
      WHERE venue_id = $1
      ORDER BY field_id ASC`,

@@ -3,14 +3,15 @@ export async function createReminderJob(client, {
   bookingId = null,
   offsetHours,
   fireAt,
+  audience = 'PLAYER',
 }) {
   const { rows } = await client.query(
     `INSERT INTO schema_notification.reminder_jobs
-      (user_id, booking_id, offset_hours, fire_at, status)
-     VALUES ($1, $2, $3, $4, 'PENDING')
+      (user_id, booking_id, offset_hours, fire_at, status, audience)
+     VALUES ($1, $2, $3, $4, 'PENDING', $5)
      RETURNING reminder_id, user_id, booking_id, offset_hours, fire_at,
-               status, notification_id, created_at, updated_at`,
-    [userId, bookingId, offsetHours, fireAt],
+               status, notification_id, audience, created_at, updated_at`,
+    [userId, bookingId, offsetHours, fireAt, audience],
   );
   return rows[0];
 }
@@ -18,7 +19,7 @@ export async function createReminderJob(client, {
 export async function findDuePending(client, { limit = 50 } = {}) {
   const { rows } = await client.query(
     `SELECT reminder_id, user_id, booking_id, offset_hours, fire_at,
-            status, notification_id, created_at, updated_at
+            status, notification_id, audience, created_at, updated_at
      FROM schema_notification.reminder_jobs
      WHERE status = 'PENDING' AND fire_at <= NOW()
      ORDER BY fire_at ASC
@@ -31,7 +32,7 @@ export async function findDuePending(client, { limit = 50 } = {}) {
 export async function findById(client, reminderId) {
   const { rows } = await client.query(
     `SELECT reminder_id, user_id, booking_id, offset_hours, fire_at,
-            status, notification_id, created_at, updated_at
+            status, notification_id, audience, created_at, updated_at
      FROM schema_notification.reminder_jobs
      WHERE reminder_id = $1
      LIMIT 1`,

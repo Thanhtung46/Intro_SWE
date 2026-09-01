@@ -71,7 +71,8 @@ export async function insertManualBooking(
 
 export async function findBookingForOwner(client, bookingId, ownerId) {
   const { rows } = await client.query(
-    `SELECT b.booking_id, b.field_id, b.status
+    `SELECT b.booking_id, b.field_id, b.status, b.booking_date::text AS booking_date,
+       f.name AS field_name, v.name AS venue_name
      FROM schema_booking.bookings b
      INNER JOIN schema_venue.fields f ON f.field_id = b.field_id
      INNER JOIN schema_venue.venues v ON v.venue_id = f.venue_id

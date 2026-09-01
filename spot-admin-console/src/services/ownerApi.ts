@@ -1,8 +1,9 @@
-import axios from 'axios'
-import { useAuthStore } from '../state/authStore'
+import { apiClient } from './apiClient'
 import type {
   Venue,
+  VenueImage,
   Field,
+  FieldImage,
   Schedule,
   ScheduleBooking,
   RevenueSummary,
@@ -11,37 +12,8 @@ import type {
   DashboardSummary,
   FieldStatus,
   SportType,
+  FootballVariant,
 } from '../types/owner'
-
-const baseURL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000'
-
-export const apiClient = axios.create({ baseURL })
-
-apiClient.interceptors.request.use((config) => {
-  const { accessToken } = useAuthStore.getState()
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`
-  }
-  return config
-})
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error?.response?.status === 401) {
-      useAuthStore.getState().logout()
-    }
-    return Promise.reject(error)
-  },
-)
-
-// --- Auth ---
-
-export async function login(email: string, password: string) {
-  const { data } = await apiClient.post('/auth/login', { email, password })
-  return data as { accessToken: string; user: { userId: string; email: string; fullName: string; role: string; status: string } }
-}
 
 // --- Venues / facilities (Story 3, and used by Foundational venue load) ---
 
@@ -52,7 +24,7 @@ export async function listOwnerVenues() {
 
 export async function getVenueDetail(venueId: number) {
   const { data } = await apiClient.get(`/owner/facilities/venues/${venueId}`)
-  return data as { venue: Venue; fields: Field[] }
+  return data as { venue: Venue; fields: Field[]; images: VenueImage[] }
 }
 
 export async function createVenue(input: {
@@ -61,6 +33,8 @@ export async function createVenue(input: {
   amenities?: string
   openingHours?: string
   closingHours?: string
+  latitude?: number
+  longitude?: number
 }) {
   const { data } = await apiClient.post('/owner/facilities/venues', input)
   return data.venue as Venue
@@ -72,14 +46,25 @@ export async function patchVenue(venueId: number, input: Partial<{
   amenities: string
   openingHours: string
   closingHours: string
+  latitude: number
+  longitude: number
 }>) {
   const { data } = await apiClient.patch(`/owner/facilities/venues/${venueId}`, input)
   return data.venue as Venue
 }
 
+export async function replaceVenueImages(
+  venueId: number,
+  images: { imageUrl: string; displayOrder?: number }[],
+) {
+  const { data } = await apiClient.put(`/owner/facilities/venues/${venueId}/images`, { images })
+  return data.images as VenueImage[]
+}
+
 export async function createField(venueId: number, input: {
   name: string
   sportType: SportType
+  footballVariant?: FootballVariant | null
   capacity?: number
   status?: FieldStatus
   pricePerHour: number
@@ -113,9 +98,30 @@ export async function deleteField(venueId: number, fieldId: number) {
   await apiClient.delete(`/owner/facilities/venues/${venueId}/fields/${fieldId}`)
 }
 
+export async function replaceFieldImages(
+  venueId: number,
+  fieldId: number,
+  images: { imageUrl: string; displayOrder?: number }[],
+) {
+  const { data } = await apiClient.put(
+    `/owner/facilities/venues/${venueId}/fields/${fieldId}/images`,
+    { images },
+  )
+  return data.images as FieldImage[]
+}
+
+export async function uploadFacilityImages(files: File[]) {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('images', file))
+  const { data } = await apiClient.post('/owner/facilities/images/upload', formData)
+  return data.urls as string[]
+}
+
 // --- Dashboard (Story 2) ---
 
-export async function getDashboardSummary(params: { venueId?: number } = {}) {
+export async function getDashboardSummary(
+  params: { venueId?: number; trendsWeeks?: number; recentLimit?: number } = {},
+) {
   const { data } = await apiClient.get('/owner/dashboard/summary', { params })
   return data as DashboardSummary
 }

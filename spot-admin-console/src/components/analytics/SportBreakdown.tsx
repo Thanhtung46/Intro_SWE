@@ -6,31 +6,32 @@ export function SportBreakdown({ bySport }: { bySport: RevenueBySport[] }) {
 
   return (
     <div className="owner-card">
-      <p className="owner-kpi-card__label" style={{ marginBottom: 16 }}>
-        Yield by sport
-      </p>
-      {bySport.map((sport) => {
-        const percent = Math.round((sport.revenue / total) * 100)
-        return (
-          <div key={sport.sportType} style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6 }}>
-              <span>{sport.sportType}</span>
-              <span>{formatVnd(sport.revenue)}</span>
+      <h2 className="owner-section-title" style={{ marginBottom: 24 }}>
+        Yield by Sport
+      </h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+        {bySport.map((sport, i) => {
+          const percent = Math.round((sport.revenue / total) * 100)
+          const isFirst = i === 0
+          return (
+            <div className="owner-sport-row" key={sport.sportType}>
+              <div className="owner-sport-row__top">
+                <span className="owner-sport-row__label">
+                  {sport.sportType === 'Badminton' ? '\u{1F3F8}' : '⚽'} {sport.sportType}
+                </span>
+                <span className="owner-sport-row__amount">{formatVnd(sport.revenue)}</span>
+              </div>
+              <div className="owner-sport-row__track">
+                <div
+                  className={isFirst ? 'owner-sport-row__fill' : 'owner-sport-row__fill owner-sport-row__fill--amber'}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <p className="owner-sport-row__caption">{percent}% of Total Volume</p>
             </div>
-            <div style={{ height: 8, background: '#f1f5f9', borderRadius: 999 }}>
-              <div
-                style={{
-                  width: `${percent}%`,
-                  height: '100%',
-                  background: '#2563eb',
-                  borderRadius: 999,
-                }}
-              />
-            </div>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 0' }}>{percent}% of total volume</p>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

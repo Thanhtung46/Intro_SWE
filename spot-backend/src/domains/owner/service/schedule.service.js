@@ -6,6 +6,9 @@ import { formatTimeInZone } from '../../booking/entity/booking.entity.js';
 import * as facilityRepository from '../repository/facility.repository.js';
 import * as scheduleRepository from '../repository/schedule.repository.js';
 import { toScheduleBooking } from '../entity/owner.entity.js';
+import * as notificationService from '../../notification/service/notification.service.js';
+import { NOTIFICATION_TYPES } from '../../../shared/constants/notification.js';
+import logger from '../../../shared/utils/logger.js';
 
 const SLOT_DURATION_MINUTES = 30;
 
@@ -161,6 +164,20 @@ export async function createManualBooking(ownerId, dto) {
       throw err;
     }
 
+    notificationService
+      .scheduleBookingReminders({
+        userId: ownerId,
+        bookingId: booking.booking_id,
+        startAt: rangeStart,
+        audience: 'OWNER',
+      })
+      .catch((err) => {
+        logger.warn('Owner manual-booking reminder scheduling failed', {
+          error: err.message,
+          bookingId: booking.booking_id,
+        });
+      });
+
     return toScheduleBooking(booking);
   } finally {
     client.release();
@@ -175,6 +192,28 @@ export async function cancelBooking(ownerId, bookingId) {
       throw new AppError('Booking not found', 404);
     }
     const booking = await scheduleRepository.cancelBooking(client, bookingId);
+
+    notificationService
+      .createNotification({
+        userId: ownerId,
+        type: NOTIFICATION_TYPES.OWNER_BOOKING_CANCELLED,
+        title: 'Booking cancelled',
+        body: `A booking at ${owned.field_name}, ${owned.venue_name} on ${owned.booking_date} was cancelled.`,
+        data: { bookingId },
+      })
+      .catch((err) => {
+        logger.warn('Owner booking-cancelled notification failed', {
+          error: err.message,
+          bookingId,
+        });
+      });
+    notificationService.cancelRemindersForBooking(bookingId).catch((err) => {
+      logger.warn('Failed to cancel reminders for cancelled booking', {
+        error: err.message,
+        bookingId,
+      });
+    });
+
     return toScheduleBooking(booking);
   } finally {
     client.release();
