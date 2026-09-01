@@ -1,10 +1,10 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { ThemeColors } from '@/constants/theme';
 
 type Props = {
   title: string;
@@ -12,6 +12,7 @@ type Props = {
   icon: (color: string) => ReactNode;
   selected: boolean;
   onPress: () => void;
+  themeColors: ThemeColors;
 };
 
 /**
@@ -20,11 +21,12 @@ type Props = {
  * navigation happens (runs on the UI thread, unlike the JS-thread
  * `Animated` API used for onboarding's float animation).
  */
-export default function RoleCard({ title, description, icon, selected, onPress }: Props) {
+export default function RoleCard({ title, description, icon, selected, onPress, themeColors }: Props) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
 
   return (
     <Animated.View style={animatedStyle}>
@@ -43,14 +45,14 @@ export default function RoleCard({ title, description, icon, selected, onPress }
         style={[styles.card, selected && styles.cardSelected]}
       >
         <View style={[styles.iconCircle, selected && styles.iconCircleSelected]}>
-          {icon(selected ? colors.white : colors.primaryDark)}
+          {icon(selected ? themeColors.white : themeColors.primary)}
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{description}</Text>
 
         {selected && (
           <View style={styles.checkBadge}>
-            <Ionicons name="checkmark" size={14} color={colors.white} />
+            <Ionicons name="checkmark" size={14} color={themeColors.white} />
           </View>
         )}
       </TouchableOpacity>
@@ -58,54 +60,56 @@ export default function RoleCard({ title, description, icon, selected, onPress }
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    width: '100%',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.cardBackground,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.xl,
-    alignItems: 'center',
-  },
-  cardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.selectedBackground,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-    backgroundColor: colors.iconBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  iconCircleSelected: {
-    backgroundColor: colors.primaryDark,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.headingText,
-    marginBottom: spacing.sm,
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.bodyText,
-    textAlign: 'center',
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      width: '100%',
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: c.roleCardBorder,
+      backgroundColor: c.roleCardBg,
+      paddingVertical: spacing.xl,
+      paddingHorizontal: spacing.xl,
+      alignItems: 'center',
+    },
+    cardSelected: {
+      borderColor: c.primary,
+      backgroundColor: c.roleCardSelectedBg,
+    },
+    iconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 16,
+      backgroundColor: c.roleIconBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.lg,
+    },
+    iconCircleSelected: {
+      backgroundColor: c.primary,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: c.textPrimary,
+      marginBottom: spacing.sm,
+    },
+    description: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    checkBadge: {
+      position: 'absolute',
+      top: spacing.md,
+      right: spacing.md,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}

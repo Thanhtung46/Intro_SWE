@@ -14,6 +14,8 @@ import {
   parseSeedScheduleDto,
 } from '../dto/schedule.dto.js';
 import * as usersService from '../service/users.service.js';
+import * as adminService from '../../admin/service/admin.service.js';
+import { parseSubmitVerificationDto } from '../dto/submit-verification.dto.js';
 
 export async function me(req, res, next) {
   try {
@@ -76,6 +78,31 @@ export async function uploadAvatar(req, res, next) {
   try {
     const result = await usersService.uploadAvatar(req.user.userId, req.file);
     return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function uploadVerificationDocument(req, res, next) {
+  try {
+    const result = await adminService.uploadVerificationDocument(
+      req.user.userId,
+      req.file,
+    );
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function submitVerificationRequest(req, res, next) {
+  try {
+    const dto = parseSubmitVerificationDto(req.body);
+    const result = await adminService.submitVerificationRequest(
+      req.user.userId,
+      dto,
+    );
+    return res.status(201).json(result);
   } catch (err) {
     return next(err);
   }

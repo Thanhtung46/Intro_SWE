@@ -3,6 +3,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
 type Sport = 'football' | 'badminton';
 
@@ -13,6 +15,7 @@ type Props = {
   inactiveColor: string;
   /** 'sm' = Home's preset, 'md' (default) = Booking's preset — differ in container radius/background and pill spacing. */
   size?: 'sm' | 'md';
+  themeColors?: ThemeColors;
 };
 
 const PRESETS = {
@@ -21,27 +24,64 @@ const PRESETS = {
 };
 
 /** Football/Badminton segmented toggle — Home (Figma 8:2) and Booking (Figma 79:1392) pills. */
-export default function SportSegmentedToggle({ value, onChange, inactiveColor, size = 'md' }: Props) {
+export default function SportSegmentedToggle({ value, onChange, inactiveColor, size = 'md', themeColors }: Props) {
+  const { t } = useLanguage();
   const preset = PRESETS[size];
+  const trackBg = themeColors
+    ? size === 'sm'
+      ? themeColors.sportToggleTrackBgSubtle
+      : themeColors.sportToggleTrackBgTint
+    : preset.background;
+  const activeIconColor = themeColors?.white ?? colors.white;
+  const activeTextColor = themeColors?.white ?? colors.white;
+  const activeBg = themeColors?.primary ?? colors.primaryDark;
 
   return (
-    <View style={[styles.container, { borderRadius: preset.borderRadius, backgroundColor: preset.background }]}>
+    <View style={[styles.container, { borderRadius: preset.borderRadius, backgroundColor: trackBg }]}>
       <TouchableOpacity
-        style={[styles.pill, { gap: preset.pillGap }, value === 'football' && styles.pillActive]}
+        style={[
+          styles.pill,
+          { gap: preset.pillGap },
+          value === 'football' && [styles.pillActive, { backgroundColor: activeBg }],
+        ]}
         onPress={() => onChange('football')}
       >
-        <MaterialCommunityIcons name="soccer" size={16} color={value === 'football' ? colors.white : inactiveColor} />
-        <Text style={[styles.text, { fontSize: preset.fontSize, color: inactiveColor }, value === 'football' && styles.textActive]}>
-          Football
+        <MaterialCommunityIcons
+          name="soccer"
+          size={16}
+          color={value === 'football' ? activeIconColor : inactiveColor}
+        />
+        <Text
+          style={[
+            styles.text,
+            { fontSize: preset.fontSize, color: inactiveColor },
+            value === 'football' && [styles.textActive, { color: activeTextColor }],
+          ]}
+        >
+          {t('sportToggle.football')}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.pill, { gap: preset.pillGap }, value === 'badminton' && styles.pillActive]}
+        style={[
+          styles.pill,
+          { gap: preset.pillGap },
+          value === 'badminton' && [styles.pillActive, { backgroundColor: activeBg }],
+        ]}
         onPress={() => onChange('badminton')}
       >
-        <MaterialCommunityIcons name="badminton" size={16} color={value === 'badminton' ? colors.white : inactiveColor} />
-        <Text style={[styles.text, { fontSize: preset.fontSize, color: inactiveColor }, value === 'badminton' && styles.textActive]}>
-          Badminton
+        <MaterialCommunityIcons
+          name="badminton"
+          size={16}
+          color={value === 'badminton' ? activeIconColor : inactiveColor}
+        />
+        <Text
+          style={[
+            styles.text,
+            { fontSize: preset.fontSize, color: inactiveColor },
+            value === 'badminton' && [styles.textActive, { color: activeTextColor }],
+          ]}
+        >
+          {t('sportToggle.badminton')}
         </Text>
       </TouchableOpacity>
     </View>

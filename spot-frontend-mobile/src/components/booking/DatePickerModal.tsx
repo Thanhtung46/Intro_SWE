@@ -3,22 +3,9 @@ import { Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, Vi
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-const WEEKDAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+import { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { MONTH_NAMES_EN, MONTH_NAMES_VI, WEEKDAYS_MIN_EN, WEEKDAYS_MIN_VI } from '@/i18n/translations';
 
 type Props = {
   visible: boolean;
@@ -26,6 +13,7 @@ type Props = {
   initialDate?: Date;
   onCancel: () => void;
   onConfirm: (date: Date) => void;
+  themeColors?: ThemeColors;
 };
 
 function isSameDay(a: Date, b: Date) {
@@ -57,7 +45,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /** Date picker modal for the Booking Field filters — Figma node 72:357 ("Book field - Choose date"). */
-export default function DatePickerModal({ visible, initialDate, onCancel, onConfirm }: Props) {
+export default function DatePickerModal({ visible, initialDate, onCancel, onConfirm, themeColors }: Props) {
+  const { t, language } = useLanguage();
+  const MONTH_NAMES = language === 'vi' ? MONTH_NAMES_VI : MONTH_NAMES_EN;
+  const WEEKDAY_LABELS = language === 'vi' ? WEEKDAYS_MIN_VI : WEEKDAYS_MIN_EN;
   const today = useMemo(() => new Date(), []);
   const [viewMonth, setViewMonth] = useState(() => {
     const base = initialDate ?? today;
@@ -76,32 +67,40 @@ export default function DatePickerModal({ visible, initialDate, onCancel, onConf
       <TouchableWithoutFeedback onPress={onCancel}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
-            <View style={styles.modal}>
+            <View
+              style={[
+                styles.modal,
+                themeColors && {
+                  backgroundColor: themeColors.venueCardChipBg,
+                  borderColor: themeColors.modalBorder,
+                },
+              ]}
+            >
               <View style={styles.header}>
                 <TouchableOpacity
                   style={styles.navButton}
                   onPress={() => goToMonth(-1)}
                   accessibilityRole="button"
-                  accessibilityLabel="Previous month"
+                  accessibilityLabel={t('filters.prevMonthLabel')}
                 >
-                  <Ionicons name="chevron-back" size={20} color={colors.primary} />
+                  <Ionicons name="chevron-back" size={20} color={themeColors?.quickActionPrimaryIcon ?? colors.primary} />
                 </TouchableOpacity>
-                <Text style={styles.monthLabel}>
+                <Text style={[styles.monthLabel, themeColors && { color: themeColors.venueCardHeadingText }]}>
                   {MONTH_NAMES[viewMonth.getMonth()]} {viewMonth.getFullYear()}
                 </Text>
                 <TouchableOpacity
                   style={styles.navButton}
                   onPress={() => goToMonth(1)}
                   accessibilityRole="button"
-                  accessibilityLabel="Next month"
+                  accessibilityLabel={t('filters.nextMonthLabel')}
                 >
-                  <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                  <Ionicons name="chevron-forward" size={20} color={themeColors?.quickActionPrimaryIcon ?? colors.primary} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.weekdayRow}>
                 {WEEKDAY_LABELS.map((label) => (
-                  <Text key={label} style={styles.weekdayLabel}>
+                  <Text key={label} style={[styles.weekdayLabel, themeColors && { color: themeColors.outlineMuted }]}>
                     {label}
                   </Text>
                 ))}
@@ -116,7 +115,13 @@ export default function DatePickerModal({ visible, initialDate, onCancel, onConf
                     return (
                       <TouchableOpacity
                         key={cell.key}
-                        style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+                        style={[
+                          styles.dayCell,
+                          isSelected && [
+                            styles.dayCellSelected,
+                            themeColors && { backgroundColor: themeColors.quickActionPrimaryIcon },
+                          ],
+                        ]}
                         onPress={() => setSelected(cell.date as Date)}
                         accessibilityRole="button"
                         accessibilityLabel={`${cell.day} ${MONTH_NAMES[viewMonth.getMonth()]}`}
@@ -124,8 +129,12 @@ export default function DatePickerModal({ visible, initialDate, onCancel, onConf
                         <Text
                           style={[
                             styles.dayText,
-                            isToday && !isSelected && styles.dayTextToday,
-                            isSelected && styles.dayTextSelected,
+                            themeColors && { color: themeColors.textSecondaryAlt },
+                            isToday && !isSelected && [
+                              styles.dayTextToday,
+                              themeColors && { color: themeColors.quickActionPrimaryIcon },
+                            ],
+                            isSelected && [styles.dayTextSelected, themeColors && { color: themeColors.white }],
                           ]}
                         >
                           {cell.day}
@@ -138,14 +147,21 @@ export default function DatePickerModal({ visible, initialDate, onCancel, onConf
 
               <View style={styles.actions}>
                 <TouchableOpacity style={styles.cancelButton} onPress={onCancel} accessibilityRole="button">
-                  <Text style={styles.cancelText}>Cancel</Text>
+                  <Text style={[styles.cancelText, themeColors && { color: themeColors.quickActionPrimaryIcon }]}>
+                    {t('common.cancel')}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.confirmButton}
+                  style={[
+                    styles.confirmButton,
+                    themeColors && { backgroundColor: themeColors.quickActionPrimaryIcon },
+                  ]}
                   onPress={() => onConfirm(selected)}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.confirmText}>Confirm</Text>
+                  <Text style={[styles.confirmText, themeColors && { color: themeColors.white }]}>
+                    {t('common.confirm')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

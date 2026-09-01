@@ -60,22 +60,28 @@ Implemented so far:
 | Redis | Attempt counters + resend cooldown, keyed by `{email}:{purpose}` (soft-fail if Redis down) |
 | Auth middleware (`authenticate` / `requireRole`) | Done — use on protected routes; `requireRole(...roles)` after `authenticate` |
 | Refresh-token rotate / Redis JWT blacklist | **Not implemented yet** (refresh re-issues tokens; old refresh still valid until TTL) |
-| Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Not implemented yet** |
-| Other domains | Still empty scaffolds (`booking`, `venue`, `payment`, …) |
+| Admin approve OWNER/REFEREE `PENDING` → `ACTIVE` | **Done** — `/admin/*`, migration `008`, `npm run seed:admin`, `npm run smoke:admin-approvals` |
+| Other domains | `payment` still empty; `admin` implemented |
 
 Auth also under `/api/auth/*`. Matches also under `/api/matches/*`. Geo also
 under `/geo` and `/api/geo`. Public users also under `/users` and `/api/users`.
 Contract: [`docs/API.md`](./docs/API.md). Product locks: [`docs/MATCHMAKING_PLAN.md`](./docs/MATCHMAKING_PLAN.md).
 | Auth | register → role → OTP → login/refresh; forgot/reset password |
 | Profile | `GET/PATCH /users/me`, Main Profile stats, preferences, password change, avatar upload |
+| Account security notify | Sau đổi email/phone/password (Settings) hoặc reset-password → inbox `SYSTEM` + email (`data.action`: `ACCOUNT_*`) |
 | Contact change | OTP email/phone under `/users/me/email|phone/...` |
 | Schedule | `GET /users/me/schedule` + dev seed |
 | Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
 | Reviews | create + owner reply; venue rating cache |
+| Owner console | `/owner/dashboard/summary` + `/owner/facilities/*`, `/owner/revenue/*`, `/owner/reviews/*` (OWNER + ACTIVE) — Figma 224-6044/2414/2648/2893/4521 |
 
-**Not yet:** refresh-token rotate / JWT blacklist; admin `PENDING`→`ACTIVE` for OWNER/REFEREE; booking CRUD UI / payment.
+**Not yet:** refresh-token rotate / JWT blacklist; booking payment gateway.
 
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
+
+**Admin console (BE):** `/admin` + `/api/admin` — dashboard, approvals, users, settings, audit log. Applicant docs: `POST /users/me/verification-requests`. OTP verify issues JWT for pending Owner/Referee (`nextStep: SUBMIT_VERIFICATION`).
+
+**Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`).
 
 ## Commands
 
@@ -93,10 +99,14 @@ npm run smoke:otp      # register → verify (needs server + OTP_DEBUG=true)
 npm run smoke:login    # register → role → verify → login JWT
 npm run smoke:profile  # GET/PATCH /users/me + preferences
 npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
+npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
+npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
+npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
 npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
 npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
 npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
 node scripts/smoke-forgot-password.js  # register → role → verify → forgot → reset → login
+npm run smoke:account-notify   # change password + reset → SYSTEM inbox (ACCOUNT_*)
 npm run smoke:schedule|notifications|reviews
 npm run worker:reminders
 npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
@@ -120,6 +130,10 @@ Compose uses `env_file: ./spot-backend/.env`, forces `REDIS_HOST=redis`. Optiona
 ```
 src/
 ├── server.js / app.js
+├── domains/admin/
+│   ├── routes.js                 # /admin/* (ADMIN only)
+│   ├── controller/admin.controller.js
+│   ├── dto/, entity/, repository/, service/
 ├── domains/auth/
 │   ├── routes.js                 # /auth/*
 │   ├── user.routes.js            # /users/:id public host profile
@@ -157,6 +171,9 @@ migrations/
 ├── 004_schema_venue_booking_social.sql  # venues, bookings, schema_social.matches
 ├── 005_schema_review.sql         # reviews + owner replies
 ├── 006_schema_matchmaking.sql    # pickup kèo + fold + province/city
+├── 007_schema_venue_images.sql   # venue gallery URLs
+├── 008_schema_admin.sql          # admin verification + settings
+├── 009_schema_owner_ops.sql      # owner field pricing + revenue indexes
 ├── README.md
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
