@@ -366,8 +366,8 @@ const mineCompleted = await request('GET', '/matches/mine?tab=completed', {
 });
 expectStatus('GET mine completed', mineCompleted, 200);
 const completedIds = (mineCompleted.json.matches || []).map((row) => row.matchId);
-if (!completedIds.includes(approvalId)) {
-  fail('mine completed missing cancelled match', {
+if (completedIds.includes(approvalId)) {
+  fail('cancelled match must not appear in completed tab', {
     completedIds,
     approvalId,
   });

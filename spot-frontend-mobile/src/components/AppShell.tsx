@@ -21,12 +21,11 @@ type TabKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
 const comingSoon = (feature: string) => showAlert('Coming soon', `${feature} is not available yet.`);
 
 /**
- * Persistent top header + bottom tab bar shared across Home/Schedule/
- * Settings (Figma: Football Dashboard.png, Settings.png, View
- * Schedule.png all show the same shell). Matches has no screen yet, stays
- * a "Coming soon" tab. Main Profile/Edit Profile and auth screens
- * intentionally do NOT use this shell (Figma's Main Profile.png has its
- * own back+Edit header, no bottom tabs).
+ * Persistent top header + bottom tab bar shared across Home/Matches/
+ * Schedule/Settings (Figma: Football Dashboard.png, Settings.png, View
+ * Schedule.png, Matches Homepage all show the same shell). Main Profile/
+ * Edit Profile and auth screens intentionally do NOT use this shell
+ * (Figma's Main Profile.png has its own back+Edit header, no bottom tabs).
  */
 export function AppShell({ activeTab, children }: { activeTab: TabKey; children: ReactNode }) {
   const router = useRouter();
@@ -48,7 +47,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
     refreshUnreadCount();
   }, []);
 
-  const goToTab = (tab: TabKey, path: '/home' | '/booking' | '/schedule' | '/settings') => {
+  const goToTab = (tab: TabKey, path: '/home' | '/booking' | '/matches' | '/schedule' | '/settings') => {
     if (activeTab === tab) return;
     router.push(path);
   };
@@ -107,7 +106,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
           icon="trophy-outline"
           label={t('nav.matches')}
           active={activeTab === 'matches'}
-          onPress={() => comingSoon(t('nav.matches'))}
+          onPress={() => goToTab('matches', '/matches')}
         />
         <BottomNavItem
           icon="calendar-outline"

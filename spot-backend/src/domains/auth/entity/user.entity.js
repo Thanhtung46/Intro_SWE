@@ -41,7 +41,11 @@ export function toPublicUser(row, skillRows = []) {
 }
 
 /** Public host/player card — no email, phone, or account internals. */
-export function toPublicHostProfile(row, skillRows = [], { matchCount = 0 } = {}) {
+export function toPublicHostProfile(
+  row,
+  skillRows = [],
+  { matchCount = 0, joinedMatches = 0, hostRating = null } = {},
+) {
   if (!row) return null;
   return {
     userId: row.user_id,
@@ -50,8 +54,9 @@ export function toPublicHostProfile(row, skillRows = [], { matchCount = 0 } = {}
     createdAt: row.created_at,
     skills: skillsFromRows(skillRows),
     matchCount,
-    rating: null,
-    reviewCount: 0,
+    joinedMatches,
+    rating: hostRating?.avgRating ?? null,
+    reviewCount: hostRating?.reviewCount ?? 0,
   };
 }
 

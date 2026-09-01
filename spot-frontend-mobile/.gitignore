@@ -56,3 +56,32 @@ yarn-error.*
 *.tsbuildinfo
 
 # @end expo-cli
+
+# Personal dev cheat-sheet of clickable localhost routes — not project docs.
+local-routes.md
+
+# SPOT-76 Matches domain test files — kept local-only per user request
+# (still run fine with `npm test`, just not pushed/shared). Scoped to the
+# Matches feature only, not other domains' tests.
+src/screens/matches/*.test.tsx
+src/components/matches/*.test.tsx
+__tests__/matches-*.test.tsx
+# Utils/services tests written alongside the Matches work (pin-drop map,
+# venue directions) — same local-only treatment.
+src/services/geoapifyService.test.ts
+src/utils/vnAdminMatch.test.ts
+src/utils/directions.test.ts
+
+# SPOT-76 Tournament domain test files — same local-only convention.
+src/schemas/createTournamentSchema.test.ts
+src/schemas/joinTournamentSchema.test.ts
+src/screens/tournaments/*.test.tsx
+src/components/tournaments/*.test.tsx
+__tests__/tournaments-*.test.tsx
+
+# SPOT-76 Groups domain test files — same local-only convention.
+src/schemas/createGroupSchema.test.ts
+src/schemas/joinGroupSchema.test.ts
+src/screens/groups/*.test.tsx
+src/components/groups/*.test.tsx
+__tests__/groups-*.test.tsx

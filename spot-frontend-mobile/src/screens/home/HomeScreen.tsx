@@ -200,6 +200,9 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
           <TouchableOpacity style={styles.quickActionCard} onPress={() => comingSoon(t('home.findMatch'))}>
             <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionSecondaryBg }]}>
               <Ionicons name="trophy-outline" size={22} color={themeColors.quickActionSecondaryIcon} />
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
+            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 112, 228, 0.2)' }]}>
+              <Ionicons name="trophy-outline" size={22} color="#2170E4" />
             </View>
             <Text style={styles.quickActionLabel}>{t('home.findMatch')}</Text>
           </TouchableOpacity>

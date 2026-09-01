@@ -7,8 +7,10 @@ import {
   JOIN_MODES,
   JOIN_REQUEST_STATUSES,
   MATCH_STATUSES,
+  MINE_TABS,
   MY_MATCH_ROLES,
   PAYMENT_STATUSES,
+  PITCH_OCCUPIED_STATUSES,
   computeRequestShare,
   pitchKey,
   normalizeCourtName,
@@ -30,6 +32,14 @@ import {
   toPublicJoinRequest,
   guestsByRequestId,
 } from '../entity/match.entity.js';
+import { attachMatchOutcome } from '../match-outcome.js';
+import { createNotification } from '../../notification/service/notification.service.js';
+import { NOTIFICATION_TYPES } from '../../../shared/constants/notification.js';
+import {
+  buildMatchReviewSummary,
+  getHostRatingForUser,
+  getHostRatingMap,
+} from '../../review/service/match-host-review.service.js';
 
 function resolveSkillRange(input) {
   if (input.allLevels) {
@@ -115,6 +125,9 @@ function assertJoinable(match) {
   if (match.status === MATCH_STATUSES.FULL || spotsLeft(match) < 1) {
     throw new AppError('Match is full', 400);
   }
+  if (new Date(match.ends_at).getTime() <= Date.now()) {
+    throw new AppError('Match has ended', 400);
+  }
 }
 
 function skillOutOfRange(match, skillCode) {
@@ -163,6 +176,20 @@ async function loadGuestsMap(client, requests) {
   return guestsByRequestId(guestRows);
 }
 
+async function loadSkillMapForSport(client, sport, userIds) {
+  const uniqueIds = [...new Set(userIds.map(Number).filter(Boolean))];
+  return userSportSkillRepository.findSkillsByUserIdsAndSport(
+    client,
+    uniqueIds,
+    sport,
+  );
+}
+
+async function loadHostRatingMap(client, rows) {
+  const hostIds = [...new Set(rows.map((row) => Number(row.host_user_id)))];
+  return getHostRatingMap(client, hostIds);
+}
+
 async function loadMatchView(client, match, userId, { includeHostPhone = false } = {}) {
   const courts = await matchCourtRepository.findByMatchId(
     client,
@@ -178,10 +205,15 @@ async function loadMatchView(client, match, userId, { includeHostPhone = false }
   const avatarsByMatch = await matchRepository.listPreviewAvatars(client, [
     match.match_id,
   ]);
+  const hostRating = await getHostRatingForUser(
+    client,
+    Number(match.host_user_id),
+  );
   return toPublicMatch(match, courts, {
     gender,
     includeHostPhone,
     participantAvatars: avatarsByMatch.get(match.match_id) || [],
+    hostRating,
   });
 }
 
@@ -456,6 +488,7 @@ export async function listMatches(userId, query) {
       list.push(court);
       courtsByMatch.set(court.match_id, list);
     }
+    const hostRatingMap = await loadHostRatingMap(client, rows);
 
     return {
       total,
@@ -465,6 +498,7 @@ export async function listMatches(userId, query) {
         toPublicMatch(row, courtsByMatch.get(row.match_id) || [], {
           gender,
           participantAvatars: avatarsByMatch.get(row.match_id) || [],
+          hostRating: hostRatingMap.get(Number(row.host_user_id)) ?? null,
         }),
       ),
       suggestions,
@@ -507,10 +541,17 @@ export async function getMatch(userId, rawId) {
       client,
       [yourRequestRow, ...acceptedRows].filter(Boolean),
     );
+    const yourSkill =
+      yourRequestRow != null
+        ? (await loadSkillMapForSport(client, row.sport, [callerId])).get(
+            callerId,
+          ) ?? null
+        : undefined;
     const yourRequest = yourRequestRow
       ? toPublicJoinRequest(
           yourRequestRow,
           guestMap.get(yourRequestRow.request_id) || [],
+          yourSkill !== undefined ? { skill: yourSkill } : {},
         )
       : null;
     const isHost = callerId === Number(row.host_user_id);
@@ -520,22 +561,35 @@ export async function getMatch(userId, rawId) {
     const avatarsByMatch = await matchRepository.listPreviewAvatars(client, [
       matchId,
     ]);
+    const hostRating = await getHostRatingForUser(
+      client,
+      Number(row.host_user_id),
+    );
     const publicMatch = toPublicMatch(row, courts, {
       gender,
       includeHostPhone,
       participantAvatars: avatarsByMatch.get(matchId) || [],
+      hostRating,
     });
     const canJoin =
       !isHost &&
       publicMatch.status === MATCH_STATUSES.OPEN &&
       publicMatch.spotsLeft >= 1 &&
-      !yourRequest;
+      !yourRequest &&
+      new Date(row.ends_at).getTime() > Date.now();
+
+    const participantSkillMap = await loadSkillMapForSport(
+      client,
+      row.sport,
+      [row.host_user_id, ...acceptedRows.map((request) => request.user_id)],
+    );
 
     const participants = [
       {
         userId: row.host_user_id,
         fullName: row.host_full_name ?? undefined,
         avatarUrl: row.host_avatar_url ?? null,
+        skill: participantSkillMap.get(Number(row.host_user_id)) ?? null,
         role: 'HOST',
         heads: 1,
         guests: [],
@@ -551,6 +605,9 @@ export async function getMatch(userId, rawId) {
           fullName: request.full_name ?? undefined,
           avatarUrl: request.avatar_url ?? null,
           gender: request.gender ?? undefined,
+          skill: participantSkillMap.get(Number(request.user_id)) ?? null,
+          shareAmount: request.share_amount ?? null,
+          paymentStatus: request.payment_status ?? null,
           role: 'PLAYER',
           requestId: request.request_id,
           heads: Number(request.heads),
@@ -571,12 +628,56 @@ export async function getMatch(userId, rawId) {
       }),
     ];
 
+    const summary = await buildMatchReviewSummary(client, row, callerId);
+
     return {
-      match: publicMatch,
+      match: attachMatchOutcome(publicMatch, row),
       canJoin,
       yourRequest,
       participants,
+      summary,
     };
+  } finally {
+    client.release();
+  }
+}
+
+export async function withdrawJoinRequest(userId, rawId) {
+  const matchId = parseMatchId(rawId);
+  const callerId = callerUserId(userId);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    try {
+      const match = await matchRepository.lockById(client, matchId);
+      if (!match) {
+        throw new AppError('Match not found', 404);
+      }
+      if (callerId === Number(match.host_user_id)) {
+        throw new AppError('Host cannot withdraw a join request', 400);
+      }
+
+      const request = await joinRequestRepository.findLatestByMatchUser(
+        client,
+        matchId,
+        callerId,
+        { forUpdate: true },
+      );
+      if (!request || request.status !== JOIN_REQUEST_STATUSES.PENDING) {
+        throw new AppError('No pending join request to cancel', 400);
+      }
+
+      await joinRequestRepository.deleteById(client, request.request_id);
+      await client.query('COMMIT');
+      return {
+        message: 'Join request cancelled',
+        matchId,
+        requestId: request.request_id,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
   } finally {
     client.release();
   }
@@ -753,11 +854,18 @@ export async function listJoinRequests(userId, rawId) {
 
     const rows = await joinRequestRepository.listByMatch(client, matchId);
     const guestMap = await loadGuestsMap(client, rows);
+    const skillMap = await loadSkillMapForSport(
+      client,
+      match.sport,
+      rows.map((row) => row.user_id),
+    );
     return {
       matchId,
       total: rows.length,
       requests: rows.map((row) =>
-        toPublicJoinRequest(row, guestMap.get(row.request_id) || []),
+        toPublicJoinRequest(row, guestMap.get(row.request_id) || [], {
+          skill: skillMap.get(Number(row.user_id)) ?? null,
+        }),
       ),
     };
   } finally {
@@ -943,6 +1051,7 @@ export async function kickParticipant(userId, rawMatchId, rawTargetUserId) {
         client,
         matchId,
         targetUserId,
+        { forUpdate: true },
       );
       if (!request) {
         throw new AppError('Participant not found on this match', 404);
@@ -1061,8 +1170,181 @@ function assertHost(match, callerId) {
   }
 }
 
+function expiredUnderfilledNotificationCopy(match) {
+  const filledCount = Number(match.filled_count);
+  const maxPlayers = Number(match.max_players);
+  return {
+    title: 'Kèo đã bị hủy',
+    body: `Kèo "${match.title}" đã bị hủy vì hết hạn mà chưa đủ người (${filledCount}/${maxPlayers}).`,
+    data: {
+      matchId: match.match_id,
+      outcome: 'CANCELLED',
+      reason: 'EXPIRED_UNDERFILLED',
+      filledCount,
+      maxPlayers,
+    },
+  };
+}
+
+async function notifyExpiredUnderfilledMatch(match, participantUserIds = []) {
+  const copy = expiredUnderfilledNotificationCopy(match);
+  const recipientIds = new Set([
+    Number(match.host_user_id),
+    ...participantUserIds.map(Number),
+  ]);
+
+  for (const userId of recipientIds) {
+    await createNotification({
+      userId,
+      type: NOTIFICATION_TYPES.MATCH_CANCELLED,
+      title: copy.title,
+      body: copy.body,
+      data: copy.data,
+      sendEmail: false,
+    });
+  }
+}
+
+function cancelledMatchNotificationCopy(match) {
+  return {
+    title: 'Kèo đã bị hủy',
+    body: `Host đã hủy kèo "${match.title}".`,
+    data: {
+      matchId: match.match_id,
+      outcome: 'CANCELLED',
+      reason: 'HOST_CANCEL',
+    },
+  };
+}
+
+async function notifyMatchCancelled(match, joinerUserIds = []) {
+  const copy = cancelledMatchNotificationCopy(match);
+  const hostId = Number(match.host_user_id);
+  const recipientIds = new Set(
+    joinerUserIds.map(Number).filter((userId) => userId !== hostId),
+  );
+
+  for (const userId of recipientIds) {
+    await createNotification({
+      userId,
+      type: NOTIFICATION_TYPES.MATCH_CANCELLED,
+      title: copy.title,
+      body: copy.body,
+      data: copy.data,
+      sendEmail: false,
+    });
+  }
+}
+
+/**
+ * Close expired kèo đủ người → COMPLETED (tab Completed + nhả sân).
+ * Idempotent — only OPEN/FULL with ends_at <= now and filled_count >= max_players.
+ */
+export async function processExpiredFullMatches({ limit = 50 } = {}) {
+  const client = await pool.connect();
+  const results = { processed: 0, matchIds: [] };
+  try {
+    const matchIds = await matchRepository.listExpiredFullIds(client, { limit });
+
+    for (const matchId of matchIds) {
+      const tx = await pool.connect();
+      try {
+        await tx.query('BEGIN');
+        const match = await matchRepository.lockById(tx, matchId);
+        if (
+          !match ||
+          !PITCH_OCCUPIED_STATUSES.includes(match.status) ||
+          new Date(match.ends_at).getTime() > Date.now() ||
+          Number(match.filled_count) < Number(match.max_players)
+        ) {
+          await tx.query('ROLLBACK');
+          continue;
+        }
+
+        await matchRepository.updateStatus(
+          tx,
+          matchId,
+          MATCH_STATUSES.COMPLETED,
+        );
+        await tx.query('COMMIT');
+        results.processed += 1;
+        results.matchIds.push(matchId);
+      } catch (err) {
+        await tx.query('ROLLBACK');
+        throw err;
+      } finally {
+        tx.release();
+      }
+    }
+
+    return results;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Auto-cancel expired kèo thiếu người → CANCELLED + inbox (không phải COMPLETED).
+ * Idempotent — only OPEN/FULL rows with ends_at <= now and filled_count < max_players.
+ */
+export async function processExpiredUnderfilledMatches({ limit = 50 } = {}) {
+  const client = await pool.connect();
+  const results = { processed: 0, matchIds: [] };
+  try {
+    const matchIds = await matchRepository.listExpiredUnderfilledIds(client, {
+      limit,
+    });
+
+    for (const matchId of matchIds) {
+      const tx = await pool.connect();
+      try {
+        await tx.query('BEGIN');
+        const match = await matchRepository.lockById(tx, matchId);
+        if (
+          !match ||
+          !PITCH_OCCUPIED_STATUSES.includes(match.status) ||
+          new Date(match.ends_at).getTime() > Date.now() ||
+          Number(match.filled_count) >= Number(match.max_players)
+        ) {
+          await tx.query('ROLLBACK');
+          continue;
+        }
+
+        const joinerUserIds =
+          await joinRequestRepository.listJoinerUserIdsToNotify(tx, matchId);
+        await joinRequestRepository.rejectPendingByMatchId(tx, matchId);
+        await matchRepository.updateStatus(
+          tx,
+          matchId,
+          MATCH_STATUSES.CANCELLED,
+        );
+        await tx.query('COMMIT');
+
+        await notifyExpiredUnderfilledMatch(match, joinerUserIds);
+        results.processed += 1;
+        results.matchIds.push(matchId);
+      } catch (err) {
+        await tx.query('ROLLBACK');
+        throw err;
+      } finally {
+        tx.release();
+      }
+    }
+
+    return results;
+  } finally {
+    client.release();
+  }
+}
+
+async function processExpiredMatches() {
+  await processExpiredFullMatches({ limit: 50 });
+  await processExpiredUnderfilledMatches({ limit: 50 });
+}
+
 export async function listMine(userId, query) {
   const callerId = callerUserId(userId);
+  await processExpiredMatches();
   const client = await pool.connect();
   try {
     const gender = await callerGender(client, callerId);
@@ -1089,23 +1371,30 @@ export async function listMine(userId, query) {
       list.push(court);
       courtsByMatch.set(court.match_id, list);
     }
+    const hostRatingMap = await loadHostRatingMap(client, rows);
     return {
       tab: query.tab,
       total,
       limit: query.limit,
       offset: query.offset,
-      matches: rows.map((row) => ({
-        ...toPublicMatch(row, courtsByMatch.get(row.match_id) || [], {
-          gender,
-          participantAvatars: avatarsByMatch.get(row.match_id) || [],
-        }),
-        myRole: row.my_role,
-        myRequestStatus: row.my_request_status ?? null,
-        pendingRequestCount:
-          row.my_role === MY_MATCH_ROLES.HOST
-            ? Number(row.pending_request_count ?? 0)
-            : 0,
-      })),
+      matches: rows.map((row) =>
+        attachMatchOutcome(
+          {
+            ...toPublicMatch(row, courtsByMatch.get(row.match_id) || [], {
+              gender,
+              participantAvatars: avatarsByMatch.get(row.match_id) || [],
+              hostRating: hostRatingMap.get(Number(row.host_user_id)) ?? null,
+            }),
+            myRole: row.my_role,
+            myRequestStatus: row.my_request_status ?? null,
+            pendingRequestCount:
+              row.my_role === MY_MATCH_ROLES.HOST
+                ? Number(row.pending_request_count ?? 0)
+                : 0,
+          },
+          row,
+        ),
+      ),
     };
   } finally {
     client.release();
@@ -1120,6 +1409,7 @@ export async function listMyJoinRequests(userId, query) {
       userId: callerId,
       limit: query.limit,
       offset: query.offset,
+      status: query.status,
     };
     const rows = await joinRequestRepository.listMyJoinRequests(
       client,
@@ -1129,8 +1419,11 @@ export async function listMyJoinRequests(userId, query) {
       client,
       filters,
     );
+    const pendingCount =
+      await joinRequestRepository.countMyPendingJoinRequests(client, callerId);
     return {
       total,
+      pendingCount,
       limit: query.limit,
       offset: query.offset,
       requests: rows.map((row) => ({
@@ -1154,6 +1447,7 @@ export async function listMyJoinRequests(userId, query) {
           venueAddress: row.match_venue_address,
           status: row.match_status,
           hostFullName: row.host_full_name ?? undefined,
+          hostAvatarUrl: row.host_avatar_url ?? null,
         },
       })),
     };
@@ -1328,6 +1622,8 @@ export async function cancelMatch(userId, rawId) {
         throw new AppError('Match is completed', 400);
       }
 
+      const joinerUserIds =
+        await joinRequestRepository.listJoinerUserIdsToNotify(client, matchId);
       await joinRequestRepository.rejectPendingByMatchId(client, matchId);
       await matchRepository.updateStatus(
         client,
@@ -1336,6 +1632,7 @@ export async function cancelMatch(userId, rawId) {
       );
       match.status = MATCH_STATUSES.CANCELLED;
       await client.query('COMMIT');
+      await notifyMatchCancelled(match, joinerUserIds);
       return {
         message: 'Match cancelled',
         match: await loadMatchView(client, match, callerId, {

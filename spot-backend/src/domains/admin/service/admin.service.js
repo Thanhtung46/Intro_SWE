@@ -5,11 +5,15 @@ import { AppError } from '../../../shared/middleware/errorHandler.js';
 import {
   VERIFICATION_REQUEST_TYPES,
   VERIFICATION_STATUSES,
+  VERIFICATION_DOCUMENT_KINDS,
   ADMIN_AUDIT_ACTIONS,
   ADMIN_AUDIT_TARGET_TYPES,
   SYSTEM_SETTING_KEYS,
 } from '../../../shared/constants/admin.js';
 import { USER_ROLES, USER_STATUSES } from '../../../shared/constants/auth.js';
+import { REFEREE_SIGNUP_DOCUMENT_KINDS } from '../../../shared/constants/referee.js';
+import { normalizeSportType } from '../../../shared/constants/venue.js';
+import * as refereeProfileRepository from '../../referee/repository/referee-profile.repository.js';
 import { sendNotificationEmail } from '../../../shared/utils/mailer.js';
 import * as verificationRepository from '../repository/verification-request.repository.js';
 import * as auditRepository from '../repository/admin-audit.repository.js';
@@ -86,7 +90,7 @@ export async function submitVerificationRequest(userId, dto) {
       );
     }
 
-    const pending = await verificationRepository.findPendingByUserId(
+    const pending = await verificationRepository.findPendingOwnerRequestByUserId(
       client,
       userId,
     );
@@ -135,6 +139,127 @@ export async function submitVerificationRequest(userId, dto) {
   }
 }
 
+export async function submitVerificationBatch(userId, dto) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const user = await adminUserRepository.findAdminUserById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    if (user.status !== USER_STATUSES.PENDING) {
+      throw new AppError(
+        'Verification requests are only for pending Owner/Referee accounts',
+        400,
+      );
+    }
+    if (user.role !== USER_ROLES.REFEREE) {
+      throw new AppError('Batch verification is only for Referee accounts', 400);
+    }
+
+    for (const doc of dto.documents) {
+      const existingKind = await verificationRepository.findPendingByUserIdAndKind(
+        client,
+        userId,
+        doc.documentKind,
+      );
+      if (existingKind) {
+        throw new AppError(
+          `A pending ${doc.documentKind} document already exists`,
+          409,
+        );
+      }
+    }
+
+    const inserted = [];
+    for (const doc of dto.documents) {
+      const row = await verificationRepository.insertRequest(client, {
+        userId,
+        requestType: VERIFICATION_REQUEST_TYPES.REFEREE_CREDENTIAL,
+        documentUrl: doc.documentUrl,
+        documentKind: doc.documentKind,
+      });
+      inserted.push(row);
+    }
+
+    await client.query('COMMIT');
+
+    const requests = await Promise.all(
+      inserted.map((r) =>
+        verificationRepository.findById(client, r.verification_req_id)),
+    );
+
+    return {
+      message: 'Verification documents submitted',
+      requests: requests.map(toVerificationRequestRow),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function submitCertUpdate(userId, dto) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const user = await adminUserRepository.findAdminUserById(client, userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+    if (user.role !== USER_ROLES.REFEREE || user.status !== USER_STATUSES.ACTIVE) {
+      throw new AppError('Cert updates are for active Referee accounts only', 400);
+    }
+
+    const pendingCert = await verificationRepository.findPendingByUserIdAndKind(
+      client,
+      userId,
+      VERIFICATION_DOCUMENT_KINDS.CERT_UPDATE,
+    );
+    if (pendingCert) {
+      throw new AppError('A pending certification update already exists', 409);
+    }
+
+    const row = await verificationRepository.insertRequest(client, {
+      userId,
+      requestType: VERIFICATION_REQUEST_TYPES.REFEREE_CREDENTIAL,
+      documentUrl: dto.documentUrl,
+      documentKind: VERIFICATION_DOCUMENT_KINDS.CERT_UPDATE,
+    });
+
+    await client.query('COMMIT');
+
+    const detail = await verificationRepository.findById(
+      client,
+      row.verification_req_id,
+    );
+    return {
+      message: 'Certification update submitted',
+      request: toVerificationRequestRow(detail),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+function normalizeCertifiedSportTypes(types) {
+  const normalized = [];
+  for (const t of types) {
+    const sport = normalizeSportType(t);
+    if (sport && !normalized.includes(sport)) {
+      normalized.push(sport);
+    }
+  }
+  return normalized;
+}
+
 export async function uploadVerificationDocument(userId, file) {
   if (!file) {
     throw new AppError('Document file is required (field name: document)', 400);
@@ -176,7 +301,7 @@ export async function getApprovalDetail(verificationReqId) {
   }
 }
 
-export async function approveRequest(adminUserId, verificationReqId) {
+export async function approveRequest(adminUserId, verificationReqId, dto = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -192,11 +317,56 @@ export async function approveRequest(adminUserId, verificationReqId) {
       throw new AppError('Only pending requests can be approved', 409);
     }
 
-    await verificationRepository.updateReview(client, verificationReqId, {
-      status: VERIFICATION_STATUSES.APPROVED,
-      adminNotes: null,
-      reviewedBy: adminUserId,
-    });
+    if (existing.role === USER_ROLES.REFEREE) {
+      const pendingAll = await verificationRepository.listPendingByUserId(
+        client,
+        existing.user_id,
+      );
+      const signupKinds = pendingAll
+        .map((r) => r.document_kind)
+        .filter((k) => REFEREE_SIGNUP_DOCUMENT_KINDS.includes(k));
+      const uniqueSignup = new Set(signupKinds);
+      const isSignupBundle = uniqueSignup.size === REFEREE_SIGNUP_DOCUMENT_KINDS.length;
+
+      if (isSignupBundle) {
+        const certifiedSportTypes = normalizeCertifiedSportTypes(
+          dto.certifiedSportTypes ?? [],
+        );
+        if (!certifiedSportTypes.length) {
+          throw new AppError(
+            'certifiedSportTypes is required when approving a Referee signup (1 or 2 sports)',
+            400,
+          );
+        }
+        if (certifiedSportTypes.length > 2) {
+          throw new AppError('At most 2 certified sport types allowed', 400);
+        }
+
+        await verificationRepository.approveAllPendingForUser(
+          client,
+          existing.user_id,
+          adminUserId,
+        );
+
+        await refereeProfileRepository.upsertProfile(
+          client,
+          existing.user_id,
+          certifiedSportTypes,
+        );
+      } else {
+        await verificationRepository.updateReview(client, verificationReqId, {
+          status: VERIFICATION_STATUSES.APPROVED,
+          adminNotes: null,
+          reviewedBy: adminUserId,
+        });
+      }
+    } else {
+      await verificationRepository.updateReview(client, verificationReqId, {
+        status: VERIFICATION_STATUSES.APPROVED,
+        adminNotes: null,
+        reviewedBy: adminUserId,
+      });
+    }
 
     await adminUserRepository.updateUserStatus(
       client,
@@ -213,6 +383,7 @@ export async function approveRequest(adminUserId, verificationReqId) {
         userId: existing.user_id,
         previousUserStatus: existing.user_status,
         newUserStatus: USER_STATUSES.ACTIVE,
+        certifiedSportTypes: dto.certifiedSportTypes ?? null,
       },
     });
 

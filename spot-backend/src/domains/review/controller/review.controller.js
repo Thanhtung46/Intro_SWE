@@ -3,7 +3,12 @@ import {
   parseReplyReviewDto,
   parseReviewIdParam,
 } from '../dto/create-review.dto.js';
+import {
+  parseCreateRefereeReviewDto,
+  parseRefereeIdParam,
+} from '../dto/create-referee-review.dto.js';
 import * as reviewService from '../service/review.service.js';
+import * as matchHostReviewService from '../service/match-host-review.service.js';
 
 export async function create(req, res, next) {
   try {
@@ -39,6 +44,26 @@ export async function venueRating(req, res, next) {
   }
 }
 
+export async function createRefereeReview(req, res, next) {
+  try {
+    const dto = parseCreateRefereeReviewDto(req.body);
+    const result = await reviewService.createRefereeReview(req.user.userId, dto);
+    return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function refereeRating(req, res, next) {
+  try {
+    const { refereeId } = parseRefereeIdParam(req.params);
+    const result = await reviewService.getRefereeRating(refereeId);
+    return res.status(200).json({ refereeRating: result });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function seed(req, res, next) {
   try {
     const daysFromNow = req.body?.daysFromNow;
@@ -47,6 +72,18 @@ export async function seed(req, res, next) {
       { daysFromNow },
     );
     return res.status(201).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function listHostMatchReviews(req, res, next) {
+  try {
+    const result = await matchHostReviewService.listHostMatchReviews(
+      req.params.userId,
+      req.query,
+    );
+    return res.status(200).json(result);
   } catch (err) {
     return next(err);
   }

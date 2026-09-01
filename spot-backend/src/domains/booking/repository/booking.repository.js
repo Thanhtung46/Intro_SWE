@@ -29,20 +29,31 @@ export async function findFieldWithVenueForBooking(client, fieldId) {
 /** Plain insert — conflict detection is left to the EXCLUDE USING gist constraint. */
 export async function insertBooking(
   client,
-  { playerId, fieldId, bookingDate, timeRange, totalAmount, depositAmount },
+  {
+    playerId,
+    fieldId,
+    bookingDate,
+    timeRange,
+    totalAmount,
+    depositAmount,
+    hireReferee = false,
+    refereeFeeVnd = null,
+  },
 ) {
   const { rows } = await client.query(
     `INSERT INTO schema_booking.bookings (
        player_id, field_id, booking_date, booking_time_range,
-       total_amount, deposit_amount, status
+       total_amount, deposit_amount, status,
+       hire_referee, referee_fee_vnd
      )
      VALUES (
        $1, $2, $3::date,
        tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-       $6, $7, 'PENDING_PAYMENT'
+       $6, $7, 'PENDING_PAYMENT',
+       $8, $9
      )
      RETURNING booking_id, field_id, booking_date::text AS booking_date, status,
-       total_amount, deposit_amount,
+       total_amount, deposit_amount, hire_referee, referee_fee_vnd,
        lower(booking_time_range) AS starts_at,
        upper(booking_time_range) AS ends_at`,
     [
@@ -53,7 +64,36 @@ export async function insertBooking(
       timeRange.end,
       totalAmount,
       depositAmount,
+      hireReferee,
+      hireReferee ? refereeFeeVnd : null,
     ],
   );
   return rows[0];
+}
+
+export async function findBookingById(client, bookingId) {
+  const { rows } = await client.query(
+    `SELECT booking_id, player_id, field_id, booking_date::text AS booking_date,
+            status, total_amount, deposit_amount, hire_referee, referee_fee_vnd,
+            lower(booking_time_range) AS starts_at,
+            upper(booking_time_range) AS ends_at
+     FROM schema_booking.bookings
+     WHERE booking_id = $1`,
+    [bookingId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function markBookingPaid(client, bookingId, playerId) {
+  const { rows } = await client.query(
+    `UPDATE schema_booking.bookings
+     SET status = 'PAID', updated_at = CURRENT_TIMESTAMP
+     WHERE booking_id = $1 AND player_id = $2 AND status = 'PENDING_PAYMENT'
+     RETURNING booking_id, field_id, booking_date::text AS booking_date, status,
+       total_amount, deposit_amount, hire_referee, referee_fee_vnd,
+       lower(booking_time_range) AS starts_at,
+       upper(booking_time_range) AS ends_at`,
+    [bookingId, playerId],
+  );
+  return rows[0] ?? null;
 }

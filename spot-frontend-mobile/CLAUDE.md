@@ -110,10 +110,10 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   the 5-tab array — Home/Booking/Matches/Schedule/Settings — and its
   navigation wiring; the individual tab leaf is
   `src/components/navigation/BottomNavItem.tsx`) renders on Home, Booking,
-  Booking Map, Schedule, Settings, and Profile. The Schedule/Settings tabs
-  intentionally still show a "coming soon" alert rather than navigating,
-  even though `/schedule` and `/settings` are real working routes — that's
-  a known, deliberate inconsistency (not yet reconciled), not a bug.
+  Booking Map, Schedule, Settings, and Profile. All five tabs navigate to
+  their real routes (`/booking`, `/matches`, `/schedule`, `/settings`; Home
+  goes back or replaces to `/home`) — the `comingSoon` placeholders that
+  used to sit on Schedule/Settings/Matches have all been wired up.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
   `*.test.ts(x)` next to several schemas/components) and a jest config
   **is** committed (`"jest": {"preset": "jest-expo"}` in `package.json`) —
