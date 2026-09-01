@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 // import MockAdapter from 'axios-mock-adapter';
 import { API_URL } from '../config/env';
-import type { CurrentUserProfile, RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import type { CurrentUserProfile, RegisterOwnerPayload, RegisterResponse, Role } from '@/types/auth';
 import { getToken } from '@/utils/authStorage';
 
 export interface RegisterPayload {
@@ -90,6 +90,20 @@ export interface VerifyOtpResult {
   message?: string;
   attemptsRemaining?: number;
   rateLimited?: boolean;
+  // For a PENDING Owner/Referee, spot-backend augments the OTP-verify
+  // response with a session token + `nextStep: 'SUBMIT_VERIFICATION'` so
+  // the account can submit its verification documents before login works.
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
+}
+
+interface VerifyOtpBody {
+  message?: string;
+  email?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
 }
 
 export async function verifyOtp(
@@ -98,8 +112,13 @@ export async function verifyOtp(
   purpose: string = DEFAULT_OTP_PURPOSE
 ): Promise<VerifyOtpResult> {
   try {
-    await client.post(`${API_URL}/auth/otp/verify`, { email, otp, purpose });
-    return { success: true };
+    const res = await client.post<VerifyOtpBody>(`${API_URL}/auth/otp/verify`, { email, otp, purpose });
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
+    };
   } catch (err) {
     const error = err as AxiosError<OtpErrorBody>;
 
@@ -433,13 +452,9 @@ export async function registerOwner(payload: RegisterOwnerPayload): Promise<Regi
   return { status: 'pending' };
 }
 
-export async function registerReferee(payload: RegisterRefereePayload): Promise<RegisterResponse> {
-  await delay(MOCK_DELAY_MS);
-  if (payload.fullName.trim().toLowerCase() === FORCE_ERROR_VALUE) {
-    throw new Error("Couldn't submit registration. Check your network and try again.");
-  }
-  return { status: 'pending' };
-}
+// registerReferee() mock removed (SPOT-93) — the referee signup now submits
+// 3 verification documents via refereeService.submitRefereeVerificationBatch
+// against the real POST /users/me/verification-requests/batch.
 
 /**
  * REAL — GET /auth/me. Named in the original SPOT-76 API analysis as the

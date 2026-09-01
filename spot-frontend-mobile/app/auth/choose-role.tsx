@@ -55,7 +55,7 @@ export default function ChooseRoleRoute() {
       return;
     }
 
-    router.push({ pathname: '/auth/otp', params: { email } });
+    router.push({ pathname: '/auth/otp', params: { email, role: selectedRole } });
   };
 
   return (
