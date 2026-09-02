@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,16 +53,59 @@ export default function EditTournamentMatchScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
 
-  const teamOptions = teams.map((t) => ({ label: t.teamName, value: String(t.teamId) }));
+  const canPickTeams = teams.length >= 2;
+  const teamOptions = useMemo(
+    () => teams.map((t) => ({ label: t.teamName, value: String(t.teamId) })),
+    [teams]
+  );
+  // Opponent lists exclude the other side — a team cannot play itself.
+  const teamAOptions = useMemo(
+    () => teamOptions.filter((o) => o.value !== teamBId),
+    [teamOptions, teamBId]
+  );
+  const teamBOptions = useMemo(
+    () => teamOptions.filter((o) => o.value !== teamAId),
+    [teamOptions, teamAId]
+  );
   const starts = new Date(tournament.startsAt);
   const ends = new Date(tournament.endsAt);
 
+  const handleTeamAChange = (value: string) => {
+    setTeamAId(value);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.teamAId;
+      delete next.teamBId;
+      return next;
+    });
+    // Picking A that was already B clears B so the form never holds A vs A.
+    if (value && value === teamBId) setTeamBId('');
+  };
+
+  const handleTeamBChange = (value: string) => {
+    setTeamBId(value);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.teamAId;
+      delete next.teamBId;
+      return next;
+    });
+    if (value && value === teamAId) setTeamAId('');
+  };
+
   const validate = (): CreateTournamentMatchPayload | null => {
     const errors: Record<string, string> = {};
+    if (!canPickTeams) {
+      errors.teamAId = 'Need at least two accepted teams';
+      setFieldErrors(errors);
+      return null;
+    }
     if (!round) errors.round = 'Pick a round';
     if (!teamAId) errors.teamAId = 'Pick team A';
     if (!teamBId) errors.teamBId = 'Pick team B';
-    if (teamAId && teamBId && teamAId === teamBId) errors.teamBId = 'Teams must be different';
+    if (teamAId && teamBId && teamAId === teamBId) {
+      errors.teamBId = 'Team B must be a different team';
+    }
     if (!scheduledAt) {
       errors.scheduledAt = 'Pick a date and time';
     } else if (scheduledAt < starts || scheduledAt > ends) {
@@ -127,10 +170,12 @@ export default function EditTournamentMatchScreen({
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
-        {teams.length < 2 ? (
+        {!canPickTeams ? (
           <View style={styles.notice}>
             <Ionicons name="information-circle-outline" size={16} color={colors.outline} />
-            <Text style={styles.noticeText}>Accept at least two teams before scheduling matches.</Text>
+            <Text style={styles.noticeText}>
+              Accept at least two teams before scheduling matches. A team cannot play itself.
+            </Text>
           </View>
         ) : null}
 
@@ -144,22 +189,24 @@ export default function EditTournamentMatchScreen({
         />
         <SelectField
           label="Team A"
-          placeholder="Select team"
+          placeholder={canPickTeams ? 'Select team' : 'Need 2+ teams'}
           value={teamAId}
-          onChange={setTeamAId}
-          options={teamOptions}
+          onChange={handleTeamAChange}
+          options={teamAOptions}
           error={fieldErrors.teamAId}
+          disabled={!canPickTeams}
         />
         <View style={styles.vsRow}>
           <Text style={styles.vsText}>vs</Text>
         </View>
         <SelectField
           label="Team B"
-          placeholder="Select team"
+          placeholder={canPickTeams ? (teamAId ? 'Select opponent' : 'Select team A first') : 'Need 2+ teams'}
           value={teamBId}
-          onChange={setTeamBId}
-          options={teamOptions}
+          onChange={handleTeamBChange}
+          options={teamBOptions}
           error={fieldErrors.teamBId}
+          disabled={!canPickTeams}
         />
         <DateTimeField
           label="Date & Time"
@@ -171,7 +218,12 @@ export default function EditTournamentMatchScreen({
           Venue is the tournament venue. {mode === 'edit' ? 'Changing either team clears the recorded result.' : ''}
         </Text>
 
-        <SubmitButton label={mode === 'edit' ? 'Save Match' : 'Add Match'} loading={isSubmitting} onPress={handleSubmit} />
+        <SubmitButton
+          label={mode === 'edit' ? 'Save Match' : 'Add Match'}
+          loading={isSubmitting}
+          onPress={handleSubmit}
+          disabled={!canPickTeams}
+        />
 
         {mode === 'edit' && (
           <TouchableOpacity testID="edit-match-delete" style={styles.deleteButton} onPress={() => setDeleteVisible(true)}>

@@ -9,7 +9,7 @@ import JoinRequestListItem from '@/components/matches/JoinRequestListItem';
 import ManageMatchCard from '@/components/matches/ManageMatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { cancelJoinRequest, getErrorMessage, listMine, listMyJoinRequests } from '@/services/matchService';
+import { cancelJoinRequest, cancelMatch, getErrorMessage, listMine, listMyJoinRequests } from '@/services/matchService';
 import type { Match, MineTab, MyJoinRequest } from '@/types/match';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -18,6 +18,7 @@ type Props = {
   onBack: () => void;
   onOpenMatch: (matchId: number) => void;
   onManageSquad: (matchId: number) => void;
+  onEditMatch: (matchId: number) => void;
 };
 
 const TABS: { key: MineTab; label: string; emptyText: string }[] = [
@@ -32,7 +33,7 @@ const TABS: { key: MineTab; label: string; emptyText: string }[] = [
  * /matches/mine`; Requests uses `GET /matches/my-join-requests` — different
  * response shape, so kept as separate state rather than reusing `matches`.
  */
-export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad }: Props) {
+export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad, onEditMatch }: Props) {
   const [tab, setTab] = useState<MineTab>('active');
   const [matches, setMatches] = useState<Match[]>([]);
   const [joinRequests, setJoinRequests] = useState<MyJoinRequest[]>([]);
@@ -41,6 +42,7 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<MyJoinRequest | null>(null);
+  const [cancelMatchTarget, setCancelMatchTarget] = useState<Match | null>(null);
 
   const fetchData = useCallback(
     async (isRefresh = false) => {
@@ -85,6 +87,18 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
       await cancelJoinRequest(request.match.matchId);
       setJoinRequests((prev) => prev.filter((r) => r.requestId !== request.requestId));
       setPendingCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err));
+    }
+  };
+
+  const handleConfirmCancelMatch = async () => {
+    if (!cancelMatchTarget) return;
+    const match = cancelMatchTarget;
+    setCancelMatchTarget(null);
+    try {
+      await cancelMatch(match.matchId);
+      setMatches((prev) => prev.filter((m) => m.matchId !== match.matchId));
     } catch (err) {
       setErrorMessage(getErrorMessage(err));
     }
@@ -155,6 +169,16 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
               variant={tab === 'completed' ? 'completed' : undefined}
               onManageSquad={() => onManageSquad(match.matchId)}
               onViewDetails={() => onOpenMatch(match.matchId)}
+              onEditMatch={
+                tab === 'active' && match.myRole === 'HOST'
+                  ? () => onEditMatch(match.matchId)
+                  : undefined
+              }
+              onCancelMatch={
+                tab === 'active' && match.myRole === 'HOST'
+                  ? () => setCancelMatchTarget(match)
+                  : undefined
+              }
             />
           ))
         )}
@@ -168,6 +192,16 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
         cancelLabel="Keep Request"
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelTarget(null)}
+      />
+
+      <ConfirmDialog
+        visible={cancelMatchTarget != null}
+        title="Cancel this match?"
+        message="Joiners will be notified. Pending requests are rejected. This cannot be undone."
+        confirmLabel="Cancel Match"
+        cancelLabel="Keep Match"
+        onConfirm={handleConfirmCancelMatch}
+        onCancel={() => setCancelMatchTarget(null)}
       />
     </SafeAreaView>
   );

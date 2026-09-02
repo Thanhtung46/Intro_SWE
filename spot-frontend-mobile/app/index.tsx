@@ -62,7 +62,8 @@ export default function Splash() {
 
           if (check.success) {
             setDestination(homeForUser(check.user));
-          } else if (check.statusCode === 401) {
+          } else if (check.statusCode === 401 || !check.statusCode) {
+            // 401 = expired token; no statusCode = network/timeout — don't block splash forever.
             await clearAllTokens();
             if (cancelled) return;
             setDestination(ROUTES.AUTH_LOGIN);

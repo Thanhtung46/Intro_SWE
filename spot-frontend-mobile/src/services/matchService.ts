@@ -14,6 +14,7 @@ import type {
   Match,
   MatchDetail,
   Sport,
+  UpdateMatchPayload,
   VenueSuggestion,
 } from '@/types/match';
 import type { VnAdminTree } from '@/types/geo';
@@ -41,6 +42,26 @@ import type { VnAdminTree } from '@/types/geo';
 export { getErrorMessage };
 
 /**
+ * Flatten list query for axios: arrays → CSV (`format=SINGLES,DOUBLES`).
+ * Avoids `format[]=` which some runtimes drop so Format filter never applies.
+ */
+function toMatchListParams(query: ListMatchesQuery): Record<string, string | number | boolean> {
+  const params: Record<string, string | number | boolean> = {};
+  (Object.entries(query) as [keyof ListMatchesQuery, ListMatchesQuery[keyof ListMatchesQuery]][]).forEach(
+    ([key, value]) => {
+      if (value === undefined || value === null) return;
+      if (Array.isArray(value)) {
+        if (value.length === 0) return;
+        params[key] = value.join(',');
+        return;
+      }
+      params[key] = value as string | number | boolean;
+    }
+  );
+  return params;
+}
+
+/**
  * GET /matches — Matches Homepage (`95:2417`) + Filter sheet (`87:1903`).
  * `location` is a substring match on venueName/venueAddress — no
  * geocoding/NLP; `province`/`city` (VN admin-unit codes) filter separately,
@@ -48,7 +69,7 @@ export { getErrorMessage };
  */
 export async function listMatches(query: ListMatchesQuery = {}): Promise<ListMatchesResult> {
   try {
-    const res = await apiClient.get('/matches', { params: query });
+    const res = await apiClient.get('/matches', { params: toMatchListParams(query) });
     return {
       matches: res.data.matches as Match[],
       total: res.data.total as number,
@@ -195,6 +216,28 @@ export async function hostMatch(payload: CreateMatchPayload): Promise<Match> {
     return res.data.match;
   } catch (err) {
     throwFromAxiosError(err, "Couldn't create your match. Check your network and try again.");
+  }
+}
+
+/** PATCH /matches/:id — host edit before startsAt (see docs/API.md §7.10). */
+export async function updateMatch(matchId: number, payload: UpdateMatchPayload): Promise<Match> {
+  try {
+    const res = await apiClient.patch<{ match: Match }>(`/matches/${matchId}`, payload);
+    return res.data.match;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't update your match. Check your network and try again.");
+  }
+}
+
+/**
+ * POST /matches/:id/cancel — host cancels the kèo (status CANCELLED, reject
+ * PENDING, notify joiners). Not a hard delete — there is no DELETE /matches/:id.
+ */
+export async function cancelMatch(matchId: number): Promise<void> {
+  try {
+    await apiClient.post(`/matches/${matchId}/cancel`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't cancel this match. Check your network and try again.");
   }
 }
 

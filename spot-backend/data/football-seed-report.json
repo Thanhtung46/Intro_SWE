@@ -1,0 +1,412 @@
+{
+  "dryRun": false,
+  "syncedAt": "2026-09-01T16:41:36.191Z",
+  "total": 50,
+  "venueTimePreSkipped": 0,
+  "created": 50,
+  "skipped": 0,
+  "failed": 0,
+  "hostsCreated": 10,
+  "results": [
+    {
+      "slug": "fb-binh-tan-11",
+      "title": "Kèo 7v7 Sân bóng Bình Tân (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost1@import.spot.local",
+      "venueName": "Sân bóng Bình Tân",
+      "startsAt": "2026-09-03T06:00:00.000Z"
+    },
+    {
+      "slug": "fb-binh-tan-31",
+      "title": "Kèo 5v5 Sân bóng Bình Tân (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost1@import.spot.local",
+      "venueName": "Sân bóng Bình Tân",
+      "startsAt": "2026-09-04T22:00:00.000Z"
+    },
+    {
+      "slug": "fb-cu-chi-20",
+      "title": "Kèo 7v7 Sân bóng Củ Chi (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost10@import.spot.local",
+      "venueName": "Sân bóng Củ Chi",
+      "startsAt": "2026-09-04T00:00:00.000Z"
+    },
+    {
+      "slug": "fb-cu-chi-40",
+      "title": "Kèo 5v5 Sân bóng Củ Chi (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost10@import.spot.local",
+      "venueName": "Sân bóng Củ Chi",
+      "startsAt": "2026-09-05T16:00:00.000Z"
+    },
+    {
+      "slug": "fb-go-vap-mini-07",
+      "title": "Kèo 5v5 Sân bóng Gò Vấp (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost7@import.spot.local",
+      "venueName": "Sân bóng Gò Vấp",
+      "startsAt": "2026-09-02T22:00:00.000Z"
+    },
+    {
+      "slug": "fb-go-vap-mini-27",
+      "title": "Kèo 11v11 Sân bóng Gò Vấp (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost7@import.spot.local",
+      "venueName": "Sân bóng Gò Vấp",
+      "startsAt": "2026-09-04T14:00:00.000Z"
+    },
+    {
+      "slug": "fb-go-vap-mini-47",
+      "title": "Kèo 7v7 Sân bóng Gò Vấp (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost7@import.spot.local",
+      "venueName": "Sân bóng Gò Vấp",
+      "startsAt": "2026-09-06T06:00:00.000Z"
+    },
+    {
+      "slug": "fb-hca-binh-thanh-01",
+      "title": "Kèo 5v5 Sân bóng HCA (Th 4)",
+      "status": "created",
+      "hostEmail": "football.fbhost1@import.spot.local",
+      "venueName": "Sân bóng HCA",
+      "startsAt": "2026-09-02T10:00:00.000Z"
+    },
+    {
+      "slug": "fb-hca-binh-thanh-21",
+      "title": "Kèo 11v11 Sân bóng HCA (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost1@import.spot.local",
+      "venueName": "Sân bóng HCA",
+      "startsAt": "2026-09-04T02:00:00.000Z"
+    },
+    {
+      "slug": "fb-hca-binh-thanh-41",
+      "title": "Kèo 7v7 Sân bóng HCA (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost1@import.spot.local",
+      "venueName": "Sân bóng HCA",
+      "startsAt": "2026-09-05T18:00:00.000Z"
+    },
+    {
+      "slug": "fb-lanh-binh-thang-02",
+      "title": "Kèo 7v7 Sân bóng Lãnh Binh Thăng (Th 4)",
+      "status": "created",
+      "hostEmail": "football.fbhost2@import.spot.local",
+      "venueName": "Sân bóng Lãnh Binh Thăng",
+      "startsAt": "2026-09-02T12:00:00.000Z"
+    },
+    {
+      "slug": "fb-lanh-binh-thang-22",
+      "title": "Kèo 5v5 Sân bóng Lãnh Binh Thăng (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost2@import.spot.local",
+      "venueName": "Sân bóng Lãnh Binh Thăng",
+      "startsAt": "2026-09-04T04:00:00.000Z"
+    },
+    {
+      "slug": "fb-lanh-binh-thang-42",
+      "title": "Kèo 11v11 Sân bóng Lãnh Binh Thăng (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost2@import.spot.local",
+      "venueName": "Sân bóng Lãnh Binh Thăng",
+      "startsAt": "2026-09-05T20:00:00.000Z"
+    },
+    {
+      "slug": "fb-nha-be-19",
+      "title": "Kèo 5v5 Sân bóng Nhà Bè (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost9@import.spot.local",
+      "venueName": "Sân bóng Nhà Bè",
+      "startsAt": "2026-09-03T22:00:00.000Z"
+    },
+    {
+      "slug": "fb-nha-be-39",
+      "title": "Kèo 11v11 Sân bóng Nhà Bè (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost9@import.spot.local",
+      "venueName": "Sân bóng Nhà Bè",
+      "startsAt": "2026-09-05T14:00:00.000Z"
+    },
+    {
+      "slug": "fb-phu-nhuan-mini-05",
+      "title": "Kèo 7v7 Sân bóng mini Phú Nhuận (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost5@import.spot.local",
+      "venueName": "Sân bóng mini Phú Nhuận",
+      "startsAt": "2026-09-02T18:00:00.000Z"
+    },
+    {
+      "slug": "fb-phu-nhuan-mini-25",
+      "title": "Kèo 5v5 Sân bóng mini Phú Nhuận (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost5@import.spot.local",
+      "venueName": "Sân bóng mini Phú Nhuận",
+      "startsAt": "2026-09-04T10:00:00.000Z"
+    },
+    {
+      "slug": "fb-phu-nhuan-mini-45",
+      "title": "Kèo 11v11 Sân bóng mini Phú Nhuận (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost5@import.spot.local",
+      "venueName": "Sân bóng mini Phú Nhuận",
+      "startsAt": "2026-09-06T02:00:00.000Z"
+    },
+    {
+      "slug": "fb-q11-minh-phung-16",
+      "title": "Kèo 5v5 Sân bóng Quận 11 (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost6@import.spot.local",
+      "venueName": "Sân bóng Quận 11",
+      "startsAt": "2026-09-03T16:00:00.000Z"
+    },
+    {
+      "slug": "fb-q11-minh-phung-36",
+      "title": "Kèo 11v11 Sân bóng Quận 11 (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost6@import.spot.local",
+      "venueName": "Sân bóng Quận 11",
+      "startsAt": "2026-09-05T08:00:00.000Z"
+    },
+    {
+      "slug": "fb-q12-trung-my-tay-18",
+      "title": "Kèo 11v11 Sân bóng Trung Mỹ Tây (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost8@import.spot.local",
+      "venueName": "Sân bóng Trung Mỹ Tây",
+      "startsAt": "2026-09-03T20:00:00.000Z"
+    },
+    {
+      "slug": "fb-q12-trung-my-tay-38",
+      "title": "Kèo 7v7 Sân bóng Trung Mỹ Tây (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost8@import.spot.local",
+      "venueName": "Sân bóng Trung Mỹ Tây",
+      "startsAt": "2026-09-05T12:00:00.000Z"
+    },
+    {
+      "slug": "fb-q3-vo-thi-sau-17",
+      "title": "Kèo 7v7 Sân bóng Quận 3 (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost7@import.spot.local",
+      "venueName": "Sân bóng Quận 3",
+      "startsAt": "2026-09-03T18:00:00.000Z"
+    },
+    {
+      "slug": "fb-q3-vo-thi-sau-37",
+      "title": "Kèo 5v5 Sân bóng Quận 3 (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost7@import.spot.local",
+      "venueName": "Sân bóng Quận 3",
+      "startsAt": "2026-09-05T10:00:00.000Z"
+    },
+    {
+      "slug": "fb-q4-nguyen-huu-hao-13",
+      "title": "Kèo 5v5 Sân bóng Quận 4 (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost3@import.spot.local",
+      "venueName": "Sân bóng Quận 4",
+      "startsAt": "2026-09-03T10:00:00.000Z"
+    },
+    {
+      "slug": "fb-q4-nguyen-huu-hao-33",
+      "title": "Kèo 11v11 Sân bóng Quận 4 (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost3@import.spot.local",
+      "venueName": "Sân bóng Quận 4",
+      "startsAt": "2026-09-05T02:00:00.000Z"
+    },
+    {
+      "slug": "fb-q5-nguyen-trai-14",
+      "title": "Kèo 7v7 Sân bóng Quận 5 (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost4@import.spot.local",
+      "venueName": "Sân bóng Quận 5",
+      "startsAt": "2026-09-03T12:00:00.000Z"
+    },
+    {
+      "slug": "fb-q5-nguyen-trai-34",
+      "title": "Kèo 5v5 Sân bóng Quận 5 (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost4@import.spot.local",
+      "venueName": "Sân bóng Quận 5",
+      "startsAt": "2026-09-05T04:00:00.000Z"
+    },
+    {
+      "slug": "fb-q6-phu-lam-15",
+      "title": "Kèo 11v11 Sân bóng Phú Lâm (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost5@import.spot.local",
+      "venueName": "Sân bóng Phú Lâm",
+      "startsAt": "2026-09-03T14:00:00.000Z"
+    },
+    {
+      "slug": "fb-q6-phu-lam-35",
+      "title": "Kèo 7v7 Sân bóng Phú Lâm (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost5@import.spot.local",
+      "venueName": "Sân bóng Phú Lâm",
+      "startsAt": "2026-09-05T06:00:00.000Z"
+    },
+    {
+      "slug": "fb-q7-pmh-09",
+      "title": "Kèo 11v11 Sân bóng Phú Mỹ Hưng (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost9@import.spot.local",
+      "venueName": "Sân bóng Phú Mỹ Hưng",
+      "startsAt": "2026-09-03T02:00:00.000Z"
+    },
+    {
+      "slug": "fb-q7-pmh-29",
+      "title": "Kèo 7v7 Sân bóng Phú Mỹ Hưng (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost9@import.spot.local",
+      "venueName": "Sân bóng Phú Mỹ Hưng",
+      "startsAt": "2026-09-04T18:00:00.000Z"
+    },
+    {
+      "slug": "fb-q7-pmh-49",
+      "title": "Kèo 5v5 Sân bóng Phú Mỹ Hưng (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost9@import.spot.local",
+      "venueName": "Sân bóng Phú Mỹ Hưng",
+      "startsAt": "2026-09-06T10:00:00.000Z"
+    },
+    {
+      "slug": "fb-q8-mini-10",
+      "title": "Kèo 5v5 Sân bóng Quận 8 (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost10@import.spot.local",
+      "venueName": "Sân bóng Quận 8",
+      "startsAt": "2026-09-03T04:00:00.000Z"
+    },
+    {
+      "slug": "fb-q8-mini-30",
+      "title": "Kèo 11v11 Sân bóng Quận 8 (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost10@import.spot.local",
+      "venueName": "Sân bóng Quận 8",
+      "startsAt": "2026-09-04T20:00:00.000Z"
+    },
+    {
+      "slug": "fb-q8-mini-50",
+      "title": "Kèo 7v7 Sân bóng Quận 8 (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost10@import.spot.local",
+      "venueName": "Sân bóng Quận 8",
+      "startsAt": "2026-09-06T12:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-binh-7-06",
+      "title": "Kèo 11v11 Sân bóng 7 người Tân Bình (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost6@import.spot.local",
+      "venueName": "Sân bóng 7 người Tân Bình",
+      "startsAt": "2026-09-02T20:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-binh-7-26",
+      "title": "Kèo 7v7 Sân bóng 7 người Tân Bình (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost6@import.spot.local",
+      "venueName": "Sân bóng 7 người Tân Bình",
+      "startsAt": "2026-09-04T12:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-binh-7-46",
+      "title": "Kèo 5v5 Sân bóng 7 người Tân Bình (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost6@import.spot.local",
+      "venueName": "Sân bóng 7 người Tân Bình",
+      "startsAt": "2026-09-06T04:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-phu-5-08",
+      "title": "Kèo 7v7 Sân bóng 5 người Tân Phú (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost8@import.spot.local",
+      "venueName": "Sân bóng 5 người Tân Phú",
+      "startsAt": "2026-09-03T00:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-phu-5-28",
+      "title": "Kèo 5v5 Sân bóng 5 người Tân Phú (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost8@import.spot.local",
+      "venueName": "Sân bóng 5 người Tân Phú",
+      "startsAt": "2026-09-04T16:00:00.000Z"
+    },
+    {
+      "slug": "fb-tan-phu-5-48",
+      "title": "Kèo 11v11 Sân bóng 5 người Tân Phú (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost8@import.spot.local",
+      "venueName": "Sân bóng 5 người Tân Phú",
+      "startsAt": "2026-09-06T08:00:00.000Z"
+    },
+    {
+      "slug": "fb-tao-dan-03",
+      "title": "Kèo 11v11 Sân bóng Tao Đàn (Th 4)",
+      "status": "created",
+      "hostEmail": "football.fbhost3@import.spot.local",
+      "venueName": "Sân bóng Tao Đàn",
+      "startsAt": "2026-09-02T14:00:00.000Z"
+    },
+    {
+      "slug": "fb-tao-dan-23",
+      "title": "Kèo 7v7 Sân bóng Tao Đàn (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost3@import.spot.local",
+      "venueName": "Sân bóng Tao Đàn",
+      "startsAt": "2026-09-04T06:00:00.000Z"
+    },
+    {
+      "slug": "fb-tao-dan-43",
+      "title": "Kèo 5v5 Sân bóng Tao Đàn (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost3@import.spot.local",
+      "venueName": "Sân bóng Tao Đàn",
+      "startsAt": "2026-09-05T22:00:00.000Z"
+    },
+    {
+      "slug": "fb-thao-dien-04",
+      "title": "Kèo 5v5 Sân bóng Thảo Điền (Th 4)",
+      "status": "created",
+      "hostEmail": "football.fbhost4@import.spot.local",
+      "venueName": "Sân bóng Thảo Điền",
+      "startsAt": "2026-09-02T16:00:00.000Z"
+    },
+    {
+      "slug": "fb-thao-dien-24",
+      "title": "Kèo 11v11 Sân bóng Thảo Điền (Th 6)",
+      "status": "created",
+      "hostEmail": "football.fbhost4@import.spot.local",
+      "venueName": "Sân bóng Thảo Điền",
+      "startsAt": "2026-09-04T08:00:00.000Z"
+    },
+    {
+      "slug": "fb-thao-dien-44",
+      "title": "Kèo 7v7 Sân bóng Thảo Điền (CN)",
+      "status": "created",
+      "hostEmail": "football.fbhost4@import.spot.local",
+      "venueName": "Sân bóng Thảo Điền",
+      "startsAt": "2026-09-06T00:00:00.000Z"
+    },
+    {
+      "slug": "fb-thu-duc-linh-trung-12",
+      "title": "Kèo 11v11 Sân bóng Linh Trung (Th 5)",
+      "status": "created",
+      "hostEmail": "football.fbhost2@import.spot.local",
+      "venueName": "Sân bóng Linh Trung",
+      "startsAt": "2026-09-03T08:00:00.000Z"
+    },
+    {
+      "slug": "fb-thu-duc-linh-trung-32",
+      "title": "Kèo 7v7 Sân bóng Linh Trung (Th 7)",
+      "status": "created",
+      "hostEmail": "football.fbhost2@import.spot.local",
+      "venueName": "Sân bóng Linh Trung",
+      "startsAt": "2026-09-05T00:00:00.000Z"
+    }
+  ]
+}

@@ -10,6 +10,9 @@ import { GEOAPIFY_API_KEY } from '@/config/env';
 // best-effort against spot-backend's pre-2025 GSO admin names).
 const AUTOCOMPLETE_URL = 'https://api.geoapify.com/v1/geocode/autocomplete';
 const REVERSE_URL = 'https://api.geoapify.com/v1/geocode/reverse';
+// Same key/quota as the geocoding + tile calls — a different endpoint, not a
+// different product. Backs VenueMapScreen's "Directions" blue route line.
+const ROUTING_URL = 'https://api.geoapify.com/v1/routing';
 
 export type GeoapifyPlace = {
   formatted: string;
@@ -62,6 +65,50 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     });
     const first = res.data?.results?.[0];
     return first ? mapResult(first) : null;
+  } catch {
+    return null;
+  }
+}
+
+export type LatLng = { latitude: number; longitude: number };
+
+export type RouteResult = {
+  /** Flattened polyline (every LineString of the GeoJSON MultiLineString, in order). */
+  line: LatLng[];
+  distanceMeters: number;
+  timeSeconds: number;
+};
+
+/**
+ * Motorcycle route between two points via Geoapify's Routing API — one mode
+ * only (`motorcycle`, matches how people actually get to a pitch here). Backs
+ * VenueMapScreen's "Directions" button: draw the blue line + show distance/ETA.
+ * Returns `null` on no key / no route / error — the caller falls back to the
+ * external Google Maps handoff (same soft-fail contract as `reverseGeocode`).
+ */
+export async function getMotorcycleRoute(from: LatLng, to: LatLng): Promise<RouteResult | null> {
+  if (!GEOAPIFY_API_KEY) return null;
+  try {
+    const res = await axios.get(ROUTING_URL, {
+      params: {
+        waypoints: `${from.latitude},${from.longitude}|${to.latitude},${to.longitude}`,
+        mode: 'motorcycle',
+        apiKey: GEOAPIFY_API_KEY,
+      },
+    });
+    // No `features` when the two points aren't connected by road (e.g. the
+    // caller is on another continent, or an emulator's default location).
+    const feature = res.data?.features?.[0];
+    if (!feature) return null;
+    // geometry is a MultiLineString: coordinates = LineString[] = [lon, lat][][]
+    const rings: number[][][] = feature.geometry?.coordinates ?? [];
+    const line: LatLng[] = rings.flat().map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
+    if (line.length < 2) return null;
+    return {
+      line,
+      distanceMeters: Number(feature.properties?.distance ?? 0),
+      timeSeconds: Number(feature.properties?.time ?? 0),
+    };
   } catch {
     return null;
   }

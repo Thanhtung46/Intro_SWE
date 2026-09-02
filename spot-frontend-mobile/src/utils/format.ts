@@ -14,10 +14,12 @@ function formatHm(date: Date): string {
   return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-// "Tonight, 19:00 - 21:00" / "Tomorrow, 08:00 - 10:00" / "Jul 28, 19:00 - 21:00"
-// — matches the Homepage card copy (node 95:2417). Evening cutoff for
-// "Tonight" is a judgment call (17:00), not specified in Figma.
-export function formatMatchWhen(startsAtIso: string, endsAtIso: string): string {
+// Day + "19:00 - 21:00" split so Match Detail's narrow Time strip can stack
+// them (Tomorrow / 16:00 - 18:00) instead of wrapping mid-range.
+export function formatMatchWhenParts(
+  startsAtIso: string,
+  endsAtIso: string
+): { dayLabel: string; timeRange: string } {
   const now = new Date();
   const starts = new Date(startsAtIso);
   const ends = new Date(endsAtIso);
@@ -33,5 +35,13 @@ export function formatMatchWhen(startsAtIso: string, endsAtIso: string): string 
     dayLabel = starts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  return `${dayLabel}, ${formatHm(starts)} - ${formatHm(ends)}`;
+  return { dayLabel, timeRange: `${formatHm(starts)} - ${formatHm(ends)}` };
+}
+
+// "Tonight, 19:00 - 21:00" / "Tomorrow, 08:00 - 10:00" / "Jul 28, 19:00 - 21:00"
+// — matches the Homepage card copy (node 95:2417). Evening cutoff for
+// "Tonight" is a judgment call (17:00), not specified in Figma.
+export function formatMatchWhen(startsAtIso: string, endsAtIso: string): string {
+  const { dayLabel, timeRange } = formatMatchWhenParts(startsAtIso, endsAtIso);
+  return `${dayLabel}, ${timeRange}`;
 }

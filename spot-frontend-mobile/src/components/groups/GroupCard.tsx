@@ -1,8 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  GestureResponderEvent,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
+import MatchCoverImage from '@/components/matches/MatchCoverImage';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
@@ -11,7 +18,12 @@ import type { Group } from '@/types/group';
 type Props = {
   group: Group;
   onPress: () => void;
+  /** Card "Join Group" CTA — joins immediately without opening detail. */
+  onJoin: () => void;
   onToggleFavorite: () => void;
+  joining?: boolean;
+  /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
+  distanceLabel?: string | null;
 };
 
 /**
@@ -21,7 +33,14 @@ type Props = {
  * "Join Group" button. Unlike MatchCard there is no price/spots-left pair
  * and no host row — groups only surface memberCount + joinMode.
  */
-export default function GroupCard({ group, onPress, onToggleFavorite }: Props) {
+export default function GroupCard({
+  group,
+  onPress,
+  onJoin,
+  onToggleFavorite,
+  joining = false,
+  distanceLabel,
+}: Props) {
   const minLabel = skillLabel(group.sport, group.skillMin);
   const maxLabel = skillLabel(group.sport, group.skillMax);
   const skillText = group.allLevels || !minLabel || !maxLabel
@@ -36,16 +55,8 @@ export default function GroupCard({ group, onPress, onToggleFavorite }: Props) {
   return (
     <TouchableOpacity testID={`group-card-${group.groupId}`} style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.cover}>
-        {group.coverUrl ? (
-          <Image source={{ uri: group.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        ) : (
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-        )}
+        {/* Same remote+default layering as MatchCard — Unsplash fail no longer leaves a blank hero. */}
+        <MatchCoverImage sport={group.sport} coverUrl={group.coverUrl} />
         <View style={styles.coverScrim} />
         <TouchableOpacity
           testID={`group-favorite-${group.groupId}`}
@@ -76,6 +87,7 @@ export default function GroupCard({ group, onPress, onToggleFavorite }: Props) {
             <View style={styles.memberRow}>
               <Ionicons name="people" size={14} color={colors.headingText} />
               <Text style={styles.memberCount}>{group.memberCount} Members</Text>
+              {distanceLabel ? <Text style={styles.distanceText}>· {distanceLabel} away</Text> : null}
             </View>
             <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">
               {metaLine}
@@ -93,8 +105,16 @@ export default function GroupCard({ group, onPress, onToggleFavorite }: Props) {
           </View>
         </View>
 
-        <TouchableOpacity testID={`group-view-${group.groupId}`} style={styles.joinButton} onPress={onPress}>
-          <Text style={styles.joinButtonText}>Join Group</Text>
+        <TouchableOpacity
+          testID={`group-join-${group.groupId}`}
+          style={[styles.joinButton, joining && styles.joinButtonDisabled]}
+          disabled={joining}
+          onPress={(e: GestureResponderEvent) => {
+            e.stopPropagation();
+            onJoin();
+          }}
+        >
+          <Text style={styles.joinButtonText}>{joining ? 'Joining...' : 'Join Group'}</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -134,6 +154,7 @@ const styles = StyleSheet.create({
   metaTextWrap: { flexShrink: 1, gap: 2 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   memberCount: { fontSize: 14, fontWeight: '800', color: colors.headingText },
+  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
   metaLine: { fontSize: 12, color: colors.outline },
 
   avatars: { flexDirection: 'row' },
@@ -157,5 +178,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
+  joinButtonDisabled: { opacity: 0.6 },
   joinButtonText: { fontSize: 14, fontWeight: '800', color: colors.white },
 });

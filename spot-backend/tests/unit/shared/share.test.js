@@ -6,14 +6,30 @@ import {
 } from '../../../src/shared/constants/matchmaking.js';
 
 describe('computeYourShare', () => {
-  it('splits evenly with ceil', () => {
+  it('splits evenly by maxPlayers with ceil', () => {
     assert.equal(
       computeYourShare({
         feeType: 'SPLIT_EVENLY',
         priceMin: 1400000,
-        filledCount: 3,
+        maxPlayers: 14,
       }),
-      Math.ceil(1400000 / 3),
+      100000,
+    );
+    assert.equal(
+      computeYourShare({
+        feeType: 'SPLIT_EVENLY',
+        priceMin: 1400000,
+        maxPlayers: 1,
+      }),
+      1400000,
+    );
+    assert.equal(
+      computeYourShare({
+        feeType: 'SPLIT_EVENLY',
+        priceMin: 100000,
+        maxPlayers: 3,
+      }),
+      Math.ceil(100000 / 3),
     );
   });
 
@@ -40,15 +56,15 @@ describe('computeYourShare', () => {
 });
 
 describe('computeRequestShare', () => {
-  it('sums joiner plus guests for split evenly', () => {
+  it('sums joiner plus guests for split evenly by maxPlayers', () => {
     const share = computeRequestShare({
       feeType: 'SPLIT_EVENLY',
       priceMin: 1400000,
-      filledCount: 4,
+      maxPlayers: 14,
       joinerGender: 'male',
       guests: [{ gender: 'female' }, { gender: 'male' }],
     });
-    const each = Math.ceil(1400000 / 4);
+    const each = Math.ceil(1400000 / 14);
     assert.equal(share, each * 3);
   });
 
@@ -57,7 +73,7 @@ describe('computeRequestShare', () => {
       feeType: 'GENDER_RANGE',
       priceMin: 50000,
       priceMax: 80000,
-      filledCount: 5,
+      maxPlayers: 14,
       joinerGender: 'female',
       guests: [{ gender: 'male' }],
     });

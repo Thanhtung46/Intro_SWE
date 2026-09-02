@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -83,9 +84,12 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
     [tab]
   );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // Refresh on focus (incl. first mount) so Managed/Joined stays accurate after transfer.
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   const handleAccept = async (requestId: number) => {
     setActingRequestId(requestId);

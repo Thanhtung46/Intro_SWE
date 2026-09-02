@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: spacing.xl },
 
   hero: { height: 220, justifyContent: 'space-between' },
-  heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.heroScrim },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
   heroTopBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',

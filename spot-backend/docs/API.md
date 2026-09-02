@@ -162,7 +162,7 @@ Hai skill **độc lập** (một per sport). Unset = `null`. API lưu `code`. C
 | `outcome` (ended kèo) | `COMPLETED` \| `CANCELLED` + `outcomeMessage` |
 
 Host chiếm **1 slot** lúc tạo. Join: `filledCount += 1 + guests.length` (AUTO ngay; APPROVAL khi accept).  
-**`yourShare`**: preview runtime trên match (`ceil(priceMin / filledCount)`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
+**`yourShare`**: preview runtime trên match (`ceil(priceMin / maxPlayers)` cho `SPLIT_EVENLY`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
 Pitch global: cùng `venueName` + `venueAddress` + tên court + giờ chồng → `409`.
 
 ### Role (chọn ở Step 2)
@@ -973,7 +973,7 @@ Dropdown 2 cấp pre-2025 (63 tỉnh + 705 quận/huyện). JSON tĩnh, Bearer. 
 
 ### 7.2 `GET /matches`
 
-Browse: `OPEN`, còn slot, `endsAt > now`. `FULL` **ẩn** trên homepage; vẫn thấy qua `?hostUserId=` (OPEN/FULL còn hạn).
+Browse: `OPEN`, còn slot, `startsAt > now`. `FULL` **ẩn** trên homepage; vẫn thấy qua `?hostUserId=` (OPEN/FULL còn hạn đến `endsAt`).
 
 **Ẩn khỏi browse mặc định** (không khi `hostUserId=`): kèo caller đang host; join `PENDING`/`ACCEPTED`/`KICKED`. **`REJECTED` hiện lại**.
 
@@ -992,7 +992,7 @@ Chi tiết (kể cả đã qua giờ / cancelled).
 Đánh giá host: `POST /matches/:id/review` (xem 7.4c). `host.rating` / `host.reviewCount` trên card lấy từ aggregate review pickup kèo.
 
 `hostPhoneNumber` **chỉ** khi caller là host hoặc `yourRequest.status === ACCEPTED`. `yourRequest` = `PENDING`/`ACCEPTED`/`KICKED` (hoặc `null` nếu chưa join / `REJECTED`); gồm `avatarUrl`, `skill` (sport của kèo).  
-`canJoin` = không phải host, `OPEN`, còn slot, chưa request active, **`endsAt > now`**, không bị kick.
+`canJoin` = không phải host, `OPEN`, còn slot, chưa request active, **`startsAt > now`**, không bị kick.
 
 `participants[]`: HOST + joiners `ACCEPTED`. HOST và player gồm `skill` (sport kèo). Player thêm `shareAmount`, `paymentStatus`, `avatarUrl`, `phoneNumber` (host hoặc chính mình).
 

@@ -117,7 +117,7 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 
 | Batch | Nội dung | Migration / worker |
 | :--- | :--- | :--- |
-| **Lifecycle** | Browse ẩn kèo hết `endsAt`; join/`canJoin` chặn sau hết giờ; worker đủ người → `COMPLETED`, thiếu người → `CANCELLED` + notify; tab **Completed** chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage` | `008` (notification types), `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
+| **Lifecycle** | Browse ẩn kèo đã bắt đầu (`startsAt`); join/`canJoin` chặn sau `startsAt`; worker đủ người → `COMPLETED`, thiếu người → `CANCELLED` + notify; tab **Completed** chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage` | `008` (notification types), `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
 | **Manage Squad** | Pending: `avatarUrl`, `skill`, `phoneNumber`, `shareAmount`. Squad: `shareAmount`, `paymentStatus`, `skill` (HOST + player). Requests tab: `hostAvatarUrl`, `pendingCount`, `?status=PENDING\|REJECTED` | — |
 | **Joiner** | `DELETE /matches/:id/join` hủy PENDING | — |
 | **Review host (P3)** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `host.rating` live trên cards + profile; `joinedMatches` trên `GET /users/:id` | `009_schema_match_host_reviews.sql` |
@@ -147,6 +147,17 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 | **T3** | Standings PTS + tie-break | — |
 | **T4** | PATCH tournament; winners; in-team player ranks; early complete | — |
 | **T5** | `docs/API.md` §9; `npm run smoke:tournaments` | — |
+
+**Aug 2026 — Vmito import (dev seed kèo):**
+
+| Batch | Nội dung | Scripts / output |
+| :--- | :--- | :--- |
+| **Fetch** | Cào API Vmito → snapshot JSON (**không** ghi DB) | `fetch:vmito:50` → `data/vmito-sessions.json` |
+| **Sync** | Đọc snapshot → shadow hosts + INSERT kèo Postgres | `sync:vmito` → `data/vmito-sync-report.json` |
+| **Live** | Fetch + sync một lệnh | `sync:vmito:live:50` → **cả hai** file JSON |
+| **Reset** | Xóa **chỉ** kèo/host Vmito trên DB (giữ kèo/user cũ) | `reset:vmito` — xem section **Vmito import → Reset dữ liệu test** |
+| **Football demo seed** | ~50 kèo bóng đá HCM (synthetic — Vmito không có FOOTBALL feed) | `seed:football` / `reset:football` |
+| **Scope** | Chỉ **TP.HCM (`79`) + Hà Nội (`01`)** | Chi tiết: section **Vmito import** |
 
 **Tournaments product locks (do not revert):** tách biệt kèo + Groups; **1 giải = 1 hạng mục**; join **APPROVAL-only** (captain); create gate **80 COMPLETED host + rating ≥ 4.5**; **`hostedByLabel = SPOT`**; cancel **before startsAt only**; sau **ACTIVE** lock venue/schedule; winners + in-team ranks **manual** on PATCH.
 
@@ -209,7 +220,12 @@ Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`
 npm install
 cp .env.example .env   # then fill Supabase DB_* + SMTP_* + JWT_SECRET
 npm run migrate        # apply pending SQL under migrations/
-npm run reset:matches  # TRUNCATE schema_matchmaking.matches CASCADE (keeps users)
+
+# Reset kèo trên DB — chọn đúng lệnh (xem section Vmito import → Reset dữ liệu test)
+npm run reset:vmito -- --dry-run     # xem trước: chỉ kèo/host Vmito import sẽ xóa
+npm run reset:vmito                  # xóa kèo/host Vmito import — GIỮ kèo smoke/tay + user thật
+npm run reset:matches                # TRUNCATE **toàn bộ** kèo — dùng cẩn thận (xóa cả smoke/manual)
+
 npm run dev            # http://localhost:3000
 npm test               # node:test unit tests (DTO schemas)
 npm start              # production entry (no --watch)
@@ -232,6 +248,38 @@ npm run smoke:schedule|notifications|reviews
 npm run worker:reminders
 npm run worker:match-expiry   # auto COMPLETED (full) / CANCELLED (underfilled) + notify
 npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
+
+# Vmito — cào kèo công khai (dev/demo seed; xem section **Vmito import** below)
+npm run fetch:vmito                  # mặc định --limit 12
+npm run fetch:vmito:50               # lấy 50 kèo eligible (HCM+Hà Nội)
+npm run fetch:vmito:100
+npm run fetch:vmito:500              # cào tối đa 500 kèo eligible (lâu hơn)
+npm run fetch:vmito:1000             # cào tối đa 1000 kèo eligible (rất lâu)
+npm run fetch:vmito -- --limit 25    # tùy chỉnh
+npm run sync:vmito                     # ghi DB từ file JSON (users + matches)
+npm run sync:vmito:live                # fetch Vmito rồi sync DB (1 lệnh)
+npm run sync:vmito:live:50             # fetch 50 kèo rồi sync
+npm run sync:vmito:live:500            # fetch 500 kèo rồi sync
+npm run sync:vmito:live:1000           # fetch 1000 kèo rồi sync
+npm run sync:vmito -- --dry-run        # mô phỏng sync, không ghi DB
+
+# Football demo seed (synthetic HCM kèo — không cào Vmito)
+npm run seed:football                  # mặc định 50 kèo
+npm run seed:football -- --count 30
+npm run seed:football -- --dry-run
+npm run reset:football -- --dry-run
+npm run reset:football                 # xóa chỉ kèo/host football.*@import.spot.local
+
+# Host groups + tournaments seed (default: thaicuongpk@gmail.com)
+npm run seed:host-gt:10                # 10 groups + 10 tournaments (full fields)
+npm run seed:host-gt -- --groups 5 --tournaments 1
+npm run seed:host-gt:badminton         # chỉ BADMINTON
+npm run seed:host-gt -- --dry-run      # xem plan, không ghi DB
+# HOST_EMAIL=... HOST_PASSWORD=... npm run seed:host-gt:10
+
+# Reset chỉ dữ liệu Vmito (sau khi đã sync) — không xóa kèo/user cũ trên DB
+npm run reset:vmito -- --dry-run       # đếm kèo + shadow host sẽ xóa
+npm run reset:vmito                    # xóa thật → có thể sync:vmito lại
 ```
 
 Docker from **repo root** `Intro_SWE/`:
@@ -239,6 +287,12 @@ Docker from **repo root** `Intro_SWE/`:
 ```bash
 docker compose up -d --build redis backend
 docker compose run --rm backend npm run migrate
+docker compose run --rm backend npm run seed:football              # đẩy 50 kèo bóng đá demo vào DB
+docker compose run --rm backend npm run reset:football -- --dry-run
+docker compose run --rm backend npm run reset:football             # xóa chỉ seed bóng đá
+docker compose run --rm backend npm run reset:vmito -- --dry-run   # preview (Vmito only)
+docker compose run --rm backend npm run reset:vmito                # delete Vmito import only
+docker compose run --rm backend npm run reset:matches              # TRUNCATE all kèo — destructive
 docker restart spot-backend
 docker compose logs -f backend
 docker compose down
@@ -246,6 +300,322 @@ docker compose down
 ```
 
 Compose uses `env_file: ./spot-backend/.env`, forces `REDIS_HOST=redis`. Optional local Postgres: `docker compose --profile local-db up -d postgres` (do not `depends_on` it while on that profile).
+
+## Vmito import (dev seed kèo)
+
+**Mục đích:** Lấy kèo cầu lông/bóng đá thật từ [Vmito](https://vmito.com/vi) để **seed DB SPOT** cho dev/demo/QA — thay vì crawl Facebook (unstructured, ToS rủi ro). **Dev/demo only** — tôn trọng ToS Vmito; không hammer server.
+
+**Aug 2026 — đã implement:** `scripts/fetch-vmito-listings.js`, `scripts/sync-vmito-to-spot.js`, `scripts/reset-vmito-import.js`, `scripts/lib/vmito-parser.js`, `scripts/lib/vmito-sync.js`, `scripts/lib/vmito-venue-dedupe.js`.
+
+**Đọc section này trước khi chạy fetch/sync** — không cần context chat; mọi quyết định thiết kế (phạm vi tỉnh, 2 file JSON, free listing, shadow host) đều ghi ở đây.
+
+### Tóm tắt cho team mới
+
+| Câu hỏi | Trả lời ngắn |
+| :--- | :--- |
+| Fetch có ghi DB không? | **Không** — chỉ ghi `data/vmito-sessions.json` |
+| Sync ghi gì? | **Postgres** (users + matches) + `data/vmito-sync-report.json` |
+| Chỉ lấy kèo tỉnh nào? | **TP.HCM (`79`) + Hà Nội (`01`)** — Bình Dương, Bắc Ninh, … bị bỏ |
+| Kèo import có gắn catalog sân SPOT/Vmito không? | **Không** — **free listing** (text + mã tỉnh/quận + lat/lng), giống user host tay |
+| Host Vmito có login được app không? | **Không** (account thật) — sync tạo **shadow user** `@import.spot.local` cho dev |
+| Sync lại có ghi đè kèo cũ không? | **Không** — skip nếu slug đã import; muốn import lại từ đầu: **`npm run reset:vmito`** rồi `sync:vmito` (giữ kèo/user khác) |
+| Xóa dữ liệu Vmito test mà không đụng DB cũ? | **`npm run reset:vmito`** — xóa kèo có link Vmito trong `notes` + shadow host `@import.spot.local`; **không** xóa kèo smoke/tay hay user đăng ký OTP |
+| Khác gì báo cáo PA (PA0–PA2)? | PA mô tả kèo gắn **booking**; triển khai hiện tại là **free listing** (matchmaking đã ship) |
+
+### Pipeline 2 bước
+
+```
+Vmito public API                    Postgres (Supabase)
+GET /api/sessions/public                    │
+        │                                   │
+        ▼  npm run fetch:vmito*             │
+ data/vmito-sessions.json  ────────────────►│  npm run sync:vmito*
+ (snapshot — xem/sửa/sync lại)              │       │
+                                            ▼       ▼
+                                    matches + shadow users
+                                            │
+                                            └──► data/vmito-sync-report.json
+                                                 (biên bản lần sync)
+```
+
+- **Bước 1 — Fetch:** cào + map sang body `POST /matches`, lưu JSON. **An toàn** — chạy thoải mái, không đụng DB.
+- **Bước 2 — Sync:** đọc `spotDrafts[]` từ JSON, tạo host + kèo. **Cần** `DB_*` trong `.env`.
+
+### Hai file JSON — khác nhau, đừng nhầm
+
+| File | Sinh ra khi | Ghi DB? | Dùng để |
+| :--- | :--- | :--- | :--- |
+| **`data/vmito-sessions.json`** | `fetch:vmito*` hoặc `sync:vmito:live*` (bước fetch) | **Không** | Snapshot nguồn: raw `sessions[]` Vmito + `spotDrafts[]` (body SPOT đã map). Xem trước khi sync; sync lại nhiều lần từ cùng file. **Ghi đè** mỗi lần fetch. |
+| **`data/vmito-sync-report.json`** | `sync:vmito*` (kể cả `--dry-run`) | Sync mới ghi DB | **Biên bản** lần sync: `created` / `skipped` / `failed` từng slug, `matchId`, `hostEmail`, lý do skip. **Ghi đè** mỗi lần sync. |
+
+**Hay nhầm:** chạy `npm run sync:vmito` (không `--fetch`) → **chỉ** cập nhật report + DB, **không** refresh `vmito-sessions.json`. Muốn cả hai file mới: `npm run sync:vmito:live:50`.
+
+**Cấu trúc `vmito-sessions.json` (metadata đầu file):**
+
+| Field | Ý nghĩa |
+| :--- | :--- |
+| `fetchedAt` | Thời điểm fetch |
+| `provinceScope` | `["79","01"]` — phạm vi import |
+| `requestedLimit` / `count` | Số kèo yêu cầu / số kèo lưu (sau lọc tỉnh) |
+| `eligibleCount` | Số kèo `syncEligible: true` (đủ SĐT host + địa chỉ + lat/lng + province/city + body hợp lệ) |
+| `unsupportedSkipped` | Số kèo Vmito bị bỏ vì ngoài HCM/Hà Nội (trong lần paginate) |
+| `venueTimeDuplicatesSkipped` | Số kèo bỏ vì **trùng tên sân + trùng giờ** với kèo khác trong cùng fetch |
+| `inactiveStatusSkipped` | Số kèo bỏ vì **FINISHED / CANCELLED** (đã qua hoặc hủy — không import) |
+| `sessions[]` | Raw từ Vmito API |
+| `spotDrafts[]` | Bản map SPOT + flags `supportedProvince`, `syncEligible`, `spotCreateBody` |
+
+**Cấu trúc `vmito-sync-report.json`:**
+
+| Field | Ý nghĩa |
+| :--- | :--- |
+| `dryRun` | `true` nếu `--dry-run` (không INSERT) |
+| `created` / `skipped` / `failed` | Tổng hợp |
+| `hostsCreated` | Shadow user mới |
+| `hostSkillsApplied[]` | Skill upsert sau sync |
+| `results[]` | Chi tiết từng kèo: `status`, `reason`, `matchId`, `hostEmail`, … |
+
+### Cách lấy data
+
+**Primary:** Vmito public API (không cần auth):
+
+```
+GET https://vmito.com/api/sessions/public?page=1&limit=50
+→ { data: { data: Session[], total, page, limit, totalPages } }
+```
+
+Script paginate tới `--limit` (hoặc `VMITO_FETCH_LIMIT`). **~1789+ kèo** trên Vmito **toàn quốc**; pipeline **chỉ giữ TP.HCM + Hà Nội** khi build snapshot và khi sync.
+
+**Phạm vi địa lý (Aug 2026 — đã chốt):**
+
+| Tỉnh | Mã SPOT (`GET /geo/vn`) | Fallback quận nếu map thất bại |
+| :--- | :--- | :--- |
+| TP.HCM | `79` | `778` (Quận 7) |
+| Hà Nội | `01` | `001` (Quận Ba Đình) |
+
+**Nhận diện tỉnh** (trong `vmito-parser.js`):
+
+1. `venue.city` / `customLocationCity` / địa chỉ / `externalSource` / mô tả (text “Hồ Chí Minh”, “Hà Nội”, …)
+2. Tọa độ trong bounding box HCM hoặc Hà Nội (khi thiếu tên tỉnh)
+3. Không xác định được → **bỏ qua** (không vào JSON khi fetch; skip khi sync file cũ)
+
+**Map quận/huyện:** tên quận Vmito → mã `city` trong `vn-admin.json` (pre-2025). HCM: alias Quận 9 → Thủ Đức (`769`); normalize `đ`→`d`. Flag `cityResolved: false` nếu dùng fallback quận.
+
+**Ưu tiên sync-eligible** (`syncEligible: true` trên `spotDrafts[]`):
+
+- Thuộc **HCM hoặc Hà Nội**
+- Có `hostPhone` VN hợp lệ
+- Có `venueName`, **`venueAddress`**, **`latitude` + `longitude`**, `province`, `city`
+- Status **`PREPARING` hoặc `IN_PROGRESS`** — **bỏ** `FINISHED` / `CANCELLED`
+- Có title, venue, startsAt, courts
+
+Fetch **chỉ lấy eligible** (không pad bằng kèo thiếu địa chỉ/tọa độ). Sync **skip** draft `syncEligible: false`.
+
+Nếu không đủ `N` kèo eligible trong phạm vi 2 tỉnh → **bổ sung fallback** (vẫn phải thuộc HCM/Hà Nội) cho đủ `N` hoặc hết trang Vmito.
+
+**Legacy (deprecated):** homepage RSC `initialSessions` (~12 rows) — `fetchVmitoListingsFromHomepage()`.
+
+| Nguồn | Ghi chú |
+| :--- | :--- |
+| `/api/sessions/public` | Dùng mặc định; pagination `page` + `limit` (max ~100/page) |
+| Homepage HTML | Chỉ ~12 session; không paginate |
+
+### Lệnh — fetch vs ghi DB vs file output
+
+| Lệnh | Ghi DB? | `vmito-sessions.json` | `vmito-sync-report.json` |
+| :--- | :--- | :--- | :--- |
+| `npm run fetch:vmito` | **Không** | ✅ ghi đè (default 12) | ❌ |
+| `npm run fetch:vmito:50` | **Không** | ✅ ghi đè | ❌ |
+| `npm run fetch:vmito:100` | **Không** | ✅ ghi đè | ❌ |
+| `npm run fetch:vmito:500` | **Không** | ✅ ghi đè | ❌ |
+| `npm run fetch:vmito:1000` | **Không** | ✅ ghi đè | ❌ |
+| `npm run sync:vmito` | **Có** | ❌ chỉ đọc | ✅ ghi đè |
+| `npm run sync:vmito:live` | **Có** | ✅ fetch + ghi | ✅ ghi đè |
+| `npm run sync:vmito:live:50` | **Có** | ✅ fetch + ghi | ✅ ghi đè |
+| `npm run sync:vmito:live:500` | **Có** | ✅ fetch + ghi | ✅ ghi đè |
+| `npm run sync:vmito:live:1000` | **Có** | ✅ fetch + ghi | ✅ ghi đè |
+| `npm run sync:vmito -- --dry-run` | **Không** | ❌ chỉ đọc | ✅ (mô phỏng) |
+| `npm run sync:vmito -- --file path.json` | **Có** | ❌ đọc file chỉ định | ✅ ghi đè |
+| `npm run reset:vmito -- --dry-run` | **Không** | ❌ | ❌ |
+| `npm run reset:vmito` | **Có** (xóa Vmito) | ❌ | ❌ |
+
+**Script reset Vmito:** `scripts/reset-vmito-import.js` (`npm run reset:vmito`).
+
+**Yêu cầu sync:** `.env` có `DB_*` (Supabase pooler). **Không cần** server API chạy — sync gọi trực tiếp `createMatch` + `userRepository`.
+
+**Legacy (tránh dùng):** `npm run fetch:vmito -- --import --email ... --password ...` — ghi DB qua HTTP `POST /matches`, cần server + JWT; **mọi kèo gán 1 account login**, không tạo host theo SĐT Vmito. Prefer **`sync:vmito`**.
+
+### Đồng bộ với model kèo SPOT (app)
+
+Import map sang **cùng schema** user host kèo qua `POST /matches` (**free listing**):
+
+| SPOT field | Nguồn import |
+| :--- | :--- |
+| `venueName`, `venueAddress` | Text từ Vmito |
+| `province`, `city` | Mã pre-2025 từ `GET /geo/vn` — **không** copy `venueId` Vmito |
+| `latitude`, `longitude` | Vmito `lat`/`lng` nếu có |
+| `courts[]` | Tên sân con Vmito |
+
+**Không đồng bộ:** catalog sân Vmito, `schema_venue`, booking, roster player Vmito, club Vmito. Filter `GET /matches?province=&city=` và card `provinceName`/`cityName` hoạt động như kèo user tạo tay.
+
+**Không import:** Vmito `venueId`, players đã join, club, cover (thường null).
+
+### Mapping Vmito → SPOT (`POST /matches` body)
+
+| Vmito | SPOT |
+| :--- | :--- |
+| `sportType` BADMINTON/FOOTBALL | `sport` |
+| `defaultMatchType` SINGLES/DOUBLES | `format` |
+| `feeConfig.femaleFee` / `maleFee` (×1000 VND) | `GENDER_RANGE` `priceMin`/`priceMax` |
+| `feeConfig.splitTotal` | `SPLIT_EVENLY` `priceMin` |
+| `requiredLevels[]` (rank 1–10) | `skillMin`/`skillMax` hoặc `allLevels` |
+| `venue`, lat/lng, district, city | `venueName`, `venueAddress`, `province` (`79` / `01`), `city` (quận/huyện) |
+| Quận 9 (Vmito cũ) | alias → **Thành phố Thủ Đức** (`769`); normalize `đ` → `d` |
+| Tỉnh ngoài HCM/Hà Nội | **Bỏ qua** khi fetch/sync |
+| `hostName`, `hostPhone` | **Không** map vào create body — host = user SPOT (below) |
+| Mô tả + SĐT host | `notes` (mô tả Vmito + liên hệ; tag nội bộ `[vmito-import:{slug}]` cho sync/reset — **không** hiện link Vmito) |
+
+Thiếu quận → fallback `city`: HCM **`778`**, Hà Nội **`001`**; flag `cityResolved: false`.
+
+### Host / tài khoản — quan trọng
+
+Host trên Vmito **không tồn tại sẵn** trong SPOT (user system riêng: `hostId` CUID Vmito vs `user_id` serial SPOT). Sync **tạo shadow PLAYER**:
+
+| Field | Giá trị import |
+| :--- | :--- |
+| Email | `vmito.{hostIdSuffix}@import.spot.local` |
+| Phone | SĐT Vmito nếu hợp lệ; không có → synthetic `09xxxxxxxx` (hash `hostId`) |
+| Password | `Password1!` (hoặc `VMITO_IMPORT_PASSWORD`) |
+| Role | `PLAYER`, `email_verified_at` + `role_selected_at` set ngay (không OTP) |
+| Skill | `user_sport_skills`: **skillMax cao nhất** trên các kèo host set (bỏ qua `allLevels`); upsert sau sync |
+
+Nhiều kèo cùng host Vmito → **1 user SPOT** (cache theo `hostId`). SĐT host vẫn nằm trong `notes` kèo cho liên hệ; **không** phải account thật của họ trên app.
+
+### Đăng nhập host import (dev / QA)
+
+Sau `npm run sync:vmito`, email host nằm trong `data/vmito-sync-report.json` (`hostEmail` từng dòng `created`) hoặc suy ra từ `hostId` Vmito.
+
+| | |
+| :--- | :--- |
+| **API** | `POST /auth/login` `{ "email", "password" }` |
+| **Email** | `vmito.{hostIdSuffix}@import.spot.local` — suffix = 24 ký tự cuối `hostId` (chữ/số), vd. `cmrtks1bg00nonu01ccl0vw6j` → `vmito.mrtks1bg00nonu01ccl0vw6j@import.spot.local` |
+| **Password** | `Password1!` hoặc env `VMITO_IMPORT_PASSWORD` |
+| **Tra cứu nhanh** | `vmito-sync-report.json` → `results[].hostEmail` + `hostUserId`; hoặc Supabase `schema_auth.users` `WHERE email LIKE 'vmito.%@import.spot.local'` |
+
+Ví dụ (server đang chạy):
+
+```bash
+curl -s -X POST http://127.0.0.1:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"vmito.msh3lgct0086o7015n9adac4@import.spot.local","password":"Password1!"}'
+```
+
+→ `{ accessToken, refreshToken, user }` — host quản lý kèo qua `GET /matches/mine`, `PATCH /matches/:id`, v.v.
+
+**Lưu ý:** Account import **không** phải user Vmito thật; không dùng email/password Vmito gốc. User đăng ký tay trên app (`POST /auth/register` + OTP) **không** liên quan các email `@import.spot.local`.
+
+### Chính sách ghi DB — thêm mới, không ghi đè
+
+| Thành phần | Hành vi |
+| :--- | :--- |
+| Kèo đã import (cùng slug Vmito) | **Skip** — giữ row cũ |
+| Kèo mới | **INSERT** |
+| Kèo/user tạo tay trên app | **Không đụng** |
+| File `vmito-sessions.json` | **Ghi đè** mỗi lần fetch |
+| Skill host import | **Upsert** (`user_sport_skills`) |
+
+**Không** tự `UPDATE`/`DELETE` kèo cũ khi sync lại.
+
+### Reset dữ liệu test Vmito (không ảnh hưởng dữ liệu cũ trên DB)
+
+Dùng khi đã **`sync:vmito`** lên DB và muốn **gỡ chỉ phần import Vmito** để fetch/sync lại — **không** xóa kèo smoke, kèo tạo tay, user đăng ký OTP, groups, tournaments.
+
+| Lệnh | Tác dụng |
+| :--- | :--- |
+| `npm run reset:vmito -- --dry-run` | Đếm trước: số kèo + shadow host sẽ xóa (không đụng DB) |
+| `npm run reset:vmito` | Xóa kèo Vmito + shadow host orphan (transaction) |
+| `npm run reset:matches` | **Xóa toàn bộ kèo** mọi nguồn — **không dùng** nếu chỉ muốn gỡ Vmito |
+
+**Quy trình import lại (khuyến nghị):**
+
+```bash
+npm run reset:vmito -- --dry-run   # 1. xem số dòng sẽ xóa
+npm run reset:vmito                # 2. xóa Vmito trên DB
+npm run sync:vmito                 # 3. đẩy lại từ data/vmito-sessions.json
+# hoặc fetch mới rồi sync:
+npm run sync:vmito:live:50         # fetch + sync một lệnh
+```
+
+**Cách nhận diện trên DB (script dùng điều kiện này):**
+
+| Entity | Điều kiện xóa |
+| :--- | :--- |
+| Kèo | `notes` chứa `[vmito-import:` hoặc (legacy) `vmito.com/vi/sessions/` |
+| Shadow host | `schema_auth.users.email LIKE 'vmito.%@import.spot.local'` **và** sau khi xóa kèo không còn host kèo nào |
+
+**Cascade:** xóa kèo → courts, join requests, favorites liên quan (FK). **Không xóa:** user đăng ký app (`@gmail`, …), kèo không có link Vmito trong `notes`, groups/tournaments.
+
+**Không đụng file JSON:** `data/vmito-sessions.json` và `vmito-sync-report.json` vẫn trên disk — chỉ DB được reset phần Vmito.
+
+**Docker (từ `Intro_SWE/`):**
+
+```bash
+docker compose run --rm backend npm run reset:vmito -- --dry-run
+docker compose run --rm backend npm run reset:vmito
+```
+
+**So sánh nhanh:**
+
+| | `reset:vmito` | `reset:matches` |
+| :--- | :--- | :--- |
+| Kèo Vmito import | ✅ xóa | ✅ xóa |
+| Kèo smoke / tạo tay | ❌ giữ | ❌ xóa hết |
+| User đăng ký OTP | ❌ giữ | ❌ giữ (chỉ TRUNCATE matches) |
+| Shadow host Vmito | ✅ xóa (nếu không còn kèo) | ❌ giữ (user row còn) |
+
+Sau `reset:vmito`, `sync:vmito` coi mọi slug là mới → **INSERT** lại (không skip `already synced`).
+
+### Sync — skip / sanitize (thiếu sót OK)
+
+| Trường hợp | Hành vi |
+| :--- | :--- |
+| **Cùng tên sân + trùng/overlap giờ** (trong file hoặc DB) | **Skip** — giữ kèo đầu tiên; **không** đổi tên/slug |
+| Tỉnh ngoài HCM/Hà Nội | **Skip** — không fetch vào JSON / không sync |
+| Đã sync (notes chứa slug Vmito) | **Skip** — idempotent |
+| **Trùng tên sân + trùng giờ** (DB hoặc cùng batch import) | **Skip** — không đẩy 2 kèo cùng venue + overlapping time |
+| Trùng pitch + giờ + sân con (409 occupancy SPOT) | **Skip** — fallback nếu lọc trên chưa bắt |
+| `startsAt` quá khứ | Bump +7 ngày/lần tối đa 52 tuần |
+| `coverUrl` | Giữ ảnh thật từ Vmito (`session`/`venue`/`images`) nếu có. **Không** dùng avatar host. Badminton thiếu cover → ảnh sân bundled trên mobile; Football thiếu → stock photo |
+| Skill thiếu khi `allLevels=false` | → `allLevels: true` |
+| Tên sân trùng trên 1 kèo | Suffix `(2)`, `(3)`… |
+| Validation Zod fail | **Skip** + ghi reason trong report |
+
+### Kết quả mẫu (Aug 2026)
+
+| Lần chạy | Kết quả |
+| :--- | :--- |
+| Fetch 12 → sync lần đầu | **11 created**, **1 skipped** (overlap sân cùng giờ), **9 hosts**, matchId ~1000–1010 |
+| Sync lại cùng file | **0 created**, **12 skipped** (`already synced`) — report ghi `matchId` cũ |
+| Fetch 50 (scope HCM+Hà Nội) | **50** trong JSON, `unsupportedSkipped: 2` (Bắc Ninh, …), ~48 HCM + ~10 Hà Nội trong mẫu |
+
+### Scripts / layout
+
+```
+scripts/
+├── fetch-vmito-listings.js       # fetch only → vmito-sessions.json
+├── sync-vmito-to-spot.js         # read JSON → DB + vmito-sync-report.json
+└── lib/
+    ├── vmito-parser.js           # API fetch, province filter, map draft
+    └── vmito-sync.js             # shadow host, sanitize, createMatch, skip rules
+data/
+├── vmito-sessions.json           # INPUT snapshot (fetch / live fetch)
+└── vmito-sync-report.json        # OUTPUT biên bản sync
+```
+
+**Env tùy chọn:** `VMITO_FETCH_URL`, `VMITO_FETCH_LIMIT`, `VMITO_IMPORT_PASSWORD`.
+
+**Export constants (parser):** `SUPPORTED_PROVINCE_CODES` = `['79','01']`, `HCM_PROVINCE_CODE`, `HANOI_PROVINCE_CODE`.
+
+**Không implement:** import toàn quốc, claim listing cho host Vmito thật, import player roster, sync 2 chiều, liên kết `venueId` Vmito ↔ SPOT catalog.
 
 ## Layout
 
@@ -307,8 +677,13 @@ migrations/
 scripts/
 ├── migrate.js / check-db.js / reset-matches.js
 ├── apply-homepage-card.js / apply-match-search.js / apply-match-admin.js
+├── fetch-vmito-listings.js / sync-vmito-to-spot.js
+├── lib/vmito-parser.js / lib/vmito-sync.js
 ├── smoke-register.js / smoke-otp-flow.js / smoke-login.js
 ├── smoke-forgot-password.js / smoke-matches.js / smoke-groups.js
+data/
+├── vmito-sessions.json           # Vmito fetch snapshot (git-tracked optional)
+├── vmito-sync-report.json        # last sync report
 docs/
 ├── API.md
 ├── MATCHMAKING_PLAN.md
@@ -431,7 +806,7 @@ Decisions from Figma + [Vmito sessions/new](https://vmito.com/vi/sessions/new). 
 | **Skill** | Multi-chip → `skillMin`/`skillMax`; `allLevels` = full ladder. Per-sport labels in `sports.js`. |
 | **Fee** | Always on. `SPLIT_EVENLY` **or** `GENDER_RANGE` — **either sport** (VND). |
 | **Recurring** | Off → `POST /matches` (1 schedule). On → FE expand dates/weekdays → `POST /matches/bulk` (max 100 schedules). Partial 409 OK. |
-| **Advanced (FE required)** | `format`, `maxPlayers`, `coverUrl` (URL). `joinMode` default `AUTO`. |
+| **Advanced (FE required)** | `format`, `maxPlayers`, `coverUrl` (URL). `joinMode` default `AUTO`. `maxPlayers` min by format (incl. host): Singles 2, Doubles 4, 5v5 10, 7v7 14, 11v11 22; max 40. |
 | **Cover** | Supabase Storage on FE → `coverUrl`. No BE upload. |
 
 **Do not confuse:** `GET /matches?location=` = browse joinable kèo. `GET /matches/venue-suggestions` = Host venue reuse (wider pool).
@@ -520,11 +895,11 @@ Product review locked. Do **not** re-open unless FE finds a gap.
 | :--- | :--- | :--- |
 | **Search (`location=`)** | **Done** | Full spec in **Homepage search** below. Postgres only — **not** Geoapify, **not** NLP/AI. |
 | **Suggestions while typing** | **Done** | Same `GET /matches?location=` returns `suggestions[]` (max 5). FE debounces per keystroke. |
-| **Public browse list** | **Done** | `OPEN` + spots left + `endsAt > now`; **`FULL` hidden**. Also hides caller’s hosted kèo + join `PENDING`/`ACCEPTED`/`KICKED`; **`REJECTED` reappears** — see **Manage Matches** browse exclusion. |
+| **Public browse list** | **Done** | `OPEN` + spots left + `startsAt > now` (chưa bắt đầu); **`FULL` hidden**. Also hides caller’s hosted kèo + join `PENDING`/`ACCEPTED`/`KICKED`; **`REJECTED` reappears** — see **Manage Matches** browse exclusion. |
 | **Hosted Matches on profile** | **Done** | `GET /matches?hostUserId=` still returns `OPEN` **and** `FULL` (future `endsAt`). |
 | **Filter tỉnh/quận** | **Done** | `province` + `city` exact codes from `GET /geo/vn` (pre-2025 63 tỉnh + quận/huyện). |
 | **Filter sport / date / time / skill / price** | **Done** | `skill` needs `sport`; prices in **VND**; skill chip labels map to codes in `sports.js`. |
-| **Distance filter** | **Done** | `latitude` + `longitude` + `radiusKm` (1–20 km). **XOR** with `location` → `400`. |
+| **Distance filter** | **Done** | `latitude` + `longitude` + `radiusKm` (0–50 km). **XOR** with `location` → `400`. |
 | **Favorites filter** | **Done** | `favorited=true`. Same browse-exclusion rule as default list. |
 | **Card fields** | **Done** | `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names, `spotsLeft`, `yourShare` (VND). |
 | **Card location display** | FE | Show `{venueName}, {cityName}`; distance from user GPS = FE (Haversine or map). |
@@ -572,7 +947,7 @@ in range), `location` (unaccent + fuzzy `title` / `venueName` / `venueAddress`;
 `suggestions[]` while typing; Postgres only), `province` / `city` (pre-2025
 GSO codes, exact; `city` requires `province`; HCM `79`, Quận 7 `778`),
 `favorited=true` (caller’s hearts), `hostUserId` (that host’s active kèo),
-`latitude`+`longitude`+`radiusKm` (1–20, haversine; all three together;
+`latitude`+`longitude`+`radiusKm` (0–50, haversine; all three together;
 matches without coords excluded), `limit` (default 20, max 50), `offset`.
 
 **Location XOR Distance:** `location` together with lat/lng/radiusKm → `400`
@@ -608,18 +983,20 @@ Lowercase, strip Vietnamese diacritics and `đ`, collapse whitespace. So
 
 1. **Substring** — folded query appears inside folded `title`, `venue_name`,
    or `venue_address`.
-2. **Fuzzy** — query length ≥ `MATCH_SEARCH.FUZZY_MIN_CHARS` (3); max
-   `similarity()` across the three fields ≥ `LIST_SIMILARITY` (0.28). Handles
-   typos / near matches.
+2. **Fuzzy** — **single-token only** (no spaces), length ≥ `FUZZY_MIN_CHARS`
+   (4), max `similarity()` ≥ `LIST_SIMILARITY` (0.4). Multi-word queries like
+   `san t12` **do not** fuzzy-match neighbors (`san t19`).
 3. **Multi-word AND** — query contains spaces → every non-empty token must
-   appear somewhere in the combined haystack
-   `title + venue_name + venue_address`.
+   appear in the **same** field (`title` **or** `venue_name` **or**
+   `venue_address`). Tokens are **not** allowed to be split across fields
+   (avoids picking a venue suggestion then flooding the feed with unrelated
+   kèo that only share common words like "cầu" / "lông").
 
 **Suggestions (`suggestions[]`) — while user types**
 
 Returned on the **same** `GET /matches` when `location` is present (FE should
 debounce, e.g. 300 ms). Built from listable kèo only (same pool as browse:
-`OPEN`, spots left, `endsAt > now`).
+`OPEN`, spots left, `startsAt > now`).
 
 | Property | Value |
 | :--- | :--- |
@@ -628,8 +1005,8 @@ debounce, e.g. 300 ms). Built from listable kèo only (same pool as browse:
 | `kind` | `title` \| `venueName` \| `venueAddress` |
 | Source | Distinct values from existing kèo (not Geoapify) |
 | Dedup | By folded `text`; best score wins |
-| Excludes | Suggestion text identical to folded query (no “search for what you typed”) |
-| Score threshold | `similarity` ≥ `SUGGEST_SIMILARITY` (0.2) per field |
+| Excludes | — |
+| Score threshold | exact / substring / same-field tokens; fuzzy only for single-token queries (length ≥ 4, ≥ `SUGGEST_SIMILARITY` 0.3) |
 | Sort | Score DESC, then text ASC |
 
 Example response fragment:
@@ -689,7 +1066,7 @@ mine / `GET /users/:id`.
 - `joinMode`: `AUTO` (join → `ACCEPTED` immediately) or `APPROVAL` (`PENDING`
   until host accepts).
 - Fee: `GENDER_RANGE` (female `priceMin`, male `priceMax`) or `SPLIT_EVENLY`
-  (`priceMin` = total; `yourShare = ceil(priceMin / filledCount)`). No `FREE`.
+  (`priceMin` = total; `yourShare = ceil(priceMin / maxPlayers)`). No `FREE`.
   Payment is a stub: `paymentStatus: SUCCESS` + recorded `shareAmount`.
 - Recurring / multi-day flags exist, default off — do not generate extra dates.
 
@@ -698,9 +1075,9 @@ mine / `GET /users/:id`.
 - Host counts as **1** at create (`filledCount: 1`).
 - Join adds `1 + guests.length` heads (AUTO immediately; APPROVAL on accept).
   FE “Send Request (2)” = that number.
-- **`yourShare`** (runtime on match card): `ceil(priceMin / filledCount)` preview for viewer.
+- **`yourShare`** (runtime on match card): `ceil(priceMin / maxPlayers)` preview for viewer.
 - **`shareAmount`** (on join request / accepted participant): locked at join/accept for joiner + guests; Figma “Paid: 50k”.
-- Join / accept / `POST` blocked when `endsAt <= now` (`assertJoinable`, `canJoin: false`).
+- Join / accept / `POST` blocked when `startsAt <= now` (`assertJoinable`, `canJoin: false`).
 - Guests: `name`, `skill` (that sport’s ladder), `gender` `male`/`female`,
   **`phoneNumber` required**. Requester `phoneNumber` optional on join (else
   account phone). Host sees phones on waiting list and on `participants` after
@@ -746,7 +1123,7 @@ is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
 
 **Match expiry / Completed lifecycle**
 
-- Browse (`GET /matches`): chỉ `OPEN`, còn slot, **`endsAt > now`**.
+- Browse (`GET /matches`): chỉ `OPEN`, còn slot, **`startsAt > now`**.
 - Hết giờ **đủ người**: worker `processExpiredFullMatches` → `status = COMPLETED` (nhả sân); vào tab Completed.
 - Hết giờ **thiếu người**: `processExpiredUnderfilledMatches` → `CANCELLED` (không COMPLETED); reject `PENDING`; notify host + joiners (`MATCH_CANCELLED`, `data.reason = EXPIRED_UNDERFILLED`).
 - Host cancel: `POST /matches/:id/cancel` → notify joiners (`data.reason = HOST_CANCEL`); **không** vào Completed.
@@ -780,8 +1157,12 @@ verified-host badge, cron recurring (auto future weeks), AI chatbot,
 Booking/Schedule tabs, Geoapify **on backend** (search/filter/admin units are Postgres + `vn-admin.json` only),
 2025 34-tỉnh / xã-phường map, football **position** field on squad.
 
-Reset kèo data:
-`npm run reset:matches` (or `docker compose run --rm backend npm run reset:matches`).
+Reset kèo data — **chọn đúng lệnh:**
+
+- **`npm run reset:vmito`** — xóa **chỉ** kèo/host import Vmito (giữ kèo smoke/tay + user thật). Preview: `--dry-run`.
+- **`npm run reset:matches`** — TRUNCATE **toàn bộ** `schema_matchmaking.matches` (mọi nguồn). Docker: `docker compose run --rm backend npm run reset:matches`.
+
+Chi tiết Vmito: section **Vmito import → Reset dữ liệu test Vmito**.
 Windows bind-mount: after changing `src/`, `docker restart spot-backend`.
 
 ### Groups (hội)
@@ -928,7 +1309,8 @@ OPEN_REGISTRATION → FULL → ACTIVE → COMPLETED
 **Browse (`GET /tournaments`)**
 
 - Reuse **Groups filter** pattern: location, province/city, distance — **omit skill level**.
-- Hide tournaments where caller has join request **`PENDING`** or **`ACCEPTED`** (**`REJECTED`** visible again).
+- Hide tournaments the caller **organizes** (manage via Mine / Manage Tournaments).
+- Hide tournaments where caller has join request **`PENDING`** or **`ACCEPTED`** or **`KICKED`** (**`REJECTED`** visible again).
 - Hide **`FULL`** from public browse (same spirit as kèo hiding FULL).
 - **Favorites:** `POST/DELETE /tournaments/:id/favorite` + `isFavorited` on list/detail (Figma heart not drawn yet — still in scope).
 

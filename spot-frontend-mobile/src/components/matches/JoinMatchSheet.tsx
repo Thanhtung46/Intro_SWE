@@ -126,10 +126,20 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                 <View style={styles.skillBannerTextWrap}>
                   <Text style={styles.skillBannerLabel}>REQUIRED SKILL LEVEL</Text>
                   <View style={styles.skillBannerChips}>
-                    {requiredSkillLabels.map((label) => (
-                      <View key={label} style={styles.skillBannerChip}>
-                        <Text style={styles.skillBannerChipText}>{label}</Text>
-                      </View>
+                    {requiredSkillLabels.map((label, index) => (
+                      <React.Fragment key={`${label}-${index}`}>
+                        {index > 0 ? (
+                          <Ionicons
+                            name="arrow-forward"
+                            size={12}
+                            color={colors.skillTierOrangeText}
+                            style={styles.skillRangeArrow}
+                          />
+                        ) : null}
+                        <View style={styles.skillBannerChip}>
+                          <Text style={styles.skillBannerChipText}>{label}</Text>
+                        </View>
+                      </React.Fragment>
                     ))}
                   </View>
                 </View>
@@ -366,7 +376,8 @@ const styles = StyleSheet.create({
   skillBannerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.skillTierOrangeText, alignItems: 'center', justifyContent: 'center' },
   skillBannerTextWrap: { flex: 1, gap: spacing.xxs },
   skillBannerLabel: { fontSize: 10, fontWeight: '800', color: colors.skillTierOrangeText, letterSpacing: 0.5 },
-  skillBannerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xxs },
+  skillBannerChips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xxs },
+  skillRangeArrow: { marginHorizontal: 2 },
   skillBannerChip: { backgroundColor: colors.skillBannerChipBackground, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   skillBannerChipText: { fontSize: 12, fontWeight: '700', color: colors.skillTierOrangeText },
 

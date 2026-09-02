@@ -154,6 +154,7 @@ npm install
 npm start          # expo start
 npm run android / ios / web
 npm test
+npx expo start --clear
 ```
 
 **Backend (`spot-backend/`):** runnable. From `spot-backend/`:
@@ -266,7 +267,7 @@ Product locks: [`spot-backend/docs/MATCHMAKING_PLAN.md`](./spot-backend/docs/MAT
 | Sports | `BADMINTON`, `FOOTBALL` |
 | Host | Free listing, no `booking_id`. Duration ≥ 1h. Named courts. Optional `coverUrl`. Required `province` + `city` (pre-2025 GSO codes, e.g. HCM `79` / Quận 7 `778`). `venueAddress` = street line only. **`POST /matches/bulk`** for Vmito-style multi-publish. **`GET /matches/venue-suggestions`** for Host location picker (wider pool than browse). |
 | Occupancy | Global: `venueName` + `venueAddress` + court + overlapping time → `409` |
-| List | `GET /matches`: browse = `OPEN` + spots left + `endsAt > now` (**FULL hidden**); also hides caller's hosted kèo and kèo with join request `PENDING`/`ACCEPTED`/`KICKED` (**`REJECTED` shows again**). `hostUserId` = that host’s `OPEN`/`FULL`. Filters: `sport`, `date`, `timeFrom`/`timeTo`, `skill` (multi OR, needs `sport`), `priceMin`/`priceMax` (**VND**), `favorited`, `province`/`city` (exact; `city` needs `province`); **Location XOR Distance** (`location` vs `lat`+`lng`+`radiusKm` 1–20). Card: `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names. |
+| List | `GET /matches`: browse = `OPEN` + spots left + `startsAt > now` (**FULL hidden**); also hides caller's hosted kèo and kèo with join request `PENDING`/`ACCEPTED`/`KICKED` (**`REJECTED` shows again**). `hostUserId` = that host’s `OPEN`/`FULL` (until `endsAt`). Filters: `sport`, `date`, `timeFrom`/`timeTo`, `skill` (multi OR, needs `sport`), `priceMin`/`priceMax` (**VND**), `favorited`, `province`/`city` (exact; `city` needs `province`); **Location XOR Distance** (`location` vs `lat`+`lng`+`radiusKm` 0–50). Card: `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names. |
 | Join | `AUTO` or `APPROVAL`; guests (`name`, `skill`, `gender`, `phoneNumber`); skill mismatch **warns** but still joins |
 | Fee | `GENDER_RANGE` or `SPLIT_EVENLY` — **either allowed per sport** (VND); always required on Host form |
 | Requests | One row per `(match_id, user_id)`. Kick = cannot rejoin **that kèo**. Reject = may rejoin. Waiting list = `PENDING` only. |
@@ -275,7 +276,7 @@ Product locks: [`spot-backend/docs/MATCHMAKING_PLAN.md`](./spot-backend/docs/MAT
 | Host profile | `GET /users/:id` (`fullName`, `avatarUrl`, `createdAt`, `skills`, `matchCount`, `joinedMatches`; no email/phone). Hosted kèo = `GET /matches?hostUserId=`. `rating`/`reviewCount` live from pickup reviews. |
 | Host phone | Only `GET /matches/:id` when caller is host or `yourRequest.status === ACCEPTED`. Never on list / mine / `/users/:id`. |
 | Rating | `host.rating` + `host.reviewCount` on cards from `match_host_reviews`; `null`/`0` until first review. Post-match: `POST /matches/:id/review`, `GET /matches/:id` → `summary`. |
-| Search / map | Homepage **`location=`** = SQL on **`title` + `venueName` + `venueAddress`** (unaccent, fuzzy ≥3 chars, multi-word AND). Same request returns **`suggestions[]`** (max 5, kinds `title` \| `venueName` \| `venueAddress`) while user types — Postgres only, **not** Geoapify/NLP. **Does not** search province/city names or GPS — use `province`/`city` or Distance filters. Filter tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025**). Map / directions = **FE Geoapify**; no key on backend. |
+| Search / map | Homepage **`location=`** = SQL on **`title` + `venueName` + `venueAddress`** (unaccent, fuzzy ≥3 chars, multi-word AND). Same request returns **`suggestions[]`** (max 5, kinds `title` \| `venueName` \| `venueAddress`) while user types — Postgres only, **not** Geoapify/NLP. **Does not** search province/city names or GPS — use `province`/`city` or Distance filters. Filter tỉnh/quận = `province`+`city` from `GET /geo/vn` (**pre-2025**). Map / directions = **FE only** (built: `spot-frontend-mobile` WebView + Leaflet + Geoapify tiles — `AppMap`, shared `/venue-map`, `PinDropModal`; see that app's `CLAUDE.md` §Maps). No map key on backend. |
 | Out of scope (kèo only) | Waitlist, Zalo, MoMo/VNPay, join-by-code, verified-host, user hero cover, AI chatbot, Booking/Schedule, football position on squad — **Tournaments** = separate domain (see below) |
 
 `GET /matches/mine` must stay **before** `GET /matches/:id` in routes.

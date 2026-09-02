@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import AppMap, { type AppMapMarker, type UserLocation } from '@/components/common/AppMap';
+import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import BoardVenueCard from '@/components/referee/BoardVenueCard';
 import RefereeFilterSheet from '@/components/referee/RefereeFilterSheet';
@@ -84,7 +84,7 @@ export default function RefereeBoardMapScreen({ onBack, onOpenVenue }: Props) {
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null);
   const [applyingId, setApplyingId] = useState<number | null>(null);
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +147,19 @@ export default function RefereeBoardMapScreen({ onBack, onOpenVenue }: Props) {
     [venues]
   );
 
-  const markers = useMemo(() => spreadVenueMarkers(mappableVenues), [mappableVenues]);
+  const markers = useMemo(() => {
+    const pins = spreadVenueMarkers(mappableVenues);
+    if (userLocation) {
+      pins.push({
+        id: '__me__',
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        tintColor: '#2563EB',
+        emoji: '🏠',
+      });
+    }
+    return pins;
+  }, [mappableVenues, userLocation]);
 
   const initialRegion = useMemo(() => {
     if (userLocation) {
@@ -238,9 +250,11 @@ export default function RefereeBoardMapScreen({ onBack, onOpenVenue }: Props) {
           <>
             <AppMap
               markers={markers}
-              onSelectMarker={(id) => setSelectedVenueId(Number(id))}
+              onSelectMarker={(id) => {
+                if (id === '__me__') return;
+                setSelectedVenueId(Number(id));
+              }}
               initialRegion={initialRegion}
-              userLocation={userLocation}
             />
             {venues.length > 0 && mappableVenues.length === 0 ? (
               <View style={styles.noPinsNotice}>

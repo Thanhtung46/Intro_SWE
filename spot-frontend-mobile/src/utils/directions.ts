@@ -10,8 +10,8 @@ type Venue = {
 
 /**
  * Opens the device's default maps app with turn-by-turn directions.
- * Kept as a low-level helper; UI screens use in-app VenueMapScreen +
- * Geoapify routing instead (see openVenueDirections).
+ * Low-level fallback when in-app routing cannot run (no coords / permission /
+ * web). Primary UX is openVenueDirections → VenueMapScreen + Geoapify.
  */
 export function openDirections(venue: Venue): void {
   const destination =
@@ -23,12 +23,13 @@ export function openDirections(venue: Venue): void {
 }
 
 /**
- * Paper-plane / Map CTA — always opens SPOT's in-app VenueMapScreen
- * (GPS home pin + route polyline). Never jumps to an external maps app.
+ * Paper-plane / Map CTA — opens SPOT's in-app VenueMapScreen (`/venue-map`)
+ * for match, group, tournament, and referee flows. Never jumps straight to
+ * an external maps app.
  */
 export function openVenueDirections(router: ImperativeRouter, venue: Venue): void {
   router.push({
-    pathname: '/matches/venue-map',
+    pathname: '/venue-map',
     params: {
       venueName: venue.venueName,
       venueAddress: venue.venueAddress,
