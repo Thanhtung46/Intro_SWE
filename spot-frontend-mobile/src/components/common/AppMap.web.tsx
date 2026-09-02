@@ -25,6 +25,7 @@ type Props = {
   markers: AppMapMarker[];
   onSelectMarker?: (id: string) => void;
   initialRegion: Region;
+  routeLine?: { latitude: number; longitude: number }[];
 };
 
 export default function AppMap(_props: Props) {

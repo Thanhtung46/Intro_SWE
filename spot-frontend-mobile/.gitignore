@@ -49,4 +49,6 @@ __tests__/groups-*.test.tsx
 # per-domain folders, so list them explicitly.
 src/screens/common/VenueMapScreen.test.tsx
 src/components/common/AppMap.test.tsx
+src/utils/location.test.ts
 __tests__/venue-map.test.tsx
+# (geoapifyService.test.ts already ignored above, line ~29)

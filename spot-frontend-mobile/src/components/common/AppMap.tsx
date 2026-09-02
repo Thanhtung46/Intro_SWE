@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 import { GEOAPIFY_TILE_URL_TEMPLATE } from '@/config/env';
+import { colors } from '@/constants/colors';
 
 export type AppMapMarker = {
   id: string;
@@ -20,6 +21,8 @@ type Props = {
   markers: AppMapMarker[];
   onSelectMarker?: (id: string) => void;
   initialRegion: Region;
+  /** Optional polyline (e.g. a motorcycle route) drawn in `colors.primary`; the map fits its bounds. */
+  routeLine?: { latitude: number; longitude: number }[];
 };
 
 function regionToZoom(latitudeDelta: number): number {
@@ -27,9 +30,15 @@ function regionToZoom(latitudeDelta: number): number {
   return Math.max(2, Math.min(18, Math.round(Math.log2(360 / latitudeDelta))));
 }
 
-function buildHtml(markers: AppMapMarker[], region: Region): string {
+function buildHtml(markers: AppMapMarker[], region: Region, routeLine?: Props['routeLine']): string {
   const zoom = regionToZoom(region.latitudeDelta);
   const markersJson = JSON.stringify(markers);
+  const routePoints = (routeLine ?? []).map((p) => [p.latitude, p.longitude]);
+  const routeScript =
+    routePoints.length > 1
+      ? `var route = L.polyline(${JSON.stringify(routePoints)}, { color: '${colors.primary}', weight: 5, opacity: 0.85 }).addTo(map);
+    map.fitBounds(route.getBounds(), { padding: [40, 40] });`
+      : '';
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -68,6 +77,8 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
         if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(m.id);
       });
     });
+
+    ${routeScript}
   </script>
 </body>
 </html>`;
@@ -95,8 +106,11 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
  * this one component instead of each hand-rolling pins — see SPOT-76 "map"
  * follow-up discussion.
  */
-export default function AppMap({ markers, onSelectMarker, initialRegion }: Props) {
-  const html = useMemo(() => buildHtml(markers, initialRegion), [markers, initialRegion]);
+export default function AppMap({ markers, onSelectMarker, initialRegion, routeLine }: Props) {
+  const html = useMemo(
+    () => buildHtml(markers, initialRegion, routeLine),
+    [markers, initialRegion, routeLine]
+  );
 
   const handleMessage = (event: WebViewMessageEvent) => {
     onSelectMarker?.(event.nativeEvent.data);

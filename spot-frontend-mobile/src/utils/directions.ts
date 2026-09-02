@@ -12,9 +12,10 @@ type Venue = {
  * Opens the device's default maps app with GPS turn-by-turn directions to a
  * venue. Google Maps' universal `/maps/dir/?api=1` link opens the
  * native Google/Apple Maps app when installed, falling back to the browser
- * otherwise. Used as the fallback action inside VenueMapScreen (real
- * turn-by-turn needs the user's GPS + a routing API call — not built yet)
- * and directly wherever coords are missing (see openVenueDirections below).
+ * otherwise. VenueMapScreen draws its own in-app motorcycle route line
+ * (Geoapify Routing) as the primary action now; this is the fallback there
+ * when that can't run (no coords / permission declined / routing error /
+ * web) and works off venueName/venueAddress even without coords.
  */
 export function openDirections(venue: Venue): void {
   const destination =
@@ -30,11 +31,10 @@ export function openDirections(venue: Venue): void {
  * (MatchCard, Check Profile, Join Match Map — Figma "Paper-plane =
  * directions, not share") and the venue mini-map on Match / Group /
  * Tournament detail. Always opens SPOT's own venue map (app/venue-map.tsx)
- * first — never jumps straight to the external Maps app. VenueMapScreen
- * itself shows an "Open in Google Maps" button (openDirections(), above)
- * for when the user actually wants turn-by-turn directions; without lat/lng
- * it falls back to a text-only view there instead of a pin (see
- * VenueMapScreen.tsx).
+ * first — never jumps straight to the external Maps app. VenueMapScreen's
+ * "Directions" button then draws an in-app motorcycle route line, or falls
+ * back to openDirections() above; without lat/lng it shows a text-only view
+ * there instead of a pin (see VenueMapScreen.tsx).
  */
 export function openVenueDirections(router: ImperativeRouter, venue: Venue): void {
   router.push({

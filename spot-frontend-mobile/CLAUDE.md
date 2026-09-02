@@ -85,17 +85,24 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
 - **Maps (SPOT-76)** — no `react-native-maps`, no Google Maps key. The stack
   is `react-native-webview` + Leaflet (CDN) + Geoapify raster tiles
   (`EXPO_PUBLIC_GEOAPIFY_API_KEY`, see `src/config/env.ts`):
-  - `src/components/common/AppMap.tsx` — read-only marker map. Embedded on
-    Match / Group / Tournament detail (venue mini-map) and full-screen in
-    `JoinMatchMapScreen` (browse-all, `/matches/map`). `AppMap.web.tsx` is a
-    deliberate "not available on web" stub — `npm run web` isn't the primary
-    target.
+  - `src/components/common/AppMap.tsx` — marker map + an optional `routeLine`
+    polyline (Leaflet `L.polyline` in `colors.primary`, fits its bounds).
+    Embedded on Match / Group / Tournament detail (venue mini-map) and
+    full-screen in `JoinMatchMapScreen` (browse-all, `/matches/map`).
+    `AppMap.web.tsx` is a deliberate "not available on web" stub — `npm run
+    web` isn't the primary target.
   - `src/screens/common/VenueMapScreen.tsx` + `app/venue-map.tsx` — the
-    shared single-venue map (pin + "Open in Google Maps", text fallback when
-    a venue has no coords). Reached via `openVenueDirections(router, venue)`
-    (`src/utils/directions.ts`) from the `MatchCard` paper-plane and from
-    every detail screen's venue block — that helper is the single choke
-    point for the `/venue-map` route.
+    shared single-venue map (pin + text fallback when a venue has no
+    coords). Reached via `openVenueDirections(router, venue)`
+    (`src/utils/directions.ts`) from the `MatchCard` paper-plane and every
+    detail screen's venue block — that helper is the single choke point for
+    the `/venue-map` route. Its **"Chỉ đường"** button requests GPS
+    (`requestCurrentPosition`, `src/utils/location.ts`) and calls
+    `getMotorcycleRoute` (`geoapifyService.ts` — Geoapify Routing,
+    `mode=motorcycle`, same key/quota) to draw a blue route line + show
+    `Xe máy · ~5.2 km · 12 phút`. Native only; any failure (no coords /
+    permission declined / routing error / web) falls back to `openDirections`
+    (external Google Maps).
   - `src/components/matches/PinDropModal.tsx` (+ `PinDropMap.tsx` / `.web.tsx`)
     — "find it on the map" pin picker used by all three create screens
     (`HostMatchScreen`, `CreateGroupScreen`, `CreateTournamentScreen`):
