@@ -151,11 +151,14 @@ npm run lint:fix
 **Mobile (`spot-frontend-mobile/`):**
 ```bash
 npm install
-npm start          # expo start
-npm run android / ios / web
+npm start                 # daily — then press a / i / w
+npm run android           # first time per emulator: build+install Dev Client (JDK 17+)
+npm run ios / web
 npm test
 npx expo start --clear
 ```
+Android error `No development build (com.anonymous.spotapp)` means the
+emulator has no SPOT APK yet — run `npm run android` once, then `npm start`.
 
 **Backend (`spot-backend/`):** runnable. From `spot-backend/`:
 ```bash
