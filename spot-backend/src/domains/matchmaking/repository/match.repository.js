@@ -9,12 +9,26 @@ import {
 
 const FOLD = 'schema_matchmaking.fold_search_text';
 
+/** All non-empty tokens of q must appear inside a single field (not spread across title+venue+address). */
+function tokensInSameField(q, field) {
+  return `(
+    ${q} LIKE '% %'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
+      WHERE length(tok.t) > 0
+        AND position(tok.t in ${field}) = 0
+    )
+  )`;
+}
+
 function locationPredicate(locationSlot) {
   const q = `${FOLD}(${locationSlot})`;
   const title = `${FOLD}(m.title)`;
   const venue = `${FOLD}(m.venue_name)`;
   const address = `${FOLD}(m.venue_address)`;
-  const hay = `(${title} || ' ' || ${venue} || ' ' || ${address})`;
+  // Fuzzy is single-token only. Multi-word ("san t12") must not fuzzy-match
+  // near neighbors like "san t19" — use full-phrase substring or same-field tokens.
   return `(
     ${q} <> ''
     AND (
@@ -22,22 +36,38 @@ function locationPredicate(locationSlot) {
       OR position(${q} in ${venue}) > 0
       OR position(${q} in ${address}) > 0
       OR (
-        length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+        ${q} NOT LIKE '% %'
+        AND length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
         AND GREATEST(
           similarity(${title}, ${q}),
           similarity(${venue}, ${q}),
           similarity(${address}, ${q})
         ) >= ${MATCH_SEARCH.LIST_SIMILARITY}
       )
-      OR (
-        ${q} LIKE '% %'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
-          WHERE length(tok.t) > 0
-            AND position(tok.t in ${hay}) = 0
-        )
-      )
+      OR ${tokensInSameField(q, title)}
+      OR ${tokensInSameField(q, venue)}
+      OR ${tokensInSameField(q, address)}
+    )
+  )`;
+}
+
+/** Score a folded field for suggestion ranking — exact / substring beat fuzzy. */
+function suggestionFieldScore(field, q) {
+  return `CASE
+    WHEN ${field} = ${q} THEN 1.0::float
+    WHEN position(${q} in ${field}) > 0 THEN 0.95::float
+    ELSE similarity(${field}, ${q})::float
+  END`;
+}
+
+function suggestionFieldPredicate(field, q) {
+  return `(
+    position(${q} in ${field}) > 0
+    OR ${tokensInSameField(q, field)}
+    OR (
+      ${q} NOT LIKE '% %'
+      AND length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+      AND similarity(${field}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
     )
   )`;
 }
@@ -183,7 +213,11 @@ function buildListMatchWhere(
   { bindViewer = false, omitLocation = false } = {},
 ) {
   const profileBrowse = filters.hostUserId != null;
-  const where = [`m.ends_at > NOW()`];
+  // Public browse / suggestions: only kèo chưa bắt đầu.
+  // Profile host list: still show OPEN/FULL until endsAt.
+  const where = [
+    profileBrowse ? `m.ends_at > NOW()` : `m.starts_at > NOW()`,
+  ];
   const params = [
     profileBrowse ? PITCH_OCCUPIED_STATUSES : LISTABLE_MATCH_STATUSES,
   ];
@@ -199,6 +233,9 @@ function buildListMatchWhere(
 
   if (filters.sport) {
     where.push(`m.sport = ${add(filters.sport)}`);
+  }
+  if (filters.formats?.length) {
+    where.push(`m.format = ANY(${add(filters.formats)}::text[])`);
   }
   if (filters.date && (filters.timeFrom || filters.timeTo)) {
     const dateSlot = add(filters.date);
@@ -394,30 +431,27 @@ export async function listSearchSuggestions(client, filters) {
        FROM (
          SELECT m.title AS text,
                 'title'::text AS kind,
-                similarity(${title}, ${q})::float AS score
+                ${suggestionFieldScore(title, q)} AS score
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${title} <> ${q}
-           AND similarity(${title}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(title, q)}
          UNION ALL
          SELECT m.venue_name,
                 'venueName',
-                similarity(${venue}, ${q})::float
+                ${suggestionFieldScore(venue, q)}
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${venue} <> ${q}
-           AND similarity(${venue}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(venue, q)}
          UNION ALL
          SELECT m.venue_address,
                 'venueAddress',
-                similarity(${address}, ${q})::float
+                ${suggestionFieldScore(address, q)}
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${address} <> ${q}
-           AND similarity(${address}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(address, q)}
        ) s
      ) ranked
      WHERE rn = 1
@@ -428,34 +462,57 @@ export async function listSearchSuggestions(client, filters) {
   return rows;
 }
 
-/** Host form: distinct venues from any non-cancelled kèo (not browse pool). */
+/**
+ * Host / Create Group venue picker: distinct venues from non-cancelled kèo
+ * plus group home venues. Match on venue_name / venue_address (substring or
+ * fuzzy) — not match title — so typing a sân name surfaces DB venues.
+ */
 export async function listVenueSuggestions(client, { location, sport, limit }) {
   if (!location) {
     return [];
   }
-  const params = [MATCH_STATUSES.CANCELLED];
-  const where = [`m.status <> $1`];
-
+  const params = [];
   function add(value) {
     params.push(value);
     return `$${params.length}`;
   }
 
-  if (sport) {
-    where.push(`m.sport = ${add(sport)}`);
+  const cancelledSlot = add(MATCH_STATUSES.CANCELLED);
+  const locationSlot = add(location);
+  const q = `${FOLD}(${locationSlot})`;
+
+  const matchVenue = `${FOLD}(m.venue_name)`;
+  const matchAddress = `${FOLD}(m.venue_address)`;
+  const groupVenue = `${FOLD}(g.venue_name)`;
+  const groupAddress = `${FOLD}(g.venue_address)`;
+
+  function venueFieldMatch(venue, address) {
+    return `(
+      position(${q} in ${venue}) > 0
+      OR position(${q} in ${address}) > 0
+      OR (
+        ${q} NOT LIKE '% %'
+        AND length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+        AND GREATEST(similarity(${venue}, ${q}), similarity(${address}, ${q}))
+          >= ${MATCH_SEARCH.VENUE_SUGGEST_SIMILARITY}
+      )
+      OR ${tokensInSameField(q, venue)}
+      OR ${tokensInSameField(q, address)}
+    )`;
   }
 
-  const locationSlot = add(location);
-  where.push(locationPredicate(locationSlot));
+  function venueFieldScore(venue, address) {
+    return `CASE
+      WHEN ${venue} = ${q} OR ${address} = ${q} THEN 1.0::float
+      WHEN position(${q} in ${venue}) > 0 THEN 0.95::float
+      WHEN position(${q} in ${address}) > 0 THEN 0.9::float
+      ELSE GREATEST(similarity(${venue}, ${q}), similarity(${address}, ${q}))::float
+    END`;
+  }
 
-  const q = `${FOLD}(${locationSlot})`;
-  const title = `${FOLD}(m.title)`;
-  const venue = `${FOLD}(m.venue_name)`;
-  const address = `${FOLD}(m.venue_address)`;
-  const venueKey = `(${venue} || '|' || ${address})`;
-
-  params.push(limit);
-  const limitSlot = `$${params.length}`;
+  const matchSportFilter = sport ? `AND m.sport = ${add(sport)}` : '';
+  const groupSportFilter = sport ? `AND g.sport = ${add(sport)}` : '';
+  const limitSlot = add(limit);
 
   const { rows } = await client.query(
     `SELECT venue_name,
@@ -466,31 +523,47 @@ export async function listVenueSuggestions(client, { location, sport, limit }) {
             venue_lng,
             score
      FROM (
-       SELECT m.venue_name,
-              m.venue_address,
-              m.province,
-              m.city,
-              m.venue_lat,
-              m.venue_lng,
-              GREATEST(
-                similarity(${venue}, ${q}),
-                similarity(${address}, ${q}),
-                similarity(${title}, ${q})
-              )::float AS score,
+       SELECT s.venue_name,
+              s.venue_address,
+              s.province,
+              s.city,
+              s.venue_lat,
+              s.venue_lng,
+              s.score,
               ROW_NUMBER() OVER (
-                PARTITION BY ${venueKey}
-                ORDER BY GREATEST(
-                  similarity(${venue}, ${q}),
-                  similarity(${address}, ${q}),
-                  similarity(${title}, ${q})
-                ) DESC,
-                m.match_id DESC
+                PARTITION BY ${FOLD}(s.venue_name) || '|' || ${FOLD}(s.venue_address)
+                ORDER BY s.score DESC
               ) AS rn
-       FROM schema_matchmaking.matches m
-       WHERE ${where.join(' AND ')}
-         AND ${q} <> ''
-         AND m.venue_name IS NOT NULL
-         AND trim(m.venue_name) <> ''
+       FROM (
+         SELECT m.venue_name,
+                m.venue_address,
+                m.province,
+                m.city,
+                m.venue_lat,
+                m.venue_lng,
+                ${venueFieldScore(matchVenue, matchAddress)} AS score
+         FROM schema_matchmaking.matches m
+         WHERE m.status <> ${cancelledSlot}
+           AND ${q} <> ''
+           AND m.venue_name IS NOT NULL
+           AND trim(m.venue_name) <> ''
+           ${matchSportFilter}
+           AND ${venueFieldMatch(matchVenue, matchAddress)}
+         UNION ALL
+         SELECT g.venue_name,
+                g.venue_address,
+                g.province,
+                g.city,
+                g.venue_lat,
+                g.venue_lng,
+                ${venueFieldScore(groupVenue, groupAddress)} AS score
+         FROM schema_groups.groups g
+         WHERE ${q} <> ''
+           AND g.venue_name IS NOT NULL
+           AND trim(g.venue_name) <> ''
+           ${groupSportFilter}
+           AND ${venueFieldMatch(groupVenue, groupAddress)}
+       ) s
      ) ranked
      WHERE rn = 1
      ORDER BY score DESC, venue_name ASC

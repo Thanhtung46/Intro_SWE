@@ -5,6 +5,8 @@ import { UserProvider } from '@/context/UserContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 
+const TAB_ROUTES = new Set(['home/index', 'booking/index', 'matches/index', 'schedule/index', 'settings/index']);
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
@@ -12,7 +14,14 @@ export default function RootLayout() {
         <UserProvider>
           <ThemedStatusBar />
           <SessionExpiredHandler />
-          <Stack screenOptions={{ headerShown: false }} />
+          <Stack
+            screenOptions={({ route }) => ({
+              headerShown: false,
+              // Tab switches must not fade/slide — that stacks two screens and looks
+              // like overlapping pages. Detail screens keep the default push feel.
+              animation: TAB_ROUTES.has(route.name) ? 'none' : 'slide_from_right',
+            })}
+          />
         </UserProvider>
       </LanguageProvider>
     </ThemeProvider>

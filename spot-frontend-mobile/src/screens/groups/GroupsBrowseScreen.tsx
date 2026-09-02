@@ -3,23 +3,32 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
+import InfoDialog from '@/components/common/InfoDialog';
 import GroupCard from '@/components/groups/GroupCard';
 import GroupFilterSheet from '@/components/groups/GroupFilterSheet';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage } from '@/services/apiErrors';
-import { listGroups, setGroupFavorite } from '@/services/groupService';
+import { joinGroup, listGroups, setGroupFavorite } from '@/services/groupService';
 import type { Group } from '@/types/group';
 import type { Sport } from '@/types/match';
 import type { GroupFilters } from '@/types/groupFilters';
+import { formatDistanceKm, haversineKm } from '@/utils/location';
 
 type Status = 'loading' | 'ready' | 'error';
+
+type JoinFeedback = {
+  tone: 'success' | 'warning';
+  title: string;
+  message: string;
+};
 
 type Props = {
   sport: Sport;
   appliedLocation: string;
   filters: GroupFilters;
   filterVisible: boolean;
+  viewerCoords?: { latitude: number; longitude: number } | null;
   onCloseFilter: () => void;
   onApplyFilters: (filters: GroupFilters) => void;
   onOpenGroup: (groupId: number) => void;
@@ -39,6 +48,7 @@ export default function GroupsBrowseScreen({
   appliedLocation,
   filters,
   filterVisible,
+  viewerCoords = null,
   onCloseFilter,
   onApplyFilters,
   onOpenGroup,
@@ -47,6 +57,8 @@ export default function GroupsBrowseScreen({
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [joiningGroupId, setJoiningGroupId] = useState<number | null>(null);
+  const [joinFeedback, setJoinFeedback] = useState<JoinFeedback | null>(null);
 
   const fetchGroups = useCallback(
     async (isRefresh = false) => {
@@ -93,6 +105,34 @@ export default function GroupsBrowseScreen({
     }
   };
 
+  const handleJoin = async (group: Group) => {
+    if (joiningGroupId != null) return;
+    setJoiningGroupId(group.groupId);
+    try {
+      const result = await joinGroup(group.groupId);
+      // Browse hides members + PENDING requests — drop the card immediately.
+      setGroups((prev) => prev.filter((g) => g.groupId !== group.groupId));
+      const accepted = result.request.status === 'ACCEPTED';
+      setJoinFeedback(
+        accepted
+          ? {
+              tone: 'success',
+              title: 'Welcome!',
+              message: 'You joined the group successfully. Find it anytime under Manage Groups.',
+            }
+          : {
+              tone: 'success',
+              title: 'Request sent',
+              message: 'The group admin will review your request. We will let you know when they respond.',
+            }
+      );
+    } catch (err) {
+      Alert.alert('Something went wrong', getErrorMessage(err));
+    } finally {
+      setJoiningGroupId(null);
+    }
+  };
+
   return (
     <>
       <ScrollView
@@ -110,14 +150,25 @@ export default function GroupsBrowseScreen({
             <Text style={styles.emptyStateText}>No groups found. Try a different sport or search.</Text>
           </View>
         ) : (
-          groups.map((group) => (
-            <GroupCard
-              key={group.groupId}
-              group={group}
-              onPress={() => onOpenGroup(group.groupId)}
-              onToggleFavorite={() => handleToggleFavorite(group)}
-            />
-          ))
+          groups.map((group) => {
+            const distanceLabel =
+              viewerCoords && group.latitude != null && group.longitude != null
+                ? formatDistanceKm(
+                    haversineKm(viewerCoords.latitude, viewerCoords.longitude, group.latitude, group.longitude)
+                  )
+                : null;
+            return (
+              <GroupCard
+                key={group.groupId}
+                group={group}
+                distanceLabel={distanceLabel}
+                joining={joiningGroupId === group.groupId}
+                onPress={() => onOpenGroup(group.groupId)}
+                onJoin={() => handleJoin(group)}
+                onToggleFavorite={() => handleToggleFavorite(group)}
+              />
+            );
+          })
         )}
       </ScrollView>
 
@@ -127,6 +178,14 @@ export default function GroupsBrowseScreen({
         initialFilters={filters}
         onClose={onCloseFilter}
         onApply={onApplyFilters}
+      />
+
+      <InfoDialog
+        visible={joinFeedback != null}
+        tone={joinFeedback?.tone ?? 'success'}
+        title={joinFeedback?.title ?? ''}
+        message={joinFeedback?.message ?? ''}
+        onDismiss={() => setJoinFeedback(null)}
       />
     </>
   );

@@ -10,5 +10,11 @@ export default function ManageSquadRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const matchId = Number(id);
 
-  return <ManageSquadScreen matchId={matchId} onBack={() => router.back()} />;
+  return (
+    <ManageSquadScreen
+      matchId={matchId}
+      onBack={() => router.back()}
+      onOpenProfile={(userId) => router.push(`/matches/host/${userId}`)}
+    />
+  );
 }

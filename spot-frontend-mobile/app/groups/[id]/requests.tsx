@@ -16,6 +16,7 @@ export default function ManageGroupRequestsRoute() {
       groupId={groupId}
       onBack={() => router.back()}
       onEditGroup={() => router.push(`/groups/${groupId}/edit`)}
+      onAdminTransferred={() => router.replace(`/groups/${groupId}`)}
     />
   );
 }

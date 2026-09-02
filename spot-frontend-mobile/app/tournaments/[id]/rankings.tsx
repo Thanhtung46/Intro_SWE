@@ -9,6 +9,7 @@ import SetPlayerRanksScreen from '@/screens/tournaments/SetPlayerRanksScreen';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getTournamentDetail, getTournamentPlayers } from '@/services/tournamentService';
 import type { TournamentDetail, TournamentTeam } from '@/types/tournament';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — pre-fetches tournament + accepted
 // teams with their rosters for the in-team ranking editor.
@@ -47,7 +48,7 @@ export default function SetRankingsRoute() {
       <SetPlayerRanksScreen
         tournament={tournament}
         teams={teams}
-        onBack={() => router.back()}
+        onBack={() => safeBack(router, `/tournaments/${tournamentId}`)}
         onSaved={() => router.replace(`/tournaments/${tournamentId}`)}
       />
     );

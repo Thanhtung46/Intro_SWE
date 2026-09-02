@@ -2,7 +2,7 @@
 // groupService's ListGroupsQuery fields except sport (owned by the
 // Homepage screen's own toggle, not part of this sheet). Unlike
 // MatchFilters, this DOES include latitude/longitude/radiusKm — the Groups
-// filter sheet has an explicit Location-vs-Distance radio + a 1-20km
+// filter sheet has an explicit Location-vs-Distance radio + a 0-50km
 // slider (confirmed against the Pencil mockup), so the Distance mode is
 // part of this feature's scope from the start.
 export type GroupFilters = {
@@ -14,7 +14,7 @@ export type GroupFilters = {
   // search bar) at the API level; all three must be set together.
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20
+  radiusKm?: number; // 0-50
 };
 
 export const EMPTY_GROUP_FILTERS: GroupFilters = { skill: [] };

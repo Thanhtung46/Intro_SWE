@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -10,21 +11,25 @@ import type { Sport } from '@/types/match';
 type Props = {
   member: GroupMember;
   sport: Sport;
+  onPress?: () => void;
 };
 
 /**
- * Group Detail Members tab row — read-only for everyone, including the
- * admin (Groups implementation plan resolved decision #1: kick/transfer
- * live only in ManageGroupRequestsScreen, never inline here). No Matches
- * equivalent — ManageSquadScreen's squad row is inline, not extracted, and
- * Matches has no standalone "browse all participants" list at all.
+ * Group Detail Members tab row — tap opens Check Profile (same as match
+ * squad). Kick/transfer stay in ManageGroupRequestsScreen only.
  */
-export default function GroupMemberListItem({ member, sport }: Props) {
+export default function GroupMemberListItem({ member, sport, onPress }: Props) {
   const label = skillLabel(sport, member.skill ?? null);
   const tier = skillTierColor(sport, member.skill ?? null);
 
   return (
-    <View style={styles.row}>
+    <TouchableOpacity
+      testID={`group-member-${member.userId}`}
+      style={styles.row}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.85}
+    >
       <View style={styles.avatar}>
         {member.avatarUrl ? (
           <Image source={{ uri: member.avatarUrl }} style={styles.avatarImage} />
@@ -45,7 +50,8 @@ export default function GroupMemberListItem({ member, sport }: Props) {
           <Text style={styles.adminTagText}>ADMIN</Text>
         </View>
       )}
-    </View>
+      {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.outline} /> : null}
+    </TouchableOpacity>
   );
 }
 

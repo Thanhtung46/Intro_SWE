@@ -8,6 +8,7 @@ import {
   parseScheduleQueryDto,
   parseEarningsQueryDto,
   parseEarningsHistoryQueryDto,
+  parseEarningsMonthlyQueryDto,
   parseVenueIdParam,
 } from '../dto/referee.dto.js';
 import * as refereeService from '../service/referee.service.js';
@@ -160,6 +161,16 @@ export async function getEarningsHistory(req, res, next) {
   try {
     const query = parseEarningsHistoryQueryDto(req.query);
     const result = await refereeService.getEarningsHistory(req.user.userId, query);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function getEarningsMonthly(req, res, next) {
+  try {
+    const query = parseEarningsMonthlyQueryDto(req.query);
+    const result = await refereeService.getEarningsMonthly(req.user.userId, query);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

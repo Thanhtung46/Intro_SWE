@@ -13,6 +13,8 @@ type Props = {
   variant?: 'completed';
   onManageSquad: () => void;
   onViewDetails: () => void;
+  onEditMatch?: () => void;
+  onCancelMatch?: () => void;
 };
 
 /**
@@ -21,7 +23,14 @@ type Props = {
  * button), branching on match.myRole. See plan mục 2 "Active tab — two
  * card variants".
  */
-export default function ManageMatchCard({ match, variant, onManageSquad, onViewDetails }: Props) {
+export default function ManageMatchCard({
+  match,
+  variant,
+  onManageSquad,
+  onViewDetails,
+  onEditMatch,
+  onCancelMatch,
+}: Props) {
   const isCompleted = variant === 'completed';
   const isHost = !isCompleted && match.myRole === 'HOST';
   const isParticipant = !isCompleted && match.myRole === 'PARTICIPANT';
@@ -29,8 +38,8 @@ export default function ManageMatchCard({ match, variant, onManageSquad, onViewD
   const isHostReview = isHost && (match.pendingRequestCount ?? 0) > 0 && match.joinMode === 'APPROVAL';
   const sportLabel = match.sport === 'FOOTBALL' ? 'Football' : 'Badminton';
 
-  return (
-    <View style={styles.card}>
+  const cardBody = (
+    <>
       <View style={styles.topRow}>
         <View style={styles.sportChip}>
           <Text style={styles.sportChipText}>{sportLabel}</Text>
@@ -92,18 +101,33 @@ export default function ManageMatchCard({ match, variant, onManageSquad, onViewD
       </View>
 
       {isHost && (
-        <>
-          <View style={styles.progressRow}>
-            <View style={styles.participantsRow}>
-              {match.participantAvatars.slice(0, 3).map((uri, index) => (
-                <Image key={index} source={{ uri }} style={[styles.participantAvatar, index > 0 && styles.participantAvatarOverlap]} />
-              ))}
-            </View>
-            <Text style={styles.progressText}>
-              {match.filledCount}/{match.maxPlayers} Joined
-            </Text>
-            <Text style={styles.spotsLeftText}>{match.spotsLeft} Spots Left</Text>
+        <View style={styles.progressRow}>
+          <View style={styles.participantsRow}>
+            {match.participantAvatars.slice(0, 3).map((uri, index) => (
+              <Image key={index} source={{ uri }} style={[styles.participantAvatar, index > 0 && styles.participantAvatarOverlap]} />
+            ))}
           </View>
+          <Text style={styles.progressText}>
+            {match.filledCount}/{match.maxPlayers} Joined
+          </Text>
+          <Text style={styles.spotsLeftText}>{match.spotsLeft} Spots Left</Text>
+        </View>
+      )}
+    </>
+  );
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        testID={`manage-match-card-${match.matchId}`}
+        onPress={onViewDetails}
+        activeOpacity={0.85}
+      >
+        {cardBody}
+      </TouchableOpacity>
+
+      {isHost && (
+        <>
           {isHostReview ? (
             <View style={styles.pendingBanner}>
               <Text style={styles.pendingBannerText}>{match.pendingRequestCount} pending requests</Text>
@@ -115,6 +139,20 @@ export default function ManageMatchCard({ match, variant, onManageSquad, onViewD
             <TouchableOpacity testID={`manage-squad-${match.matchId}`} style={styles.outlineButton} onPress={onManageSquad}>
               <Text style={styles.outlineButtonText}>View Squad</Text>
             </TouchableOpacity>
+          )}
+          {(onEditMatch || onCancelMatch) && (
+            <View style={styles.hostActionsRow}>
+              {onEditMatch ? (
+                <TouchableOpacity testID={`manage-edit-${match.matchId}`} style={styles.outlineButtonFlex} onPress={onEditMatch}>
+                  <Text style={styles.outlineButtonText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
+              {onCancelMatch ? (
+                <TouchableOpacity testID={`manage-cancel-${match.matchId}`} style={styles.dangerButtonFlex} onPress={onCancelMatch}>
+                  <Text style={styles.dangerButtonText}>Cancel Match</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           )}
         </>
       )}
@@ -212,6 +250,24 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   outlineButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  hostActionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  outlineButtonFlex: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+    borderRadius: 12,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  dangerButtonFlex: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: 12,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  dangerButtonText: { fontSize: 13, fontWeight: '700', color: colors.error },
   filledButton: {
     backgroundColor: colors.primaryDark,
     borderRadius: 12,

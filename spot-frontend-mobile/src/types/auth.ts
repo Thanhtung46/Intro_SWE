@@ -2,17 +2,14 @@ export type Role = 'player' | 'owner' | 'referee';
 
 export type RegistrationStatus = 'pending';
 
-export type RegisterOwnerPayload = {
-  venueName: string;
-  address: string;
-  phone: string;
-};
+// Per .claude/rules/form-conventions.md: payload types are re-exports of
+// the form schema's inferred type, never hand-duplicated (that drift is
+// exactly what broke the build on this branch).
+export type { OwnerRegisterFormValues as RegisterOwnerPayload } from '@/schemas/ownerRegisterSchema';
 
-export type RegisterRefereePayload = {
-  fullName: string;
-  phone: string;
-  certification: string;
-};
+// RegisterRefereePayload removed (SPOT-93): referee signup submits 3
+// verification documents, not a flat payload — see
+// src/schemas/refereeRegisterSchema.ts + refereeService.ts.
 
 export type RegisterResponse = {
   status: RegistrationStatus;

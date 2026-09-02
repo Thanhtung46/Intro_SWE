@@ -13,6 +13,21 @@ export const MATCH_FORMATS = Object.freeze(
   Object.values(MATCH_FORMATS_BY_SPORT).flat(),
 );
 
+/** Minimum maxPlayers (includes host) per format — full roster floor. */
+export const MATCH_FORMAT_MIN_PLAYERS = Object.freeze({
+  SINGLES: 2,
+  DOUBLES: 4,
+  FIVE_A_SIDE: 10,
+  SEVEN_A_SIDE: 14,
+  ELEVEN_A_SIDE: 22,
+});
+
+export const MATCH_MAX_PLAYERS = 40;
+
+export function minPlayersForFormat(format) {
+  return MATCH_FORMAT_MIN_PLAYERS[format] ?? 2;
+}
+
 export const FEE_TYPES = Object.freeze({
   GENDER_RANGE: 'GENDER_RANGE',
   SPLIT_EVENLY: 'SPLIT_EVENLY',
@@ -65,13 +80,14 @@ export const PITCH_OCCUPIED_STATUSES = Object.freeze([
 
 /** GET /matches?location= — unaccent + trigram; suggestions from title/venue/address. */
 export const MATCH_SEARCH = Object.freeze({
-  FUZZY_MIN_CHARS: 3,
-  LIST_SIMILARITY: 0.28,
-  SUGGEST_SIMILARITY: 0.2,
+  /** Below this length, list/suggest use substring only (avoids "T12" fuzzy noise). */
+  FUZZY_MIN_CHARS: 4,
+  LIST_SIMILARITY: 0.4,
+  SUGGEST_SIMILARITY: 0.3,
   SUGGEST_LIMIT: 5,
   /** Host form venue picker — wider pool than homepage browse. */
   VENUE_SUGGEST_LIMIT: 10,
-  VENUE_SUGGEST_SIMILARITY: 0.2,
+  VENUE_SUGGEST_SIMILARITY: 0.3,
 });
 
 /** Host bulk publish (Vmito-style clone / weekly expand on FE). */
@@ -147,11 +163,11 @@ export function computeYourShare({
   feeType,
   priceMin,
   priceMax,
-  filledCount,
+  maxPlayers,
   gender,
 }) {
   if (feeType === FEE_TYPES.SPLIT_EVENLY) {
-    const heads = Math.max(Number(filledCount) || 0, 1);
+    const heads = Math.max(Number(maxPlayers) || 0, 1);
     const total = Number(priceMin);
     if (!Number.isFinite(total) || total < 1) {
       return null;
@@ -174,7 +190,7 @@ export function computeRequestShare({
   feeType,
   priceMin,
   priceMax,
-  filledCount,
+  maxPlayers,
   joinerGender,
   guests = [],
 }) {
@@ -182,7 +198,7 @@ export function computeRequestShare({
     feeType,
     priceMin,
     priceMax,
-    filledCount,
+    maxPlayers,
     gender: joinerGender,
   });
   const guestShares = guests.map((guest) =>
@@ -190,7 +206,7 @@ export function computeRequestShare({
       feeType,
       priceMin,
       priceMax,
-      filledCount,
+      maxPlayers,
       gender: guest.gender,
     }),
   );

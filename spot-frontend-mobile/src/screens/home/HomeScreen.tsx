@@ -166,7 +166,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search bar — opens the AI assistant chat (nlp-assistant), same
             screen as AppShell's header sparkle icon; voice capture lives
@@ -231,7 +231,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
             </View>
             <Text style={styles.quickActionLabel}>{t('home.bookField')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.replace(ROUTES.MATCHES)}>
             <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionSecondaryBg }]}>
               <Ionicons name="trophy-outline" size={22} color={themeColors.quickActionSecondaryIcon} />
             </View>

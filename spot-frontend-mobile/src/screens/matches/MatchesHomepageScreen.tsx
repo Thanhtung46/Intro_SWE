@@ -1,11 +1,13 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,17 +15,18 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import FilterSheet from '@/components/matches/FilterSheet';
 import MatchCard from '@/components/matches/MatchCard';
+import SlidingSegmentControl from '@/components/navigation/SlidingSegmentControl';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
 import { listGroups } from '@/services/groupService';
 import { listTournaments } from '@/services/tournamentService';
 import { openVenueDirections } from '@/utils/directions';
+import { formatDistanceKm, haversineKm, requestCurrentPosition } from '@/utils/location';
 import type { Match, MatchSuggestion, Sport } from '@/types/match';
 import { EMPTY_MATCH_FILTERS, type MatchFilters } from '@/types/matchFilters';
 import { EMPTY_GROUP_FILTERS, type GroupFilters } from '@/types/groupFilters';
@@ -38,14 +41,18 @@ type SubTab = 'matches' | 'groups' | 'tournaments';
 type Status = 'loading' | 'ready' | 'error';
 
 type Props = {
-  onOpenMap: () => void;
+  /** Map button — opens the map for the current sub-tab (matches / groups / tournaments). */
+  onOpenMap: (tab: SubTab) => void;
   onOpenMatch: (matchId: number) => void;
+  /** Card "Join Match" CTA — should open join sheet (e.g. /matches/:id?join=1). */
+  onJoinMatch?: (matchId: number) => void;
   onHostMatch: (sport: Sport) => void;
   onManageMatches: () => void;
   onOpenGroup: (groupId: number) => void;
   onCreateGroup: (sport: Sport) => void;
   onManageGroups: () => void;
   onOpenTournament: (tournamentId: number) => void;
+  onJoinTournament?: (tournamentId: number) => void;
   onCreateTournament: (sport: Sport) => void;
   onManageTournaments: () => void;
 };
@@ -74,13 +81,14 @@ function getFabActions(subTab: SubTab, sport: Sport, props: Props): FabAction[] 
   ];
 }
 
-// FAB popover position/size — tied to clearing AppShell's bottom nav height
-// and the FAB's own 56px size, not the xs/sm/md/lg/xl content-spacing scale,
-// so these stay local constants rather than spacing.ts tokens. 192 matches
-// the Figma popover width (node 95:2927).
-const FAB_BOTTOM_OFFSET = 96;
-const FAB_MENU_BOTTOM_OFFSET = 160;
+// FAB sits in AppShell's content slot (already above bottom nav), so offset
+// is only a small gap from the content bottom — not nav height + FAB size.
+const FAB_BOTTOM_OFFSET = 24;
+const FAB_MENU_BOTTOM_OFFSET = 88;
 const FAB_MENU_WIDTH = 192;
+
+/** Matches list page size — mirrors GET /matches default/max-friendly batch. */
+const PAGE_SIZE = 20;
 
 // The map button reads noticeably smaller/tighter than the reference than
 // the xs/sm spacing scale gives — sized up a bit past the strict
@@ -108,9 +116,12 @@ export default function MatchesHomepageScreen(props: Props) {
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
+  const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [fabOpen, setFabOpen] = useState(false);
   const fabAnim = useRef(new Animated.Value(0)).current;
 
@@ -128,6 +139,22 @@ export default function MatchesHomepageScreen(props: Props) {
   );
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<MatchFilters>(EMPTY_MATCH_FILTERS);
+  /** Viewer GPS for card distance labels — refreshed on focus / pull / distance Apply. */
+  const [viewerCoords, setViewerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const viewerCoordsRef = useRef(viewerCoords);
+  viewerCoordsRef.current = viewerCoords;
+  const viewerCoordsFetchedAt = useRef(0);
+
+  const refreshViewerCoords = useCallback(async (force = false) => {
+    // Avoid spamming the GPS stack on every focus; force on pull-to-refresh.
+    if (!force && viewerCoordsRef.current && Date.now() - viewerCoordsFetchedAt.current < 60_000) {
+      return;
+    }
+    const pos = await requestCurrentPosition();
+    if (!pos.ok) return;
+    viewerCoordsFetchedAt.current = Date.now();
+    setViewerCoords({ latitude: pos.latitude, longitude: pos.longitude });
+  }, []);
   const [groupFilterVisible, setGroupFilterVisible] = useState(false);
   const [groupFilters, setGroupFilters] = useState<GroupFilters>(EMPTY_GROUP_FILTERS);
   const [tournamentFilterVisible, setTournamentFilterVisible] = useState(false);
@@ -136,30 +163,43 @@ export default function MatchesHomepageScreen(props: Props) {
   const [suggestionsVisible, setSuggestionsVisible] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
+  const buildListQuery = useCallback(
+    (offset: number) => {
+      // Distance mode (lat/lng/radiusKm) is XOR with free-text location and
+      // province/city at the API level — send only one set.
+      const distanceMode =
+        filters.latitude != null && filters.longitude != null && filters.radiusKm != null;
+      return {
+        sport,
+        location: distanceMode ? undefined : appliedLocation || undefined,
+        date: filters.date,
+        timeFrom: filters.timeFrom,
+        timeTo: filters.timeTo,
+        skill: filters.skill?.length ? filters.skill : undefined,
+        format: filters.format?.length ? filters.format : undefined,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        province: distanceMode ? undefined : filters.province,
+        city: distanceMode ? undefined : filters.city,
+        latitude: distanceMode ? filters.latitude : undefined,
+        longitude: distanceMode ? filters.longitude : undefined,
+        radiusKm: distanceMode ? Math.round(filters.radiusKm!) : undefined,
+        favorited: filters.favorited,
+        limit: PAGE_SIZE,
+        offset,
+      };
+    },
+    [sport, appliedLocation, filters]
+  );
+
   const fetchMatches = useCallback(
     async (isRefresh = false) => {
       isRefresh ? setRefreshing(true) : setStatus('loading');
       try {
-        // Distance mode (lat/lng/radiusKm) is XOR with free-text location and
-        // province/city at the API level — send only one set.
-        const distanceMode = filters.radiusKm != null && filters.latitude != null;
-        const result = await listMatches({
-          sport,
-          location: distanceMode ? undefined : appliedLocation || undefined,
-          date: filters.date,
-          timeFrom: filters.timeFrom,
-          timeTo: filters.timeTo,
-          skill: filters.skill.length ? filters.skill : undefined,
-          priceMin: filters.priceMin,
-          priceMax: filters.priceMax,
-          province: distanceMode ? undefined : filters.province,
-          city: distanceMode ? undefined : filters.city,
-          latitude: distanceMode ? filters.latitude : undefined,
-          longitude: distanceMode ? filters.longitude : undefined,
-          radiusKm: distanceMode ? filters.radiusKm : undefined,
-          favorited: filters.favorited,
-        });
+        if (isRefresh) await refreshViewerCoords(true);
+        const result = await listMatches(buildListQuery(0));
         setMatches(result.matches);
+        setTotal(result.total);
         setStatus('ready');
       } catch (err) {
         setErrorMessage(getErrorMessage(err));
@@ -168,12 +208,46 @@ export default function MatchesHomepageScreen(props: Props) {
         if (isRefresh) setRefreshing(false);
       }
     },
-    [sport, appliedLocation, filters]
+    [buildListQuery, refreshViewerCoords]
   );
+
+  const loadMoreMatches = useCallback(async () => {
+    if (status !== 'ready' || loadingMoreRef.current || matches.length >= total) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const result = await listMatches(buildListQuery(matches.length));
+      setMatches((prev) => {
+        const seen = new Set(prev.map((m) => m.matchId));
+        return [...prev, ...result.matches.filter((m) => !seen.has(m.matchId))];
+      });
+      setTotal(result.total);
+    } catch {
+      // Keep what we already have; user can pull-to-refresh.
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [status, matches.length, total, buildListQuery]);
 
   useEffect(() => {
     fetchMatches();
   }, [fetchMatches]);
+
+  // When Location Services is on, keep viewer GPS fresh so every card can
+  // show distance — on screen focus and when returning to the app.
+  useFocusEffect(
+    useCallback(() => {
+      refreshViewerCoords(false);
+    }, [refreshViewerCoords])
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshViewerCoords(false);
+    });
+    return () => sub.remove();
+  }, [refreshViewerCoords]);
 
   // Search-as-you-type dropdown — separate from `appliedLocation`/`fetchMatches`
   // above so the visible match list only changes on submit/tap, not on every
@@ -212,11 +286,26 @@ export default function MatchesHomepageScreen(props: Props) {
     setSearchText(suggestion.text);
     setAppliedLocation(suggestion.text);
     setSuggestionsVisible(false);
+    // Search XOR Distance — drop GPS radius when applying a text location.
+    setFilters((prev) => ({
+      ...prev,
+      latitude: undefined,
+      longitude: undefined,
+      radiusKm: undefined,
+    }));
+    setGroupFilters((prev) => ({
+      ...prev,
+      latitude: undefined,
+      longitude: undefined,
+      radiusKm: undefined,
+    }));
   };
 
   const suggestionIcon = (kind: string): keyof typeof Ionicons.glyphMap => {
-    if (kind === 'venueName' || kind === 'name') return 'storefront-outline';
+    if (kind === 'name') return 'people-outline';
+    if (kind === 'venueName') return 'storefront-outline';
     if (kind === 'venueAddress') return 'location-outline';
+    if (kind === 'title') return 'pricetag-outline';
     return 'pricetag-outline';
   };
 
@@ -240,7 +329,8 @@ export default function MatchesHomepageScreen(props: Props) {
   const fabActions = getFabActions(subTab, sport, props);
 
   const matchFiltersActive =
-    filters.skill.length > 0 ||
+    (filters.skill?.length ?? 0) > 0 ||
+    (filters.format?.length ?? 0) > 0 ||
     !!filters.date ||
     !!filters.timeFrom ||
     !!filters.timeTo ||
@@ -259,29 +349,35 @@ export default function MatchesHomepageScreen(props: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={styles.sportToggle}>
-        {(['FOOTBALL', 'BADMINTON'] as Sport[]).map((item) => {
-          const isActive = item === sport;
-          return (
-            <TouchableOpacity
-              key={item}
-              testID={`sport-toggle-${item.toLowerCase()}`}
-              style={[styles.sportButton, isActive && styles.sportButtonActive]}
-              onPress={() => setSport(item)}
-            >
-              {item === 'FOOTBALL' ? (
-                <Ionicons name="football-outline" size={16} color={isActive ? colors.white : colors.primaryDark} />
-              ) : (
-                <MaterialCommunityIcons name="badminton" size={16} color={isActive ? colors.white : colors.primaryDark} />
-              )}
-              <Text style={[styles.sportButtonText, isActive && styles.sportButtonTextActive]}>
-                {item === 'FOOTBALL' ? 'Football' : 'Badminton'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
+      <SlidingSegmentControl
+        style={styles.sportToggle}
+        active={sport}
+        inactiveColor={colors.primaryDark}
+        segmentPaddingVertical={14}
+        onChange={(next) => {
+          setSport(next);
+          setFilters((prev) => ({ ...prev, skill: [], format: [] }));
+        }}
+        items={[
+          {
+            key: 'FOOTBALL',
+            label: 'Football',
+            testID: 'sport-toggle-football',
+            renderIcon: (isActive) => (
+              <Ionicons name="football-outline" size={16} color={isActive ? colors.white : colors.primaryDark} />
+            ),
+          },
+          {
+            key: 'BADMINTON',
+            label: 'Badminton',
+            testID: 'sport-toggle-badminton',
+            renderIcon: (isActive) => (
+              <MaterialCommunityIcons name="badminton" size={16} color={isActive ? colors.white : colors.primaryDark} />
+            ),
+          },
+        ]}
+      />
 
       <View style={styles.searchRow}>
         <View style={styles.searchInputWrap}>
@@ -289,14 +385,35 @@ export default function MatchesHomepageScreen(props: Props) {
           <TextInput
             testID="matches-search-input"
             style={styles.searchInput}
-            placeholder="Find me a 7v7 match tonight..."
+            placeholder={
+              subTab === 'groups'
+                ? 'Search groups, venues, or areas...'
+                : subTab === 'tournaments'
+                  ? 'Search tournaments or venues...'
+                  : 'Find me a 7v7 match tonight...'
+            }
             placeholderTextColor={colors.outline}
             value={searchText}
             onChangeText={setSearchText}
             onFocus={() => setSuggestionsVisible(true)}
             onSubmitEditing={() => {
-              setAppliedLocation(searchText);
+              const trimmed = searchText.trim();
+              setAppliedLocation(trimmed);
               setSuggestionsVisible(false);
+              if (trimmed) {
+                setFilters((prev) => ({
+                  ...prev,
+                  latitude: undefined,
+                  longitude: undefined,
+                  radiusKm: undefined,
+                }));
+                setGroupFilters((prev) => ({
+                  ...prev,
+                  latitude: undefined,
+                  longitude: undefined,
+                  radiusKm: undefined,
+                }));
+              }
             }}
             returnKeyType="search"
           />
@@ -322,7 +439,11 @@ export default function MatchesHomepageScreen(props: Props) {
             </View>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity testID="matches-map-button" style={styles.mapButton} onPress={props.onOpenMap}>
+        <TouchableOpacity
+          testID="matches-map-button"
+          style={styles.mapButton}
+          onPress={() => props.onOpenMap(subTab)}
+        >
           <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
         </TouchableOpacity>
       </View>
@@ -349,25 +470,19 @@ export default function MatchesHomepageScreen(props: Props) {
         </View>
       )}
 
-      <View style={styles.subTabs}>
-        {([
-          { key: 'matches', label: 'Matches' },
-          { key: 'groups', label: 'Groups' },
-          { key: 'tournaments', label: 'Tournaments' },
-        ] as { key: SubTab; label: string }[]).map((item) => {
-          const isActive = item.key === subTab;
-          return (
-            <TouchableOpacity
-              key={item.key}
-              testID={`sub-tab-${item.key}`}
-              style={[styles.subTabButton, isActive && styles.subTabButtonActive]}
-              onPress={() => handleSubTabPress(item.key)}
-            >
-              <Text style={[styles.subTabText, isActive && styles.subTabTextActive]}>{item.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <SlidingSegmentControl
+        style={styles.subTabs}
+        active={subTab}
+        inactiveColor={colors.outline}
+        segmentPaddingVertical={spacing.md}
+        labelStyle={styles.subTabText}
+        onChange={handleSubTabPress}
+        items={[
+          { key: 'matches', label: 'Matches', testID: 'sub-tab-matches' },
+          { key: 'groups', label: 'Groups', testID: 'sub-tab-groups' },
+          { key: 'tournaments', label: 'Tournaments', testID: 'sub-tab-tournaments' },
+        ]}
+      />
 
       {subTab === 'groups' ? (
         <GroupsBrowseScreen
@@ -375,8 +490,15 @@ export default function MatchesHomepageScreen(props: Props) {
           appliedLocation={appliedLocation}
           filters={groupFilters}
           filterVisible={groupFilterVisible}
+          viewerCoords={viewerCoords}
           onCloseFilter={() => setGroupFilterVisible(false)}
-          onApplyFilters={setGroupFilters}
+          onApplyFilters={(next) => {
+            setGroupFilters(next);
+            if (next.latitude != null && next.longitude != null) {
+              viewerCoordsFetchedAt.current = Date.now();
+              setViewerCoords({ latitude: next.latitude, longitude: next.longitude });
+            }
+          }}
           onOpenGroup={props.onOpenGroup}
         />
       ) : subTab === 'tournaments' ? (
@@ -385,37 +507,67 @@ export default function MatchesHomepageScreen(props: Props) {
           appliedLocation={appliedLocation}
           filters={tournamentFilters}
           filterVisible={tournamentFilterVisible}
+          viewerCoords={viewerCoords}
           onCloseFilter={() => setTournamentFilterVisible(false)}
-          onApplyFilters={setTournamentFilters}
+          onApplyFilters={(next) => {
+            setTournamentFilters(next);
+            if (next.latitude != null && next.longitude != null) {
+              viewerCoordsFetchedAt.current = Date.now();
+              setViewerCoords({ latitude: next.latitude, longitude: next.longitude });
+            }
+          }}
           onOpenTournament={props.onOpenTournament}
+          onJoinTournament={(tournamentId) =>
+            (props.onJoinTournament ?? props.onOpenTournament)(tournamentId)
+          }
         />
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.list}
           contentContainerStyle={styles.listContent}
+          data={status === 'ready' ? matches : []}
+          keyExtractor={(item) => String(item.matchId)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} />}
-        >
-          {status === 'loading' ? (
-            <ActivityIndicator style={styles.spinner} color={colors.primary} />
-          ) : status === 'error' ? (
-            <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
-          ) : matches.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-              <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
-            </View>
-          ) : (
-            matches.map((match) => (
+          onEndReached={loadMoreMatches}
+          onEndReachedThreshold={0.4}
+          ListHeaderComponent={
+            status === 'loading' ? (
+              <ActivityIndicator style={styles.spinner} color={colors.primary} />
+            ) : status === 'error' ? (
+              <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
+            ) : null
+          }
+          ListEmptyComponent={
+            status === 'ready' ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="calendar-outline" size={28} color={colors.outline} />
+                <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={styles.loadMoreSpinner} color={colors.primary} /> : null
+          }
+          ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
+          renderItem={({ item: match }) => {
+            const distanceLabel =
+              viewerCoords && match.latitude != null && match.longitude != null
+                ? formatDistanceKm(
+                    haversineKm(viewerCoords.latitude, viewerCoords.longitude, match.latitude, match.longitude)
+                  )
+                : null;
+            return (
               <MatchCard
-                key={match.matchId}
                 match={match}
+                distanceLabel={distanceLabel}
                 onPress={() => props.onOpenMatch(match.matchId)}
+                onJoin={() => (props.onJoinMatch ?? props.onOpenMatch)(match.matchId)}
                 onToggleFavorite={() => handleToggleFavorite(match)}
                 onDirections={() => openVenueDirections(router, match)}
               />
-            ))
-          )}
-        </ScrollView>
+            );
+          }}
+        />
       )}
 
       {fabOpen && (
@@ -482,7 +634,18 @@ export default function MatchesHomepageScreen(props: Props) {
         sport={sport}
         initialFilters={filters}
         onClose={() => setFilterVisible(false)}
-        onApply={setFilters}
+        onApply={(next) => {
+          setFilters(next);
+          if (next.latitude != null && next.longitude != null) {
+            // Distance mode XOR free-text search — clear the search bar so we
+            // never send both `location` and lat/lng/radiusKm (BE 400).
+            setSearchText('');
+            setAppliedLocation('');
+            setSuggestionsVisible(false);
+            viewerCoordsFetchedAt.current = Date.now();
+            setViewerCoords({ latitude: next.latitude, longitude: next.longitude });
+          }
+        }}
       />
     </SafeAreaView>
   );
@@ -491,25 +654,8 @@ export default function MatchesHomepageScreen(props: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.screenBackground },
   sportToggle: {
-    flexDirection: 'row',
     marginHorizontal: spacing.md,
-    padding: 6,
-    borderRadius: 16,
-    backgroundColor: colors.iconBackground,
-    gap: 6,
   },
-  sportButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  sportButtonActive: { backgroundColor: colors.primaryDark },
-  sportButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
-  sportButtonTextActive: { color: colors.white },
 
   searchRow: {
     flexDirection: 'row',
@@ -580,22 +726,19 @@ const styles = StyleSheet.create({
   suggestionText: { flex: 1, fontSize: 13, color: colors.headingText },
 
   subTabs: {
-    flexDirection: 'row',
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    padding: spacing.xs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    padding: spacing.xs,
     gap: spacing.xxs,
   },
-  subTabButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: 8 },
-  subTabButtonActive: { backgroundColor: colors.primaryDark },
-  subTabText: { fontSize: 12, fontWeight: '700', color: colors.outline },
-  subTabTextActive: { color: colors.white },
+  subTabText: { fontSize: 12, fontWeight: '700' },
 
   list: { flex: 1 },
-  listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
+  listContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
+  listSeparator: { height: spacing.lg },
   spinner: { marginTop: spacing.xl },
+  loadMoreSpinner: { marginVertical: spacing.md },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
   emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
 

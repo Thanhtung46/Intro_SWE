@@ -1,12 +1,9 @@
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -18,8 +15,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import MatchCoverImage from '@/components/matches/MatchCoverImage';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import GroupScheduleGrid from '@/components/groups/GroupScheduleGrid';
+import GroupScheduleCalendar from '@/components/groups/GroupScheduleCalendar';
 import GroupMemberListItem from '@/components/groups/GroupMemberListItem';
 import GroupGalleryGrid from '@/components/groups/GroupGalleryGrid';
 import { colors } from '@/constants/colors';
@@ -40,7 +39,7 @@ import {
   setGroupFavorite,
 } from '@/services/groupService';
 import { getErrorMessage } from '@/services/apiErrors';
-import { formatDisplayDate, parseIsoDate, toIsoDate } from '@/utils/dateTime';
+import { formatDisplayDate, toIsoDate } from '@/utils/dateTime';
 import type { GalleryImage, GroupDetail, GroupMember, ScheduleCourtRow } from '@/types/group';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -49,9 +48,16 @@ type DetailTab = 'about' | 'schedule' | 'members' | 'gallery';
 type Props = {
   groupId: number;
   onBack: () => void;
-  onOpenMap: () => void;
+  onOpenVenueMap: (venue: {
+    venueName: string;
+    venueAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
   onManageRequests: () => void; // admin-only, shown when myRole==='ADMIN'
   onEditGroup: () => void; // admin-only
+  /** Opens Check Profile (`GET /users/:id`) for a group member row. */
+  onOpenMemberProfile: (userId: number) => void;
 };
 
 /**
@@ -66,7 +72,14 @@ type Props = {
  * does — pending-request state is derived by cross-referencing
  * listMyGroupJoinRequests() against this groupId (see fetchDetail below).
  */
-export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManageRequests, onEditGroup }: Props) {
+export default function GroupDetailScreen({
+  groupId,
+  onBack,
+  onOpenVenueMap,
+  onManageRequests,
+  onEditGroup,
+  onOpenMemberProfile,
+}: Props) {
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -80,7 +93,7 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
 
   // Schedule tab — lazy-fetched on first visit, refetched whenever the date changes.
   const [scheduleDate, setScheduleDate] = useState(() => toIsoDate(new Date()));
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showScheduleCalendar, setShowScheduleCalendar] = useState(true);
   const [scheduleCourts, setScheduleCourts] = useState<ScheduleCourtRow[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
@@ -172,11 +185,26 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
     }
   };
 
-  const handleShareInvite = () => {
+  const handleShareInvite = async () => {
     if (!group) return;
-    Share.share({
-      message: `Join "${group.title}" on SPOT! spot://groups/${group.groupId}`,
-    }).catch(() => undefined);
+    const zaloUrl = group.zaloUrl?.trim();
+    if (!zaloUrl) {
+      Alert.alert(
+        'No Zalo link',
+        group.myRole === 'ADMIN'
+          ? 'Add a Zalo group link in Edit Group so members can share it.'
+          : 'This group has no Zalo invite link yet. Ask the admin to add one.'
+      );
+      return;
+    }
+    try {
+      await Share.share({
+        message: `Join "${group.name}" on Zalo: ${zaloUrl}`,
+        url: zaloUrl,
+      });
+    } catch {
+      // User dismissed share sheet — ignore.
+    }
   };
 
   // Schedule tab: fetch whenever it's the active tab and the date changes.
@@ -196,12 +224,6 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
   useEffect(() => {
     if (tab === 'schedule') fetchSchedule();
   }, [tab, fetchSchedule]);
-
-  const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
-    if (event.type === 'dismissed' || !selected) return;
-    setScheduleDate(toIsoDate(selected));
-  };
 
   // Members tab: fetch on first visit, refetch on search (debounced).
   const fetchMembers = useCallback(async () => {
@@ -272,6 +294,12 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
     }
   };
 
+  // Must stay above loading/error early returns — hook order cannot change between renders.
+  const scheduleActiveDays = useMemo(
+    () => [...new Set((group?.recurringSlots ?? []).map((slot) => Number(slot.dayOfWeek)))],
+    [group?.recurringSlots]
+  );
+
   if (status === 'loading') {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
@@ -305,16 +333,7 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
-          {group.coverUrl ? (
-            <Image source={{ uri: group.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-          )}
+          <MatchCoverImage sport={group.sport} coverUrl={group.coverUrl} />
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             {group.logoUrl ? <Image source={{ uri: group.logoUrl }} style={styles.heroLogo} /> : null}
@@ -393,7 +412,19 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
                     {group.venueName}
                   </Text>
                   {group.latitude != null && group.longitude != null ? (
-                    <TouchableOpacity testID="group-detail-map" style={styles.venueMap} onPress={onOpenMap} activeOpacity={0.9}>
+                    <TouchableOpacity
+                      testID="group-detail-map"
+                      style={styles.venueMap}
+                      onPress={() =>
+                        onOpenVenueMap({
+                          venueName: group.venueName,
+                          venueAddress: group.venueAddress,
+                          latitude: group.latitude,
+                          longitude: group.longitude,
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
                       <AppMap
                         markers={[
                           {
@@ -419,7 +450,18 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
                       {group.venueAddress}
                     </Text>
                   </View>
-                  <TouchableOpacity testID="group-detail-directions" style={styles.directionsButton} onPress={onOpenMap}>
+                  <TouchableOpacity
+                    testID="group-detail-directions"
+                    style={styles.directionsButton}
+                    onPress={() =>
+                      onOpenVenueMap({
+                        venueName: group.venueName,
+                        venueAddress: group.venueAddress,
+                        latitude: group.latitude,
+                        longitude: group.longitude,
+                      })
+                    }
+                  >
                     <Ionicons name="navigate-outline" size={15} color={colors.primaryDark} />
                     <Text style={styles.directionsButtonText}>Get Directions</Text>
                   </TouchableOpacity>
@@ -428,7 +470,7 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
 
               <TouchableOpacity testID="group-detail-share-invite" style={styles.shareButton} onPress={handleShareInvite}>
                 <Ionicons name="share-social-outline" size={16} color={colors.primaryDark} />
-                <Text style={styles.shareButtonText}>Share Group Invite Link</Text>
+                <Text style={styles.shareButtonText}>Share Zalo Group Link</Text>
               </TouchableOpacity>
 
               <View style={styles.section}>
@@ -463,18 +505,27 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
 
           {tab === 'schedule' && (
             <>
-              <TouchableOpacity testID="group-schedule-date" style={styles.pickerField} onPress={() => setShowDatePicker(true)}>
+              <TouchableOpacity
+                testID="group-schedule-date"
+                style={styles.pickerField}
+                onPress={() => setShowScheduleCalendar((prev) => !prev)}
+              >
                 <Text style={styles.pickerValue}>{formatDisplayDate(scheduleDate)}</Text>
-                <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={parseIsoDate(scheduleDate)}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleDateChange}
+                <Ionicons
+                  name={showScheduleCalendar ? 'chevron-up' : 'calendar-outline'}
+                  size={18}
+                  color={colors.primaryDark}
                 />
-              )}
+              </TouchableOpacity>
+              {showScheduleCalendar ? (
+                <GroupScheduleCalendar
+                  selectedDate={scheduleDate}
+                  activeDayOfWeeks={scheduleActiveDays}
+                  onSelectDate={(iso) => {
+                    setScheduleDate(iso);
+                  }}
+                />
+              ) : null}
               {scheduleLoading ? (
                 <ActivityIndicator style={styles.tabSpinner} color={colors.primary} />
               ) : scheduleError ? (
@@ -507,7 +558,12 @@ export default function GroupDetailScreen({ groupId, onBack, onOpenMap, onManage
               ) : (
                 <View style={styles.membersList}>
                   {members.map((member) => (
-                    <GroupMemberListItem key={member.userId} member={member} sport={group.sport} />
+                    <GroupMemberListItem
+                      key={member.userId}
+                      member={member}
+                      sport={group.sport}
+                      onPress={() => onOpenMemberProfile(member.userId)}
+                    />
                   ))}
                   {membersTotal > members.length && (
                     <Text style={styles.helperTextCenter}>Showing {members.length} of {membersTotal}.</Text>

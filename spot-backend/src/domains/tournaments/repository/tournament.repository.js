@@ -114,6 +114,9 @@ function buildListWhere(filters, { bindViewer = false, omitLocation = false, lis
 
   if (filters.viewerUserId != null) {
     const browseViewerSlot = add(filters.viewerUserId);
+    // Same spirit as GET /matches hiding caller's hosted kèo — hosted
+    // tournaments belong on Manage Tournaments, not the public browse feed.
+    where.push(`t.organizer_user_id <> ${browseViewerSlot}`);
     const hiddenStatuses = [
       TOURNAMENT_JOIN_REQUEST_STATUSES.PENDING,
       TOURNAMENT_JOIN_REQUEST_STATUSES.ACCEPTED,

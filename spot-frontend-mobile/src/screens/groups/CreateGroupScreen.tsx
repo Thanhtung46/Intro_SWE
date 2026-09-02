@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, findNodeHandle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
@@ -11,13 +11,13 @@ import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
-import { getVnAdminTree } from '@/services/matchService';
+import { getVnAdminTree, getVenueSuggestions } from '@/services/matchService';
 import { getMe } from '@/services/authService';
 import { createGroup, updateGroup } from '@/services/groupService';
 import { getErrorMessage } from '@/services/apiErrors';
 import { createGroupSchema } from '@/schemas/createGroupSchema';
 import type { CreateGroupPayload, GroupDetail } from '@/types/group';
-import type { Sport } from '@/types/match';
+import type { Sport, VenueSuggestion } from '@/types/match';
 import type { VnProvince } from '@/types/geo';
 
 type Props = {
@@ -30,6 +30,39 @@ type Props = {
 };
 
 type CourtField = { key: string; name: string };
+
+/** Form top→bottom order — scroll to the first invalid field on submit. */
+const FIELD_ORDER = [
+  'name',
+  'title',
+  'venueName',
+  'venueAddress',
+  'province',
+  'city',
+  'skillCodes',
+  'courts',
+  'recurringSlots',
+  'zaloUrl',
+  'logoUrl',
+  'coverUrl',
+] as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Group Name',
+  title: 'Title',
+  venueName: 'Venue Name',
+  venueAddress: 'Address',
+  province: 'Province',
+  city: 'Ward/commune',
+  skillCodes: 'Skill Level',
+  courts: 'Courts',
+  recurringSlots: 'Recurring Schedule',
+  zaloUrl: 'Zalo Link',
+  logoUrl: 'Logo URL',
+  coverUrl: 'Cover Image URL',
+};
+
+const VENUE_FIELD_KEYS = new Set(['venueName', 'venueAddress', 'province', 'city']);
 
 let courtKeySeq = 0;
 function nextCourtKey(): string {
@@ -67,6 +100,14 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
   const [longitude, setLongitude] = useState<number | null>(initialGroup?.longitude ?? null);
   const [provinces, setProvinces] = useState<VnProvince[]>([]);
   const [pinPickerVisible, setPinPickerVisible] = useState(false);
+  const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([]);
+  const [venueSuggestionsVisible, setVenueSuggestionsVisible] = useState(false);
+  const [venueSuggestionsLoading, setVenueSuggestionsLoading] = useState(false);
+  // True after picking a DB venue suggestion / map pin with province+city —
+  // greys Province/Ward as read-only until the user edits venue name again.
+  const [locationLocked, setLocationLocked] = useState(
+    Boolean(initialGroup?.province && initialGroup?.city && initialGroup?.latitude != null)
+  );
   // Location section is progressive disclosure (Groups plan resolved
   // decision #6): starts collapsed as an empty "Add Venue" card on create,
   // or a summary card on edit — expands in place when tapped.
@@ -81,13 +122,12 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
   // Join mode
   const [joinMode, setJoinMode] = useState<'AUTO' | 'APPROVAL'>(initialGroup?.joinMode ?? 'AUTO');
 
-  // Courts
+  // Courts — editable list in place (same UX as HostMatchScreen).
   const [courts, setCourts] = useState<CourtField[]>(
     initialGroup && initialGroup.courts.length
       ? initialGroup.courts.map((c) => ({ key: nextCourtKey(), name: c.name ?? '' }))
       : [{ key: nextCourtKey(), name: '' }]
   );
-  const [newCourtName, setNewCourtName] = useState('');
 
   // Recurring schedule
   const [recurringSlots, setRecurringSlots] = useState<RecurringSlotField[]>(
@@ -112,6 +152,37 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
   // Group Admin is always the caller (backend sets it) — display-only, never
   // sent in the payload. Mirrors HostMatchScreen's read-only Host Name field.
   const [adminName, setAdminName] = useState(initialGroup?.admin.fullName ?? '');
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const fieldRefs = useRef<Record<string, View | null>>({});
+
+  const setFieldRef = (key: string) => (node: View | null) => {
+    fieldRefs.current[key] = node;
+  };
+
+  const scrollToFirstError = (errors: Record<string, string>) => {
+    let firstKey =
+      FIELD_ORDER.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    if (!firstKey) return;
+    // Home Venue fields may still be mounting after we expand the section.
+    if (VENUE_FIELD_KEYS.has(firstKey) && !fieldRefs.current[firstKey]) {
+      firstKey = 'venueName';
+    }
+    const fieldNode = fieldRefs.current[firstKey];
+    const contentNode = contentRef.current;
+    if (!fieldNode || !contentNode) return;
+    const relativeTo = findNodeHandle(contentNode);
+    if (relativeTo == null) return;
+    requestAnimationFrame(() => {
+      fieldNode.measureLayout(
+        relativeTo,
+        (_x, y) => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true });
+        },
+        () => {}
+      );
+    });
+  };
 
   useEffect(() => {
     getVnAdminTree().then((tree) => setProvinces(tree.provinces)).catch(() => setProvinces([]));
@@ -122,17 +193,44 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
     getMe().then((profile) => setAdminName(profile.fullName)).catch(() => undefined);
   }, [mode]);
 
+  useEffect(() => {
+    const query = venueName.trim();
+    if (query.length < 1 || !venueEditing) {
+      setVenueSuggestions([]);
+      setVenueSuggestionsLoading(false);
+      return;
+    }
+    setVenueSuggestionsLoading(true);
+    const handle = setTimeout(() => {
+      // Omit sport so Create Group can reuse any sân already in kèo/groups DB.
+      getVenueSuggestions(query)
+        .then((rows) => setVenueSuggestions(rows ?? []))
+        .catch(() => setVenueSuggestions([]))
+        .finally(() => setVenueSuggestionsLoading(false));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [venueName, venueEditing]);
+
   const selectedProvince = provinces.find((p) => p.code === province);
   const cityOptions = (selectedProvince?.cities ?? []).map((c) => ({ label: c.name, value: c.code }));
+
+  function applyVenueSuggestion(suggestion: VenueSuggestion) {
+    setVenueName(suggestion.venueName);
+    setVenueAddress(suggestion.venueAddress);
+    if (suggestion.province) setProvince(suggestion.province);
+    if (suggestion.city) setCity(suggestion.city);
+    setLatitude(suggestion.latitude);
+    setLongitude(suggestion.longitude);
+    setVenueSuggestionsVisible(false);
+    setLocationLocked(true);
+  }
 
   function toggleSkill(code: string) {
     setSkillCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
   }
 
   function addCourt() {
-    if (!newCourtName.trim()) return;
-    setCourts((prev) => [...prev, { key: nextCourtKey(), name: newCourtName.trim() }]);
-    setNewCourtName('');
+    setCourts((prev) => [...prev, { key: nextCourtKey(), name: '' }]);
   }
 
   function removeCourt(key: string) {
@@ -141,7 +239,20 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
 
   function updateCourtName(key: string, value: string) {
     setCourts((prev) => prev.map((c) => (c.key === key ? { ...c, name: value } : c)));
+    if (fieldErrors.courts) {
+      setFieldErrors((prev) => {
+        if (!prev.courts) return prev;
+        const next = { ...prev };
+        delete next.courts;
+        return next;
+      });
+    }
   }
+
+  const courtDuplicateWarning = useMemo(() => {
+    const names = courts.map((c) => c.name.trim().toLowerCase()).filter(Boolean);
+    return new Set(names).size !== names.length ? 'Court names must be unique' : null;
+  }, [courts]);
 
   function addSlot(slot: RecurringSlotField) {
     setRecurringSlots((prev) => [...prev, slot]);
@@ -184,8 +295,20 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         const key = String(issue.path[0]);
         if (!errors[key]) errors[key] = issue.message;
       }
+      const needsVenueOpen = Object.keys(errors).some((key) => VENUE_FIELD_KEYS.has(key));
+      if (needsVenueOpen) setVenueEditing(true);
       setFieldErrors(errors);
-      setSubmitError('Please fix the highlighted fields.');
+      const orderedKeys = [
+        ...FIELD_ORDER.filter((key) => errors[key]),
+        ...Object.keys(errors).filter((key) => !FIELD_ORDER.includes(key as (typeof FIELD_ORDER)[number])),
+      ];
+      const summary = orderedKeys
+        .slice(0, 3)
+        .map((key) => `${FIELD_LABELS[key] ?? key}: ${errors[key]}`)
+        .join('\n');
+      setSubmitError(summary || 'Please fix the highlighted fields.');
+      // Wait a tick if Home Venue must expand before measuring layout.
+      setTimeout(() => scrollToFirstError(errors), needsVenueOpen ? 80 : 0);
       return;
     }
     setFieldErrors({});
@@ -241,11 +364,16 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         <View style={styles.backButtonSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View ref={contentRef} collapsable={false}>
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
         <Section title="General Information" icon="information-circle-outline">
-          <Field label="Group Name" error={fieldErrors.name}>
+          <Field label="Group Name" error={fieldErrors.name} fieldKey="name" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-name"
               style={styles.input}
@@ -268,7 +396,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               </View>
             </View>
           </Field>
-          <Field label="Title" error={fieldErrors.title}>
+          <Field label="Title" error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-title"
               style={styles.input}
@@ -293,6 +421,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         </Section>
 
         <Section title="Home Venue" icon="location-outline">
+          <View ref={setFieldRef('venueName')} collapsable={false}>
           {!venueEditing && venueName ? (
             <TouchableOpacity testID="create-group-add-venue" style={styles.venueSummaryCard} onPress={() => setVenueEditing(true)}>
               <View style={styles.venueSummaryIcon}>
@@ -322,21 +451,58 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           ) : (
             <>
               <Field label="Venue Name" error={fieldErrors.venueName}>
-                <View style={styles.pickerField}>
-                  <TextInput
-                    testID="create-group-venue-name"
-                    style={styles.locationInput}
-                    placeholder="Venue name"
-                    placeholderTextColor={colors.outline}
-                    value={venueName}
-                    onChangeText={setVenueName}
-                  />
-                  <TouchableOpacity testID="create-group-open-map-picker" onPress={() => setPinPickerVisible(true)}>
-                    <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
-                  </TouchableOpacity>
+                <View style={styles.locationFieldWrap}>
+                  <View style={styles.pickerField}>
+                    <TextInput
+                      testID="create-group-venue-name"
+                      style={styles.locationInput}
+                      placeholder="Search or enter venue name"
+                      placeholderTextColor={colors.outline}
+                      value={venueName}
+                      onChangeText={(t) => {
+                        setVenueName(t);
+                        setVenueSuggestionsVisible(true);
+                        setLocationLocked(false);
+                      }}
+                      onFocus={() => setVenueSuggestionsVisible(true)}
+                    />
+                    <TouchableOpacity testID="create-group-open-map-picker" onPress={() => setPinPickerVisible(true)}>
+                      <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                    </TouchableOpacity>
+                  </View>
+                  {venueSuggestionsVisible && venueName.trim().length > 0 && (
+                    <View testID="create-group-venue-suggestions" style={styles.suggestionsBox}>
+                      {venueSuggestionsLoading ? (
+                        <ActivityIndicator style={styles.suggestionsSpinner} color={colors.primary} />
+                      ) : venueSuggestions.length > 0 ? (
+                        <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                          {venueSuggestions.map((s, index) => (
+                            <TouchableOpacity
+                              key={`${s.venueName}-${index}`}
+                              testID={`create-group-venue-suggestion-${index}`}
+                              style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
+                              onPress={() => applyVenueSuggestion(s)}
+                            >
+                              <Ionicons name="location-outline" size={14} color={colors.outline} />
+                              <View style={styles.flexShrink}>
+                                <Text style={styles.suggestionText} numberOfLines={1}>
+                                  {s.venueName}
+                                </Text>
+                                <Text style={styles.suggestionSubtext} numberOfLines={1}>
+                                  {s.venueAddress}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <Text style={styles.suggestionsEmpty}>No saved venues match. Keep typing or pick on the map.</Text>
+                      )}
+                    </View>
+                  )}
                 </View>
               </Field>
-              <Field label="Address" error={fieldErrors.venueAddress}>
+              <Field label="Address" error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef}>
                 <TextInput
                   testID="create-group-venue-address"
                   style={styles.input}
@@ -347,27 +513,31 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                 />
               </Field>
               <View style={styles.row}>
-                <SelectField
-                  label="Province/City"
-                  placeholder="Select province"
-                  value={province}
-                  onChange={(v) => {
-                    setProvince(v);
-                    setCity('');
-                  }}
-                  options={provinces.map((p) => ({ label: p.name, value: p.code }))}
-                  error={fieldErrors.province}
-                  containerStyle={styles.rowItem}
-                />
-                <SelectField
-                  label="Ward/Commune"
-                  placeholder={province ? 'Select ward' : 'Pick province'}
-                  value={city}
-                  onChange={setCity}
-                  options={cityOptions}
-                  error={fieldErrors.city}
-                  containerStyle={styles.rowItem}
-                />
+                <View ref={setFieldRef('province')} collapsable={false} style={styles.rowItem}>
+                  <SelectField
+                    label="Province/City"
+                    placeholder="Select province"
+                    value={province}
+                    onChange={(v) => {
+                      setProvince(v);
+                      setCity('');
+                    }}
+                    options={provinces.map((p) => ({ label: p.name, value: p.code }))}
+                    error={fieldErrors.province}
+                    disabled={locationLocked}
+                  />
+                </View>
+                <View ref={setFieldRef('city')} collapsable={false} style={styles.rowItem}>
+                  <SelectField
+                    label="Ward/Commune"
+                    placeholder={province ? 'Select ward' : 'Pick province'}
+                    value={city}
+                    onChange={setCity}
+                    options={cityOptions}
+                    error={fieldErrors.city}
+                    disabled={locationLocked}
+                  />
+                </View>
               </View>
               <TouchableOpacity
                 testID="create-group-venue-done"
@@ -379,9 +549,11 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               </TouchableOpacity>
             </>
           )}
+          </View>
         </Section>
 
         <Section title="Skill Level" icon="stats-chart-outline">
+          <View ref={setFieldRef('skillCodes')} collapsable={false}>
           <TouchableOpacity
             testID="create-group-all-levels"
             style={[styles.allLevelsBanner, allLevels && styles.allLevelsBannerActive]}
@@ -413,6 +585,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               {fieldErrors.skillCodes ? <Text style={styles.fieldError}>{fieldErrors.skillCodes}</Text> : null}
             </>
           )}
+          </View>
         </Section>
 
         <Section title="Join Mode" icon="shield-checkmark-outline">
@@ -444,52 +617,51 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         </Section>
 
         <Section title="Court Configuration" icon="grid-outline">
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
-              <Field label="No. of Courts">
-                <TextInput style={[styles.input, styles.readOnlyInput]} value={String(courts.length)} editable={false} />
-              </Field>
-            </View>
-            <View style={styles.rowItem}>
-              <Field label="Court Name">
-                <TextInput
-                  testID="create-group-new-court-name"
-                  style={styles.input}
-                  placeholder="e.g., Court A"
-                  placeholderTextColor={colors.outline}
-                  value={newCourtName}
-                  onChangeText={setNewCourtName}
-                  onSubmitEditing={addCourt}
-                />
-              </Field>
-            </View>
+          <View ref={setFieldRef('courts')} collapsable={false} style={styles.courtList}>
+            {courts.map((court, index) => {
+              const normalized = court.name.trim().toLowerCase();
+              const isDuplicate =
+                normalized.length > 0 &&
+                courts.some((other) => other.key !== court.key && other.name.trim().toLowerCase() === normalized);
+              return (
+                <View key={court.key} style={styles.courtRow}>
+                  <Text style={styles.courtIndex}>{index + 1}</Text>
+                  <TextInput
+                    testID={`create-group-court-${index}`}
+                    style={[styles.input, styles.courtInput, isDuplicate && styles.courtInputDuplicate]}
+                    placeholder={index === 0 ? 'e.g. Court A / Sân 1' : `Court ${index + 1} name`}
+                    placeholderTextColor={colors.outline}
+                    value={court.name}
+                    onChangeText={(t) => updateCourtName(court.key, t)}
+                  />
+                  {courts.length > 1 && (
+                    <TouchableOpacity
+                      testID={`create-group-remove-court-${index}`}
+                      style={styles.removeCourtButton}
+                      onPress={() => removeCourt(court.key)}
+                    >
+                      <Ionicons name="close" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            {courtDuplicateWarning ? (
+              <Text testID="create-group-court-duplicate-error" style={styles.fieldError}>
+                {courtDuplicateWarning}
+              </Text>
+            ) : fieldErrors.courts ? (
+              <Text style={styles.fieldError}>{fieldErrors.courts}</Text>
+            ) : null}
+            <TouchableOpacity testID="create-group-add-court" style={styles.addCourtButton} onPress={addCourt}>
+              <Ionicons name="add" size={16} color={colors.primaryDark} />
+              <Text style={styles.addCourtText}>Add Court</Text>
+            </TouchableOpacity>
           </View>
-          {fieldErrors.courts ? <Text style={styles.fieldError}>{fieldErrors.courts}</Text> : null}
-          <TouchableOpacity testID="create-group-add-court" style={styles.addCourtButton} onPress={addCourt}>
-            <Ionicons name="add" size={16} color={colors.primaryDark} />
-            <Text style={styles.addCourtText}>Add Court</Text>
-          </TouchableOpacity>
-
-          {courts.map((court, index) => (
-            <View key={court.key} style={styles.courtRow}>
-              <TextInput
-                testID={`create-group-court-${index}`}
-                style={[styles.input, styles.courtInput]}
-                placeholder={`Court ${index + 1} name`}
-                placeholderTextColor={colors.outline}
-                value={court.name}
-                onChangeText={(t) => updateCourtName(court.key, t)}
-              />
-              {courts.length > 1 && (
-                <TouchableOpacity testID={`create-group-remove-court-${index}`} style={styles.removeCourtButton} onPress={() => removeCourt(court.key)}>
-                  <Ionicons name="close" size={16} color={colors.error} />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
         </Section>
 
         <Section title="Recurring Schedule" icon="repeat-outline">
+          <View ref={setFieldRef('recurringSlots')} collapsable={false}>
           <Text style={styles.helperText}>Add the weekly time slots this group plays at.</Text>
           <CreateGroupSchedulePicker
             courtNames={courtNames}
@@ -498,10 +670,11 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
             onRemoveSlot={removeSlot}
             error={fieldErrors.recurringSlots}
           />
+          </View>
         </Section>
 
         <Section title="Contact & Media" icon="link-outline">
-          <Field label="Zalo Link (Optional)" error={fieldErrors.zaloUrl}>
+          <Field label="Zalo Link (Optional)" error={fieldErrors.zaloUrl} fieldKey="zaloUrl" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-zalo-url"
               style={styles.input}
@@ -548,7 +721,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               </TouchableOpacity>
             </View>
           </View>
-          <Field label="Logo URL (Optional)" error={fieldErrors.logoUrl}>
+          <Field label="Logo URL (Optional)" error={fieldErrors.logoUrl} fieldKey="logoUrl" setFieldRef={setFieldRef}>
             <TextInput
               ref={logoInputRef}
               testID="create-group-logo-url"
@@ -560,7 +733,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               autoCapitalize="none"
             />
           </Field>
-          <Field label="Cover Image URL (Optional)" error={fieldErrors.coverUrl}>
+          <Field label="Cover Image URL (Optional)" error={fieldErrors.coverUrl} fieldKey="coverUrl" setFieldRef={setFieldRef}>
             <TextInput
               ref={coverInputRef}
               testID="create-group-cover-url"
@@ -575,6 +748,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         </Section>
 
         <SubmitButton label={mode === 'edit' ? 'Save Changes' : 'Create Group'} loading={isSubmitting} onPress={handleSubmit} />
+        </View>
       </ScrollView>
 
       <PinDropModal
@@ -593,7 +767,9 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           if (matchedProvince) {
             setProvince(matchedProvince);
             setCity(matchedCity ?? '');
+            setLocationLocked(true);
           }
+          setVenueSuggestionsVisible(false);
           setPinPickerVisible(false);
         }}
       />
@@ -623,9 +799,25 @@ function Section({
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  fieldKey,
+  setFieldRef,
+  children,
+}: {
+  label: string;
+  error?: string;
+  fieldKey?: string;
+  setFieldRef?: (key: string) => (node: View | null) => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={styles.field}>
+    <View
+      style={styles.field}
+      collapsable={false}
+      ref={fieldKey && setFieldRef ? setFieldRef(fieldKey) : undefined}
+    >
       <Text style={styles.fieldLabel}>{label}</Text>
       {children}
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
@@ -687,6 +879,32 @@ const styles = StyleSheet.create({
   multilineInput: { height: 80, textAlignVertical: 'top', paddingTop: spacing.sm },
   readOnlyInput: { backgroundColor: colors.iconBackground, color: colors.bodyText },
   locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  locationFieldWrap: { gap: spacing.xxs },
+  suggestionsBox: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  suggestionsSpinner: { paddingVertical: spacing.md },
+  suggestionsEmpty: {
+    fontSize: 12,
+    color: colors.outline,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  suggestionSubtext: { fontSize: 11, color: colors.outline },
 
   // Group Media tiles — mirror the Pencil "Section - Group Media Card" frame
   // (camera / cloud-upload icon tiles). The pasted-URL TextInputs below stay
@@ -852,8 +1070,17 @@ const styles = StyleSheet.create({
   joinModeTitleSelected: { color: colors.primaryDark },
   joinModeSubtext: { fontSize: 11, color: colors.outline },
 
+  courtList: { gap: spacing.sm },
   courtRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  courtIndex: {
+    width: 22,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.outline,
+    textAlign: 'center',
+  },
   courtInput: { flex: 1 },
+  courtInputDuplicate: { borderColor: colors.error },
   removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.errorBackground, alignItems: 'center', justifyContent: 'center' },
   addCourtButton: {
     flexDirection: 'row',

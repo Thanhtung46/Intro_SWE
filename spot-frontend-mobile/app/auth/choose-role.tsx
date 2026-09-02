@@ -55,7 +55,9 @@ export default function ChooseRoleRoute() {
       return;
     }
 
-    router.push({ pathname: '/auth/otp', params: { email } });
+    // replace, not push: the role is now committed server-side, so coming
+    // back here would only hit a 409 "role already selected".
+    router.replace({ pathname: '/auth/otp', params: { email, role: selectedRole } });
   };
 
   return (

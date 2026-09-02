@@ -89,31 +89,51 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
 - **Booking** (`app/booking/index.tsx`, `app/booking/map.tsx`): reached from
   Home's "Book Field" quick action. `BookingScreen.tsx` is a venue list
   (Figma node `79:1390`) with its own search/filter bar and a map-view
-  button (→ `/booking/map`); `BookingMapScreen.tsx` is a static map-image
-  mockup (Figma node `79:1286`) with tappable pins and a venue popup — no
-  real map SDK (`react-native-maps`) or `GOOGLE_MAPS_KEY` wiring exists
-  yet, so pan/zoom/location controls are `comingSoon()` placeholders.
-  Venue data for both is local mock arrays, not an API call.
-- The top app bar (logo + AI/notification/avatar) is **not** actually one
-  shared component today: `src/components/layout/AppHeader.tsx` (with
-  `onAssistantPress`/`onAvatarPress` props) is only used by `BookingScreen.tsx`;
-  Home/Schedule/Settings instead go through `src/components/AppShell.tsx`,
-  which has its own separately duplicated inline copy of the same header
-  markup (own `onPress={() => router.push(ROUTES.ASSISTANT)}` wiring for
-  the AI icon — kept in sync by hand, not by sharing code).
+  button (→ `/booking/map`); `BookingMapScreen.tsx` is a **pre-SPOT-76
+  static map-image mockup** (Figma node `79:1286`) with tappable pins and a
+  venue popup — its pan/zoom/location controls are `comingSoon()`
+  placeholders and its venue data is a local mock array. This is the one
+  screen still on the old mockup; the SPOT-76 map stack below (real map via
+  WebView + Leaflet + Geoapify) has not been ported to it yet.
+- **Maps (SPOT-76)** — no `react-native-maps`, no Google Maps key. The stack
+  is `react-native-webview` + Leaflet (CDN) + Geoapify raster tiles
+  (`EXPO_PUBLIC_GEOAPIFY_API_KEY`, see `src/config/env.ts`):
+  - `src/components/common/AppMap.tsx` — marker map + an optional `routeLine`
+    polyline (Leaflet `L.polyline` in `colors.primary`, fits its bounds).
+    Embedded on Match / Group / Tournament detail (venue mini-map) and
+    full-screen in `JoinMatchMapScreen` (browse-all, `/matches/map`).
+    `AppMap.web.tsx` is a deliberate "not available on web" stub — `npm run
+    web` isn't the primary target.
+  - `src/screens/common/VenueMapScreen.tsx` + `app/venue-map.tsx` — the
+    shared single-venue map (pin + text fallback when a venue has no
+    coords). Reached via `openVenueDirections(router, venue)`
+    (`src/utils/directions.ts`) from the `MatchCard` paper-plane, referee
+    board / assignment flows, and every detail screen's venue block — that
+    helper is the single choke point for the `/venue-map` route. Its
+    **"Chỉ đường"** button requests GPS (`requestCurrentPosition`,
+    `src/utils/location.ts`) and calls `getMotorcycleRoute`
+    (`geoapifyService.ts` — Geoapify Routing, `mode=motorcycle`, same
+    key/quota) to draw a blue route line + show distance/ETA. Native only;
+    any failure (no coords / permission declined / routing error / web)
+    falls back to `openDirections` (external Google Maps).
+  - `src/components/matches/PinDropModal.tsx` (+ `PinDropMap.tsx` / `.web.tsx`)
+    — "find it on the map" pin picker used by all three create screens
+    (`HostMatchScreen`, `CreateGroupScreen`, `CreateTournamentScreen`):
+    Geoapify autocomplete search → drop/drag pin → `reverseGeocode` prefills
+    Address + best-effort Province/Ward (`src/utils/vnAdminMatch.ts`, pre-2025
+    GSO codes, always lands in an editable field).
+- The top app bar (logo + AI/notification/avatar) is primarily owned by
+  `src/components/AppShell.tsx` (Home/Matches/Schedule/Settings), with the
+  AI sparkle wired to `router.push(ROUTES.ASSISTANT)`. `BookingScreen` may
+  still use `src/components/layout/AppHeader.tsx` separately;
   `BookingMapScreen` has no header (full-bleed map). The
   football/badminton segmented toggle is shared via
   `src/components/venue/SportSegmentedToggle.tsx` (Home/Booking only —
   the map screen's "All/Football/Badminton" filter-chip row is a
   different shape and stays screen-local).
-- **Bottom navigation**: `src/components/navigation/BottomNav.tsx` (owns
-  the 5-tab array — Home/Booking/Matches/Schedule/Settings — and its
-  navigation wiring; the individual tab leaf is
-  `src/components/navigation/BottomNavItem.tsx`) renders on Home, Booking,
-  Booking Map, Schedule, Settings, and Profile. All five tabs navigate to
-  their real routes (`/booking`, `/matches`, `/schedule`, `/settings`; Home
-  goes back or replaces to `/home`) — the `comingSoon` placeholders that
-  used to sit on Schedule/Settings/Matches have all been wired up.
+- **Bottom navigation**: `SlidingBottomNav` (via `AppShell` / `BottomNav.tsx`)
+  owns the 5-tab array — Home/Booking/Matches/Schedule/Settings — and
+  navigates with `router.replace` so tab switches don't stack screens.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
   `*.test.ts(x)` next to several schemas/components) and a jest config
   **is** committed (`"jest": {"preset": "jest-expo"}` in `package.json`) —
@@ -174,12 +194,13 @@ exists beyond what's listed above.
   missing-config problem. Re-run `npm install` before debugging further.
 - **No ESLint/Prettier config is committed** — style is enforced by hand,
   not tooling (see Code Style & Conventions below).
-- **`.env.example`'s vars aren't wired up yet.** It lists `API_URL`,
-  `SOCKET_URL`, `GOOGLE_MAPS_KEY`, `ENV`, but nothing reads them into the
-  app yet — `process.env` is not populated at runtime in Expo/RN without
-  extra bundler config. `expo-constants` **is** already a dependency, so
-  the intended path is `app.json`'s `expo.extra` + `Constants.expoConfig.extra`,
-  not a `.env` loader.
+- **`.env.example` — mixed.** `EXPO_PUBLIC_GEOAPIFY_API_KEY` **is** wired:
+  `src/config/env.ts` reads `process.env.EXPO_PUBLIC_*` (Metro inlines
+  `EXPO_PUBLIC_`-prefixed vars at build time, SDK 49+). The rest
+  (`API_URL`, `SOCKET_URL`, `ENV`) are still placeholders that nothing
+  reads — `API_URL` is actually derived at runtime in `env.ts`. The old
+  `GOOGLE_MAPS_KEY` line was removed (maps use Geoapify, not Google — see
+  the Maps section above).
 - **Two color-token files used to exist** (`src/constants/colors.ts` and
   `src/theme/colors.ts`) with different values for the same semantic
   colors (e.g. two different "primary blue"s). `src/theme/colors.ts` has
@@ -233,6 +254,8 @@ app/                       # expo-router routes (file-based) — every feature
 │   └── map.tsx                 # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup)
 ├── venue/[id].tsx            # "/venue/:id" → src/screens/venue/VenueDetailScreen.tsx (venue detail)
 ├── assistant/index.tsx        # thin route → src/screens/assistant/AssistantScreen.tsx (AI chat, spec 004)
+├── venue-map.tsx             # "/venue-map" → src/screens/common/VenueMapScreen.tsx (shared single-venue map — Matches/Groups/Tournaments/Referee)
+├── matches/ , groups/ , tournaments/ , referee/   # SPOT-76 / SPOT-93 feature routes (not expanded here — see each feature's Figma/plan)
 └── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
 ├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,assistant,profile,settings,schedule}/   # presentational screen components

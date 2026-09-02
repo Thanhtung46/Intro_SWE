@@ -125,8 +125,8 @@ function assertJoinable(match) {
   if (match.status === MATCH_STATUSES.FULL || spotsLeft(match) < 1) {
     throw new AppError('Match is full', 400);
   }
-  if (new Date(match.ends_at).getTime() <= Date.now()) {
-    throw new AppError('Match has ended', 400);
+  if (new Date(match.starts_at).getTime() <= Date.now()) {
+    throw new AppError('Match has already started', 400);
   }
 }
 
@@ -152,12 +152,12 @@ function requireFeeGender(match, gender, message) {
   }
 }
 
-function shareForRequest(match, filledCount, joinerGender, guests) {
+function shareForRequest(match, joinerGender, guests) {
   const shareAmount = computeRequestShare({
     feeType: match.fee_type,
     priceMin: match.price_min,
     priceMax: match.price_max,
-    filledCount,
+    maxPlayers: match.max_players,
     joinerGender,
     guests,
   });
@@ -451,6 +451,7 @@ export async function listMatches(userId, query) {
       skillRanks: (query.skill || [])
         .map((code) => rankForSkill(query.sport, code))
         .filter((rank) => rank != null),
+      formats: query.format?.length ? query.format : undefined,
       priceMin: query.priceMin,
       priceMax: query.priceMax,
       location: query.location,
@@ -576,7 +577,7 @@ export async function getMatch(userId, rawId) {
       publicMatch.status === MATCH_STATUSES.OPEN &&
       publicMatch.spotsLeft >= 1 &&
       !yourRequest &&
-      new Date(row.ends_at).getTime() > Date.now();
+      new Date(row.starts_at).getTime() > Date.now();
 
     const participantSkillMap = await loadSkillMapForSport(
       client,
@@ -633,6 +634,7 @@ export async function getMatch(userId, rawId) {
     return {
       match: attachMatchOutcome(publicMatch, row),
       canJoin,
+      isHost,
       yourRequest,
       participants,
       summary,
@@ -733,7 +735,7 @@ export async function joinMatch(userId, rawId, body) {
       const autoJoin = match.join_mode === JOIN_MODES.AUTO;
       const filledAfter = Number(match.filled_count) + heads;
       const shareAmount = autoJoin
-        ? shareForRequest(match, filledAfter, joiner.gender, dto.guests)
+        ? shareForRequest(match, joiner.gender, dto.guests)
         : null;
 
       const existing = await joinRequestRepository.findLatestByMatchUser(
@@ -921,12 +923,7 @@ export async function acceptJoinRequest(userId, rawMatchId, rawRequestId) {
         'Joiner gender must be male or female to accept this request',
       );
       const filledAfter = Number(match.filled_count) + heads;
-      const shareAmount = shareForRequest(
-        match,
-        filledAfter,
-        request.gender,
-        guests,
-      );
+      const shareAmount = shareForRequest(match, request.gender, guests);
 
       const updated = await joinRequestRepository.updateDecision(client, requestId, {
         status: JOIN_REQUEST_STATUSES.ACCEPTED,

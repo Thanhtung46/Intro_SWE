@@ -1,6 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
@@ -14,9 +23,9 @@ import { GENDER_DIVISIONS, formatsForSport, needsGenderDivision } from '@/consta
 import { createTournamentSchema } from '@/schemas/createTournamentSchema';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getMe } from '@/services/authService';
-import { getHostProfile, getHostReviews, getVnAdminTree } from '@/services/matchService';
+import { getHostProfile, getHostReviews, getVenueSuggestions, getVnAdminTree } from '@/services/matchService';
 import { createTournament, updateTournament } from '@/services/tournamentService';
-import type { Sport } from '@/types/match';
+import type { Sport, VenueSuggestion } from '@/types/match';
 import type { VnProvince } from '@/types/geo';
 import type {
   CreateTournamentPayload,
@@ -67,6 +76,12 @@ export default function CreateTournamentScreen({
   const [longitude, setLongitude] = useState<number | null>(init?.longitude ?? null);
   const [provinces, setProvinces] = useState<VnProvince[]>([]);
   const [pinVisible, setPinVisible] = useState(false);
+  const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([]);
+  const [venueSuggestionsVisible, setVenueSuggestionsVisible] = useState(false);
+  const [venueSuggestionsLoading, setVenueSuggestionsLoading] = useState(false);
+  const [locationLocked, setLocationLocked] = useState(
+    Boolean(init?.province && init?.city && init?.latitude != null)
+  );
 
   const [startsAt, setStartsAt] = useState<Date | null>(init ? new Date(init.startsAt) : null);
   const [endsAt, setEndsAt] = useState<Date | null>(init ? new Date(init.endsAt) : null);
@@ -90,6 +105,28 @@ export default function CreateTournamentScreen({
       .then((tree) => setProvinces(tree.provinces))
       .catch(() => setProvinces([]));
   }, []);
+
+  useEffect(() => {
+    if (locked) {
+      setVenueSuggestions([]);
+      return;
+    }
+    const query = venueName.trim();
+    if (query.length < 1) {
+      setVenueSuggestions([]);
+      setVenueSuggestionsLoading(false);
+      return;
+    }
+    setVenueSuggestionsLoading(true);
+    const handle = setTimeout(() => {
+      // Same pool as Host Match / Create Group — any sân already in DB.
+      getVenueSuggestions(query)
+        .then((rows) => setVenueSuggestions(rows ?? []))
+        .catch(() => setVenueSuggestions([]))
+        .finally(() => setVenueSuggestionsLoading(false));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [venueName, locked]);
 
   const runGateCheck = useMemo(
     () => async (): Promise<Gate> => {
@@ -117,6 +154,17 @@ export default function CreateTournamentScreen({
   const selectedProvince = provinces.find((p) => p.code === province);
   const cityOptions = (selectedProvince?.cities ?? []).map((c) => ({ label: c.name, value: c.code }));
   const formatOptions = useMemo(() => formatsForSport(sport), [sport]);
+
+  function applyVenueSuggestion(suggestion: VenueSuggestion) {
+    setVenueName(suggestion.venueName);
+    setVenueAddress(suggestion.venueAddress);
+    if (suggestion.province) setProvince(suggestion.province);
+    if (suggestion.city) setCity(suggestion.city);
+    setLatitude(suggestion.latitude);
+    setLongitude(suggestion.longitude);
+    setVenueSuggestionsVisible(false);
+    setLocationLocked(true);
+  }
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -344,7 +392,9 @@ export default function CreateTournamentScreen({
               value={coverUrl}
               onChangeText={setCoverUrl}
             />
-            {coverUrl ? <Image source={{ uri: coverUrl }} style={styles.coverPreview} /> : null}
+            {coverUrl ? (
+              <Image source={{ uri: coverUrl }} style={styles.coverPreview} resizeMode="cover" />
+            ) : null}
           </Field>
           <Field label="Description" error={fieldErrors.description}>
             <TextInput
@@ -361,20 +411,57 @@ export default function CreateTournamentScreen({
 
         <Section title="Venue" icon="location-outline">
           <Field label="Venue Name" error={fieldErrors.venueName}>
-            <View style={styles.pickerField}>
-              <TextInput
-                testID="create-tournament-venue-name"
-                style={[styles.locationInput, locked && styles.readOnlyInput]}
-                placeholder="e.g. SPOT Arena"
-                placeholderTextColor={colors.outline}
-                value={venueName}
-                editable={!locked}
-                onChangeText={setVenueName}
-              />
-              {!locked && (
-                <TouchableOpacity testID="create-tournament-open-map" onPress={() => setPinVisible(true)}>
-                  <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
-                </TouchableOpacity>
+            <View style={styles.locationFieldWrap}>
+              <View style={styles.pickerField}>
+                <TextInput
+                  testID="create-tournament-venue-name"
+                  style={[styles.locationInput, locked && styles.readOnlyInput]}
+                  placeholder="Search or enter venue name"
+                  placeholderTextColor={colors.outline}
+                  value={venueName}
+                  editable={!locked}
+                  onChangeText={(t) => {
+                    setVenueName(t);
+                    setVenueSuggestionsVisible(true);
+                    setLocationLocked(false);
+                  }}
+                  onFocus={() => !locked && setVenueSuggestionsVisible(true)}
+                />
+                {!locked && (
+                  <TouchableOpacity testID="create-tournament-open-map" onPress={() => setPinVisible(true)}>
+                    <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {!locked && venueSuggestionsVisible && venueName.trim().length > 0 && (
+                <View testID="create-tournament-venue-suggestions" style={styles.suggestionsBox}>
+                  {venueSuggestionsLoading ? (
+                    <ActivityIndicator style={styles.suggestionsSpinner} color={colors.primary} />
+                  ) : venueSuggestions.length > 0 ? (
+                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                      {venueSuggestions.map((s, index) => (
+                        <TouchableOpacity
+                          key={`${s.venueName}-${index}`}
+                          testID={`create-tournament-venue-suggestion-${index}`}
+                          style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
+                          onPress={() => applyVenueSuggestion(s)}
+                        >
+                          <Ionicons name="location-outline" size={14} color={colors.outline} />
+                          <View style={styles.flexShrink}>
+                            <Text style={styles.suggestionText} numberOfLines={1}>
+                              {s.venueName}
+                            </Text>
+                            <Text style={styles.suggestionSubtext} numberOfLines={1}>
+                              {s.venueAddress}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.suggestionsEmpty}>No saved venues match. Keep typing or pick on the map.</Text>
+                  )}
+                </View>
               )}
             </View>
           </Field>
@@ -394,7 +481,7 @@ export default function CreateTournamentScreen({
               label="Province/City"
               placeholder="Select province"
               value={province}
-              disabled={locked}
+              disabled={locked || locationLocked}
               onChange={(v) => {
                 if (locked) return;
                 setProvince(v);
@@ -408,7 +495,7 @@ export default function CreateTournamentScreen({
               label="Ward/Commune"
               placeholder={province ? 'Select ward' : 'Pick province'}
               value={city}
-              disabled={locked}
+              disabled={locked || locationLocked}
               onChange={(v) => !locked && setCity(v)}
               options={cityOptions}
               error={fieldErrors.city}
@@ -492,16 +579,21 @@ export default function CreateTournamentScreen({
         visible={pinVisible}
         initialLatitude={latitude}
         initialLongitude={longitude}
+        seedQuery={venueName.trim() || venueAddress.trim()}
+        seedVenueName={venueName}
         provinces={provinces}
         onCancel={() => setPinVisible(false)}
-        onConfirm={({ latitude: lat, longitude: lng, address, province: mp, city: mc }) => {
+        onConfirm={({ latitude: lat, longitude: lng, address, venueName: pickedName, province: mp, city: mc }) => {
           setLatitude(lat);
           setLongitude(lng);
+          if (pickedName) setVenueName(pickedName);
           if (address) setVenueAddress(address);
           if (mp) {
             setProvince(mp);
             setCity(mc ?? '');
+            setLocationLocked(true);
           }
+          setVenueSuggestionsVisible(false);
           setPinVisible(false);
         }}
       />
@@ -632,7 +724,14 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 90, textAlignVertical: 'top' },
   readOnlyInput: { backgroundColor: colors.formScreenBackground, color: colors.outline },
 
-  coverPreview: { marginTop: spacing.xs, width: '100%', height: 120, borderRadius: 10, backgroundColor: colors.iconBackground },
+  coverPreview: {
+    marginTop: spacing.xs,
+    width: '100%',
+    height: 120,
+    borderRadius: 10,
+    backgroundColor: colors.iconBackground,
+    overflow: 'hidden',
+  },
 
   readOnlyPill: {
     alignSelf: 'flex-start',
@@ -668,6 +767,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  locationFieldWrap: { gap: spacing.xxs },
+  suggestionsBox: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  suggestionsSpinner: { paddingVertical: spacing.md },
+  suggestionsEmpty: {
+    fontSize: 12,
+    color: colors.outline,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  suggestionSubtext: { fontSize: 11, color: colors.outline },
+  flexShrink: { flexShrink: 1 },
   pickerValue: { fontSize: 14, color: colors.headingText },
   pickerPlaceholder: { fontSize: 14, color: colors.outline },
   coordHint: { fontSize: 12, color: colors.outline },
