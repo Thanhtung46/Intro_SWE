@@ -14,7 +14,11 @@ export default function MatchesHomepageRoute() {
   return (
     <AppShell activeTab="matches">
       <MatchesHomepageScreen
-        onOpenMap={() => router.push('/matches/map')}
+        onOpenMap={(tab) => {
+          if (tab === 'groups') return router.push('/groups/map');
+          if (tab === 'tournaments') return router.push('/tournaments/map');
+          return router.push('/matches/map');
+        }}
         onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)}
         onJoinMatch={(matchId) =>
           router.push({ pathname: '/matches/[id]', params: { id: String(matchId), join: '1' } })
@@ -25,6 +29,7 @@ export default function MatchesHomepageRoute() {
         onCreateGroup={(sport) => router.push({ pathname: '/groups/create', params: { sport } })}
         onManageGroups={() => router.push('/groups/mine')}
         onOpenTournament={(tournamentId) => router.push(`/tournaments/${tournamentId}`)}
+        onJoinTournament={(tournamentId) => router.push(`/tournaments/${tournamentId}/join`)}
         onCreateTournament={(sport) => router.push({ pathname: '/tournaments/create', params: { sport } })}
         onManageTournaments={() => router.push('/tournaments/mine')}
       />

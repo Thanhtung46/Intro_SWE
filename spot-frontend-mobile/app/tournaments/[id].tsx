@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import TournamentDetailScreen from '@/screens/tournaments/TournamentDetailScreen';
 import { openVenueDirections } from '@/utils/directions';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — parses :id, owns navigation.
 // Organizer-only callbacks (requests / add match / edit match) are passed
@@ -14,7 +15,8 @@ export default function TournamentDetailRoute() {
   return (
     <TournamentDetailScreen
       tournamentId={tournamentId}
-      onBack={() => router.back()}
+      onBack={() => safeBack(router, '/matches')}
+
       onJoin={(joinId) => router.push(`/tournaments/${joinId}/join`)}
       onManage={() => router.push('/tournaments/mine')}
       onOpenVenueMap={(venue) => openVenueDirections(router, venue)}

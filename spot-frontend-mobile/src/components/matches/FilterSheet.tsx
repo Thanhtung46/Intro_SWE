@@ -1,9 +1,8 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
-import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SelectField } from '@/components/SelectField';
@@ -13,6 +12,7 @@ import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
 import { formatsForSport } from '@/constants/matchFormats';
 import { formatVnd } from '@/utils/format';
 import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
+import { promptLocationFailure, requestCurrentPosition } from '@/utils/location';
 import { getVnAdminTree } from '@/services/matchService';
 import type { MatchFilters } from '@/types/matchFilters';
 import type { MatchFormat, Sport } from '@/types/match';
@@ -31,8 +31,8 @@ type LocationMode = 'location' | 'distance';
 const PRICE_MIN = 0;
 const PRICE_MAX = 500000;
 const PRICE_STEP = 10000;
-const RADIUS_MIN = 1;
-const RADIUS_MAX = 20;
+const RADIUS_MIN = 0;
+const RADIUS_MAX = 50;
 const RADIUS_DEFAULT = 10;
 // Extra inset beyond the sheet's own content padding so the slider's thumbs
 // (and their larger touch targets) never sit flush against the screen edge
@@ -79,7 +79,7 @@ function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChang
  * Province is picked.
  *
  * Distance (radius slider) mirrors GroupFilterSheet/TournamentFilterSheet:
- * a 1–20km slider; on Apply it requests `expo-location` foreground
+ * a 0–50km slider; on Apply it requests `expo-location` foreground
  * permission, reads the device position, and emits latitude/longitude/
  * radiusKm (XOR with `location` / province+city at the API level).
  *
@@ -180,21 +180,26 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     if (locationMode === 'distance') {
       setLocating(true);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Location needed', 'Allow location access to search matches near you, or switch back to Location.');
+        const pos = await requestCurrentPosition({ offerEnable: true });
+        if (!pos.ok) {
+          promptLocationFailure(pos.reason);
           return;
         }
-        const pos = await Location.getCurrentPositionAsync({});
+        if (!Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) {
+          promptLocationFailure('unavailable');
+          return;
+        }
         onApply({
           ...base,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          radiusKm,
+          // Distance XOR Location/search — never leave province/city on the
+          // filter object when switching to GPS radius mode.
+          province: undefined,
+          city: undefined,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          radiusKm: Math.round(radiusKm),
         });
         onClose();
-      } catch {
-        Alert.alert('Location unavailable', "Couldn't get your current location. Try again or switch back to Location.");
       } finally {
         setLocating(false);
       }
@@ -205,6 +210,10 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
       ...base,
       province: provinceCode || undefined,
       city: cityCode || undefined,
+      // Clear any previous distance trio when using admin location.
+      latitude: undefined,
+      longitude: undefined,
+      radiusKm: undefined,
     });
     onClose();
   };

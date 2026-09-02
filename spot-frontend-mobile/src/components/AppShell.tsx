@@ -6,16 +6,32 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
-import BottomNavItem from '@/components/navigation/BottomNavItem';
+import SlidingBottomNav, { type SlidingTab, type SlidingTabKey } from '@/components/navigation/SlidingBottomNav';
 import { showAlert } from '@/utils/showAlert';
 import { useUser } from '../context/UserContext';
 import { getUnreadCount } from '../services/notificationService';
 import { NotificationMenu } from './NotificationMenu';
 import { ProfileMenu } from './ProfileMenu';
 
-type TabKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
+type TabKey = SlidingTabKey;
 
 const comingSoon = (feature: string) => showAlert('Coming soon', `${feature} is not available yet.`);
+
+const SHELL_TABS: SlidingTab[] = [
+  { key: 'home', label: 'Home', icon: 'home' },
+  { key: 'booking', label: 'Booking', icon: 'ticket-outline' },
+  { key: 'matches', label: 'Matches', icon: 'trophy-outline' },
+  { key: 'schedule', label: 'Schedule', icon: 'calendar-outline' },
+  { key: 'settings', label: 'Settings', icon: 'settings-outline' },
+];
+
+const TAB_PATH: Record<TabKey, '/home' | '/booking' | '/matches' | '/schedule' | '/settings'> = {
+  home: '/home',
+  booking: '/booking',
+  matches: '/matches',
+  schedule: '/schedule',
+  settings: '/settings',
+};
 
 /**
  * Persistent top header + bottom tab bar shared across Home/Matches/
@@ -42,9 +58,11 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
     refreshUnreadCount();
   }, []);
 
-  const goToTab = (tab: TabKey, path: '/home' | '/booking' | '/matches' | '/schedule' | '/settings') => {
+  const goToTab = (tab: TabKey) => {
     if (activeTab === tab) return;
-    router.push(path);
+    // replace keeps the tab switch from stacking screens; root Stack uses
+    // animation: 'none' for these routes so pages don't overlap while fading.
+    router.replace(TAB_PATH[tab]);
   };
 
   return (
@@ -86,31 +104,7 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
       <View style={styles.content}>{children}</View>
 
       <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-        <BottomNavItem icon="home" label="Home" active={activeTab === 'home'} onPress={() => goToTab('home', '/home')} />
-        <BottomNavItem
-          icon="ticket-outline"
-          label="Booking"
-          active={activeTab === 'booking'}
-          onPress={() => goToTab('booking', '/booking')}
-        />
-        <BottomNavItem
-          icon="trophy-outline"
-          label="Matches"
-          active={activeTab === 'matches'}
-          onPress={() => goToTab('matches', '/matches')}
-        />
-        <BottomNavItem
-          icon="calendar-outline"
-          label="Schedule"
-          active={activeTab === 'schedule'}
-          onPress={() => goToTab('schedule', '/schedule')}
-        />
-        <BottomNavItem
-          icon="settings-outline"
-          label="Settings"
-          active={activeTab === 'settings'}
-          onPress={() => goToTab('settings', '/settings')}
-        />
+        <SlidingBottomNav tabs={SHELL_TABS} active={activeTab} onPress={goToTab} />
       </View>
 
       <ProfileMenu visible={profileMenuVisible} onClose={() => setProfileMenuVisible(false)} />
@@ -200,9 +194,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
     paddingHorizontal: 8,
     paddingTop: 6,
     // paddingBottom set from safe-area inset so the white bar reaches the

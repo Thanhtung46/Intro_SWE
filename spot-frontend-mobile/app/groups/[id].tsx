@@ -18,6 +18,7 @@ export default function GroupDetailRoute() {
       onOpenVenueMap={(venue) => openVenueDirections(router, venue)}
       onManageRequests={() => router.push(`/groups/${groupId}/requests`)}
       onEditGroup={() => router.push(`/groups/${groupId}/edit`)}
+      onOpenMemberProfile={(userId) => router.push(`/matches/host/${userId}`)}
     />
   );
 }

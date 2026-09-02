@@ -143,11 +143,11 @@ describe('listMatchesQuerySchema', () => {
     assert.equal(result.success, false);
   });
 
-  it('rejects radiusKm above 20', () => {
+  it('rejects radiusKm above 50', () => {
     const result = listMatchesQuerySchema.safeParse({
       latitude: '10.7',
       longitude: '106.7',
-      radiusKm: '21',
+      radiusKm: '51',
     });
     assert.equal(result.success, false);
   });

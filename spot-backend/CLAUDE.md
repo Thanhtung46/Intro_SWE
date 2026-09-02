@@ -117,7 +117,7 @@ Cập nhật khi ship matchmaking lớn. **Aug 2026** — Manage Matches Figma `
 
 | Batch | Nội dung | Migration / worker |
 | :--- | :--- | :--- |
-| **Lifecycle** | Browse ẩn kèo hết `endsAt`; join/`canJoin` chặn sau hết giờ; worker đủ người → `COMPLETED`, thiếu người → `CANCELLED` + notify; tab **Completed** chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage` | `008` (notification types), `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
+| **Lifecycle** | Browse ẩn kèo đã bắt đầu (`startsAt`); join/`canJoin` chặn sau `startsAt`; worker đủ người → `COMPLETED`, thiếu người → `CANCELLED` + notify; tab **Completed** chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage` | `008` (notification types), `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
 | **Manage Squad** | Pending: `avatarUrl`, `skill`, `phoneNumber`, `shareAmount`. Squad: `shareAmount`, `paymentStatus`, `skill` (HOST + player). Requests tab: `hostAvatarUrl`, `pendingCount`, `?status=PENDING\|REJECTED` | — |
 | **Joiner** | `DELETE /matches/:id/join` hủy PENDING | — |
 | **Review host (P3)** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `host.rating` live trên cards + profile; `joinedMatches` trên `GET /users/:id` | `009_schema_match_host_reviews.sql` |
@@ -259,6 +259,13 @@ npm run seed:football -- --count 30
 npm run seed:football -- --dry-run
 npm run reset:football -- --dry-run
 npm run reset:football                 # xóa chỉ kèo/host football.*@import.spot.local
+
+# Host groups + tournaments seed (default: thaicuongpk@gmail.com)
+npm run seed:host-gt:10                # 10 groups + 10 tournaments (full fields)
+npm run seed:host-gt -- --groups 5 --tournaments 1
+npm run seed:host-gt:badminton         # chỉ BADMINTON
+npm run seed:host-gt -- --dry-run      # xem plan, không ghi DB
+# HOST_EMAIL=... HOST_PASSWORD=... npm run seed:host-gt:10
 
 # Reset chỉ dữ liệu Vmito (sau khi đã sync) — không xóa kèo/user cũ trên DB
 npm run reset:vmito -- --dry-run       # đếm kèo + shadow host sẽ xóa
@@ -875,11 +882,11 @@ Product review locked. Do **not** re-open unless FE finds a gap.
 | :--- | :--- | :--- |
 | **Search (`location=`)** | **Done** | Full spec in **Homepage search** below. Postgres only — **not** Geoapify, **not** NLP/AI. |
 | **Suggestions while typing** | **Done** | Same `GET /matches?location=` returns `suggestions[]` (max 5). FE debounces per keystroke. |
-| **Public browse list** | **Done** | `OPEN` + spots left + `endsAt > now`; **`FULL` hidden**. Also hides caller’s hosted kèo + join `PENDING`/`ACCEPTED`/`KICKED`; **`REJECTED` reappears** — see **Manage Matches** browse exclusion. |
+| **Public browse list** | **Done** | `OPEN` + spots left + `startsAt > now` (chưa bắt đầu); **`FULL` hidden**. Also hides caller’s hosted kèo + join `PENDING`/`ACCEPTED`/`KICKED`; **`REJECTED` reappears** — see **Manage Matches** browse exclusion. |
 | **Hosted Matches on profile** | **Done** | `GET /matches?hostUserId=` still returns `OPEN` **and** `FULL` (future `endsAt`). |
 | **Filter tỉnh/quận** | **Done** | `province` + `city` exact codes from `GET /geo/vn` (pre-2025 63 tỉnh + quận/huyện). |
 | **Filter sport / date / time / skill / price** | **Done** | `skill` needs `sport`; prices in **VND**; skill chip labels map to codes in `sports.js`. |
-| **Distance filter** | **Done** | `latitude` + `longitude` + `radiusKm` (1–20 km). **XOR** with `location` → `400`. |
+| **Distance filter** | **Done** | `latitude` + `longitude` + `radiusKm` (0–50 km). **XOR** with `location` → `400`. |
 | **Favorites filter** | **Done** | `favorited=true`. Same browse-exclusion rule as default list. |
 | **Card fields** | **Done** | `coverUrl`, `host`, `isFavorited`, `participantAvatars`, `province`/`city` + names, `spotsLeft`, `yourShare` (VND). |
 | **Card location display** | FE | Show `{venueName}, {cityName}`; distance from user GPS = FE (Haversine or map). |
@@ -927,7 +934,7 @@ in range), `location` (unaccent + fuzzy `title` / `venueName` / `venueAddress`;
 `suggestions[]` while typing; Postgres only), `province` / `city` (pre-2025
 GSO codes, exact; `city` requires `province`; HCM `79`, Quận 7 `778`),
 `favorited=true` (caller’s hearts), `hostUserId` (that host’s active kèo),
-`latitude`+`longitude`+`radiusKm` (1–20, haversine; all three together;
+`latitude`+`longitude`+`radiusKm` (0–50, haversine; all three together;
 matches without coords excluded), `limit` (default 20, max 50), `offset`.
 
 **Location XOR Distance:** `location` together with lat/lng/radiusKm → `400`
@@ -976,7 +983,7 @@ Lowercase, strip Vietnamese diacritics and `đ`, collapse whitespace. So
 
 Returned on the **same** `GET /matches` when `location` is present (FE should
 debounce, e.g. 300 ms). Built from listable kèo only (same pool as browse:
-`OPEN`, spots left, `endsAt > now`).
+`OPEN`, spots left, `startsAt > now`).
 
 | Property | Value |
 | :--- | :--- |
@@ -1057,7 +1064,7 @@ mine / `GET /users/:id`.
   FE “Send Request (2)” = that number.
 - **`yourShare`** (runtime on match card): `ceil(priceMin / maxPlayers)` preview for viewer.
 - **`shareAmount`** (on join request / accepted participant): locked at join/accept for joiner + guests; Figma “Paid: 50k”.
-- Join / accept / `POST` blocked when `endsAt <= now` (`assertJoinable`, `canJoin: false`).
+- Join / accept / `POST` blocked when `startsAt <= now` (`assertJoinable`, `canJoin: false`).
 - Guests: `name`, `skill` (that sport’s ladder), `gender` `male`/`female`,
   **`phoneNumber` required**. Requester `phoneNumber` optional on join (else
   account phone). Host sees phones on waiting list and on `participants` after
@@ -1103,7 +1110,7 @@ is `PENDING` / `ACCEPTED` / `KICKED` (not `REJECTED` — they may join again).
 
 **Match expiry / Completed lifecycle**
 
-- Browse (`GET /matches`): chỉ `OPEN`, còn slot, **`endsAt > now`**.
+- Browse (`GET /matches`): chỉ `OPEN`, còn slot, **`startsAt > now`**.
 - Hết giờ **đủ người**: worker `processExpiredFullMatches` → `status = COMPLETED` (nhả sân); vào tab Completed.
 - Hết giờ **thiếu người**: `processExpiredUnderfilledMatches` → `CANCELLED` (không COMPLETED); reject `PENDING`; notify host + joiners (`MATCH_CANCELLED`, `data.reason = EXPIRED_UNDERFILLED`).
 - Host cancel: `POST /matches/:id/cancel` → notify joiners (`data.reason = HOST_CANCEL`); **không** vào Completed.
@@ -1289,7 +1296,8 @@ OPEN_REGISTRATION → FULL → ACTIVE → COMPLETED
 **Browse (`GET /tournaments`)**
 
 - Reuse **Groups filter** pattern: location, province/city, distance — **omit skill level**.
-- Hide tournaments where caller has join request **`PENDING`** or **`ACCEPTED`** (**`REJECTED`** visible again).
+- Hide tournaments the caller **organizes** (manage via Mine / Manage Tournaments).
+- Hide tournaments where caller has join request **`PENDING`** or **`ACCEPTED`** or **`KICKED`** (**`REJECTED`** visible again).
 - Hide **`FULL`** from public browse (same spirit as kèo hiding FULL).
 - **Favorites:** `POST/DELETE /tournaments/:id/favorite` + `isFavorited` on list/detail (Figma heart not drawn yet — still in scope).
 

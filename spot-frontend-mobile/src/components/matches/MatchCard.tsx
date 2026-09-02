@@ -17,6 +17,8 @@ type Props = {
   onJoin?: () => void;
   onToggleFavorite: () => void;
   onDirections: () => void;
+  /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
+  distanceLabel?: string | null;
 };
 
 /**
@@ -30,7 +32,7 @@ type Props = {
  * src/utils/directions.ts. `onDirections` is a callback prop (not owned
  * here) so every screen can wire the same `openDirections(match)` helper.
  */
-export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, onDirections }: Props) {
+export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, onDirections, distanceLabel }: Props) {
   const isFull = match.status === 'FULL' || match.spotsLeft < 1;
   // Prefer runtime yourShare (SPLIT_EVENLY = ceil(total/maxPlayers); GENDER_RANGE by viewer gender).
   // Fall back to listed prices when yourShare is null (e.g. GENDER_RANGE + viewer gender unknown).
@@ -155,7 +157,14 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
           </View>
         </View>
 
-        <Text style={styles.spotsLeftText}>{isFull ? 'Full' : `${match.spotsLeft} spots left`}</Text>
+        <View style={styles.spotsRow}>
+          <Text style={styles.spotsLeftText}>{isFull ? 'Full' : `${match.spotsLeft} spots left`}</Text>
+          {distanceLabel ? (
+            <Text style={styles.distanceText} numberOfLines={1}>
+              {distanceLabel} away
+            </Text>
+          ) : null}
+        </View>
 
         <View style={styles.participantsRow}>
           {match.participantAvatars.slice(0, 3).map((uri, index) => (
@@ -280,6 +289,7 @@ const styles = StyleSheet.create({
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   cardMetaText: { fontSize: 13, color: colors.bodyText },
   cardMetaTextFlex: { flex: 1, flexShrink: 1 },
+  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark, flexShrink: 0 },
   skillChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xxs },
   skillRangeArrow: { marginHorizontal: 2 },
   skillPill: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
@@ -290,7 +300,14 @@ const styles = StyleSheet.create({
   },
   skillPillAllLevelsText: { color: colors.primaryDark },
 
-  spotsLeftText: { fontSize: 12, fontWeight: '700', color: colors.error, marginTop: spacing.xs },
+  spotsRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  spotsLeftText: { fontSize: 12, fontWeight: '700', color: colors.error, flexShrink: 1 },
 
   participantsRow: { flexDirection: 'row', marginTop: spacing.xs },
   participantAvatar: {

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
@@ -21,6 +21,7 @@ type Props = {
 type RouteStatus = 'idle' | 'locating' | 'routing' | 'shown';
 
 const VENUE_MARKER_ID = 'venue';
+const ME_MARKER_ID = '__me__';
 
 /** 8 → "8m", 120 → "2h", 237 → "3h 57m". */
 function formatDuration(totalMinutes: number): string {
@@ -52,10 +53,30 @@ export default function VenueMapScreen({ venueName, venueAddress, latitude, long
   const [routeStatus, setRouteStatus] = useState<RouteStatus>('idle');
   const [routeLine, setRouteLine] = useState<{ latitude: number; longitude: number }[] | undefined>(undefined);
   const [routeInfo, setRouteInfo] = useState<{ km: string; minutes: number } | null>(null);
+  const [userPos, setUserPos] = useState<LatLng | null>(null);
 
-  const markers: AppMapMarker[] = venue
-    ? [{ id: VENUE_MARKER_ID, latitude: venue.latitude, longitude: venue.longitude, tintColor: colors.primaryDark, emoji: '📍' }]
-    : [];
+  const markers: AppMapMarker[] = (() => {
+    const pins: AppMapMarker[] = [];
+    if (venue) {
+      pins.push({
+        id: VENUE_MARKER_ID,
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        tintColor: colors.primaryDark,
+        emoji: '📍',
+      });
+    }
+    if (userPos) {
+      pins.push({
+        id: ME_MARKER_ID,
+        latitude: userPos.latitude,
+        longitude: userPos.longitude,
+        tintColor: '#2563EB',
+        emoji: '🏠',
+      });
+    }
+    return pins;
+  })();
 
   const busy = routeStatus === 'locating' || routeStatus === 'routing';
 
@@ -72,14 +93,23 @@ export default function VenueMapScreen({ venueName, venueAddress, latitude, long
     const cancel = { text: 'Close', style: 'cancel' as const };
 
     setRouteStatus('locating');
-    const pos = await requestCurrentPosition();
+    const pos = await requestCurrentPosition({ offerEnable: true });
     if (!pos.ok) {
       setRouteStatus('idle');
+      if (pos.reason === 'pref_off') {
+        // User declined the Allow dialog — offer Google Maps instead of Settings.
+        Alert.alert(
+          'Location not enabled',
+          'Open Google Maps for directions instead?',
+          [cancel, openGoogleMaps]
+        );
+        return;
+      }
       if (pos.reason === 'denied') {
         Alert.alert(
           'Location permission needed',
-          'SPOT needs your location to draw directions to this venue. Grant it in Settings, or open Google Maps instead.',
-          [cancel, { text: 'Open Settings', onPress: () => Linking.openSettings() }, openGoogleMaps]
+          'SPOT needs your location to draw directions to this venue. You can open Google Maps instead.',
+          [cancel, openGoogleMaps]
         );
       } else {
         Alert.alert(
@@ -91,6 +121,7 @@ export default function VenueMapScreen({ venueName, venueAddress, latitude, long
       return;
     }
     const from: LatLng = { latitude: pos.latitude, longitude: pos.longitude };
+    setUserPos(from);
 
     setRouteStatus('routing');
     const route = await getMotorcycleRoute(from, venue);

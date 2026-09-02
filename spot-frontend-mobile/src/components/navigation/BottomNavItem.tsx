@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { colors } from '@/constants/colors';
 
 const ACTIVE_BG = '#2170E4';
 const INACTIVE_TEXT = '#334155';
+const SPRING = { damping: 20, stiffness: 320, mass: 0.6 };
 
 type Props = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -14,15 +16,29 @@ type Props = {
   onPress: () => void;
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /** One tab of the bottom navigation shell — Figma node 8:139. */
-export default function BottomNavItem({ icon, label, active, onPress }: Props) {
+export default function BottomNavItem({ icon, label, active = false, onPress }: Props) {
+  const pressScale = useSharedValue(1);
+
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+
   return (
-    <TouchableOpacity
-      style={styles.item}
+    <AnimatedPressable
+      style={[styles.item, pressStyle]}
       onPress={onPress}
-      activeOpacity={0.8}
+      onPressIn={() => {
+        pressScale.value = withSpring(0.94, SPRING);
+      }}
+      onPressOut={() => {
+        pressScale.value = withSpring(1, SPRING);
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
     >
       {/* Pill hugs icon+label; outer item stays flex:1 for a decent tap target. */}
       <View style={[styles.pill, active && styles.pillActive]}>
@@ -31,7 +47,7 @@ export default function BottomNavItem({ icon, label, active, onPress }: Props) {
           {label}
         </Text>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

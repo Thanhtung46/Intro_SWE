@@ -125,8 +125,8 @@ function assertJoinable(match) {
   if (match.status === MATCH_STATUSES.FULL || spotsLeft(match) < 1) {
     throw new AppError('Match is full', 400);
   }
-  if (new Date(match.ends_at).getTime() <= Date.now()) {
-    throw new AppError('Match has ended', 400);
+  if (new Date(match.starts_at).getTime() <= Date.now()) {
+    throw new AppError('Match has already started', 400);
   }
 }
 
@@ -577,7 +577,7 @@ export async function getMatch(userId, rawId) {
       publicMatch.status === MATCH_STATUSES.OPEN &&
       publicMatch.spotsLeft >= 1 &&
       !yourRequest &&
-      new Date(row.ends_at).getTime() > Date.now();
+      new Date(row.starts_at).getTime() > Date.now();
 
     const participantSkillMap = await loadSkillMapForSport(
       client,

@@ -10,7 +10,7 @@ import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/Ma
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { cancelJoinRequest, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
+import { cancelJoinRequest, cancelMatch, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
 import type { Guest, MatchDetail, Participant, Sport } from '@/types/match';
 import { formatMatchWhenParts, formatVnd } from '@/utils/format';
 
@@ -29,6 +29,8 @@ type Props = {
   }) => void;
   onOpenHostProfile: (hostUserId: number) => void;
   onManageSquad?: () => void;
+  /** Host — navigate to edit form (PATCH /matches/:id). */
+  onEditMatch?: () => void;
 };
 
 type SquadMember = {
@@ -90,6 +92,7 @@ export default function MatchDetailScreen({
   onOpenVenueMap,
   onOpenHostProfile,
   onManageSquad,
+  onEditMatch,
 }: Props) {
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
@@ -97,6 +100,8 @@ export default function MatchDetailScreen({
   const [errorMessage, setErrorMessage] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
+  const [cancelMatchDialogVisible, setCancelMatchDialogVisible] = useState(false);
+  const [isCancellingMatch, setIsCancellingMatch] = useState(false);
   const didAutoOpenJoin = useRef(false);
 
   const fetchDetail = useCallback(async () => {
@@ -136,6 +141,20 @@ export default function MatchDetailScreen({
     }
   };
 
+  const handleConfirmCancelMatch = async () => {
+    if (!detail) return;
+    setCancelMatchDialogVisible(false);
+    setIsCancellingMatch(true);
+    try {
+      await cancelMatch(detail.match.matchId);
+      onBack();
+    } catch (err) {
+      Alert.alert('Something went wrong', getErrorMessage(err));
+    } finally {
+      setIsCancellingMatch(false);
+    }
+  };
+
   const handleToggleFavorite = async () => {
     if (!detail) return;
     const nextFavorited = !detail.match.isFavorited;
@@ -166,6 +185,11 @@ export default function MatchDetailScreen({
 
   const { match, participants, canJoin, isHost, yourRequest } = detail;
   const isPending = yourRequest?.status === 'PENDING';
+  const canHostManage =
+    Boolean(isHost) &&
+    match.status !== 'CANCELLED' &&
+    match.status !== 'COMPLETED' &&
+    new Date(match.startsAt).getTime() > Date.now();
   const host = participants.find((p) => p.role === 'HOST');
   const squadMembers = buildSquadMembers(participants);
   const openSlots = Math.max(0, match.maxPlayers - 1 - squadMembers.length);
@@ -352,39 +376,70 @@ export default function MatchDetailScreen({
       </SafeAreaView>
 
       <SafeAreaView edges={['bottom']} style={styles.actionBarWrap}>
-        <View style={styles.actionBar}>
-          <View>
-            <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
-            <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
+        {isHost ? (
+          <View style={styles.hostActionBar}>
+            <View style={styles.actionBar}>
+              <View>
+                <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
+                <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
+              </View>
+              {onManageSquad ? (
+                <TouchableOpacity testID="match-detail-manage-squad" style={styles.joinButton} onPress={onManageSquad}>
+                  <Text style={styles.joinButtonText}>
+                    {match.joinMode === 'APPROVAL' && (match.pendingRequestCount ?? 0) > 0 ? 'Manage Squad' : 'View Squad'}
+                  </Text>
+                  <Ionicons name="people-outline" size={16} color={colors.white} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            {canHostManage ? (
+              <View style={styles.hostSecondaryRow}>
+                {onEditMatch ? (
+                  <TouchableOpacity testID="match-detail-edit" style={styles.secondaryButton} onPress={onEditMatch}>
+                    <Ionicons name="create-outline" size={16} color={colors.primaryDark} />
+                    <Text style={styles.secondaryButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  testID="match-detail-cancel-match"
+                  style={[styles.secondaryButton, styles.secondaryButtonDanger]}
+                  onPress={() => setCancelMatchDialogVisible(true)}
+                  disabled={isCancellingMatch}
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
+                  <Text style={styles.secondaryButtonDangerText}>{isCancellingMatch ? 'Cancelling...' : 'Cancel Match'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
-          {isHost && onManageSquad ? (
-            <TouchableOpacity testID="match-detail-manage-squad" style={styles.joinButton} onPress={onManageSquad}>
-              <Text style={styles.joinButtonText}>
-                {match.joinMode === 'APPROVAL' && (match.pendingRequestCount ?? 0) > 0 ? 'Manage Squad' : 'View Squad'}
-              </Text>
-              <Ionicons name="people-outline" size={16} color={colors.white} />
-            </TouchableOpacity>
-          ) : isPending ? (
-            <TouchableOpacity
-              testID="match-detail-cancel-request"
-              style={[styles.cancelRequestButton, isCancelling && styles.joinButtonDisabled]}
-              onPress={() => setCancelDialogVisible(true)}
-              disabled={isCancelling}
-            >
-              <Text style={styles.cancelRequestButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel Request'}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              testID="match-detail-join"
-              style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
-              onPress={() => setJoinSheetVisible(true)}
-              disabled={!canJoin}
-            >
-              <Text style={styles.joinButtonText}>{canJoin ? 'Join Match' : match.spotsLeft < 1 ? 'Full' : 'Requested'}</Text>
-              {canJoin && <Ionicons name="flash" size={16} color={colors.white} />}
-            </TouchableOpacity>
-          )}
-        </View>
+        ) : (
+          <View style={styles.actionBar}>
+            <View>
+              <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
+              <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
+            </View>
+            {isPending ? (
+              <TouchableOpacity
+                testID="match-detail-cancel-request"
+                style={[styles.cancelRequestButton, isCancelling && styles.joinButtonDisabled]}
+                onPress={() => setCancelDialogVisible(true)}
+                disabled={isCancelling}
+              >
+                <Text style={styles.cancelRequestButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel Request'}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                testID="match-detail-join"
+                style={[styles.joinButton, !canJoin && styles.joinButtonDisabled]}
+                onPress={() => setJoinSheetVisible(true)}
+                disabled={!canJoin}
+              >
+                <Text style={styles.joinButtonText}>{canJoin ? 'Join Match' : match.spotsLeft < 1 ? 'Full' : 'Requested'}</Text>
+                {canJoin && <Ionicons name="flash" size={16} color={colors.white} />}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </SafeAreaView>
 
       <JoinMatchSheet
@@ -393,7 +448,11 @@ export default function MatchDetailScreen({
         matchTitle={match.title}
         sport={match.sport}
         requiredSkillLabels={
-          !match.allLevels ? [minLabel, maxLabel].filter((label): label is string => Boolean(label)) : undefined
+          !match.allLevels
+            ? [minLabel, maxLabel && maxLabel !== minLabel ? maxLabel : null].filter(
+                (label): label is string => Boolean(label)
+              )
+            : undefined
         }
         onClose={() => setJoinSheetVisible(false)}
         onSubmitted={fetchDetail}
@@ -407,6 +466,16 @@ export default function MatchDetailScreen({
         cancelLabel="Keep Request"
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelDialogVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={cancelMatchDialogVisible}
+        title="Cancel this match?"
+        message="Joiners will be notified. Pending requests are rejected. This cannot be undone."
+        confirmLabel="Cancel Match"
+        cancelLabel="Keep Match"
+        onConfirm={handleConfirmCancelMatch}
+        onCancel={() => setCancelMatchDialogVisible(false)}
       />
     </View>
   );
@@ -587,6 +656,7 @@ const styles = StyleSheet.create({
   notesText: { flex: 1, fontSize: 13, color: colors.bodyText, lineHeight: 20 },
 
   actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white },
+  hostActionBar: {},
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -595,6 +665,27 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.iconBackground,
   },
+  hostSecondaryRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    marginTop: -spacing.xs,
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+    borderRadius: 14,
+    paddingVertical: spacing.sm,
+  },
+  secondaryButtonText: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
+  secondaryButtonDanger: { borderColor: colors.error },
+  secondaryButtonDangerText: { fontSize: 14, fontWeight: '700', color: colors.error },
   actionBarLabel: { fontSize: 11, fontWeight: '800', color: colors.bodyText, letterSpacing: 0.5 },
   actionBarValue: { fontSize: 22, fontWeight: '800', color: colors.headingText },
   joinButton: {

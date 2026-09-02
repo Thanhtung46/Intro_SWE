@@ -14,6 +14,7 @@ import type {
   Match,
   MatchDetail,
   Sport,
+  UpdateMatchPayload,
   VenueSuggestion,
 } from '@/types/match';
 import type { VnAdminTree } from '@/types/geo';
@@ -215,6 +216,28 @@ export async function hostMatch(payload: CreateMatchPayload): Promise<Match> {
     return res.data.match;
   } catch (err) {
     throwFromAxiosError(err, "Couldn't create your match. Check your network and try again.");
+  }
+}
+
+/** PATCH /matches/:id — host edit before startsAt (see docs/API.md §7.10). */
+export async function updateMatch(matchId: number, payload: UpdateMatchPayload): Promise<Match> {
+  try {
+    const res = await apiClient.patch<{ match: Match }>(`/matches/${matchId}`, payload);
+    return res.data.match;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't update your match. Check your network and try again.");
+  }
+}
+
+/**
+ * POST /matches/:id/cancel — host cancels the kèo (status CANCELLED, reject
+ * PENDING, notify joiners). Not a hard delete — there is no DELETE /matches/:id.
+ */
+export async function cancelMatch(matchId: number): Promise<void> {
+  try {
+    await apiClient.post(`/matches/${matchId}/cancel`);
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't cancel this match. Check your network and try again.");
   }
 }
 

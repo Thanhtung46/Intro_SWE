@@ -20,6 +20,7 @@ export default function MatchDetailRoute() {
       onOpenVenueMap={(venue) => openVenueDirections(router, venue)}
       onOpenHostProfile={(hostUserId) => router.push(`/matches/host/${hostUserId}`)}
       onManageSquad={() => router.push(`/matches/${matchId}/squad`)}
+      onEditMatch={() => router.push(`/matches/${matchId}/edit`)}
     />
   );
 }

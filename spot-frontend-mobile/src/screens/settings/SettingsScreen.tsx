@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { ReactNode, useEffect, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { useUser } from '@/context/UserContext';
 import { colors } from '@/constants/colors';
 import { comingSoon } from '@/utils/comingSoon';
 import { clearAllTokens } from '@/utils/authStorage';
 import { Appearance, getPreferences, Language, updatePreferences } from '@/services/preferencesService';
+import { invalidateLocationPrefsCache } from '@/utils/location';
 // Alert.alert's button-array form (React Native's only way to offer a
 // multi-choice picker without a custom component) is a no-op on web —
 // react-native-web ships `class Alert { static alert() {} }`, verified
@@ -158,9 +160,19 @@ export default function SettingsScreen({
   const handleToggleLocationServices = async (value: boolean) => {
     setLocationServices(value);
     const result = await updatePreferences({ locationServicesEnabled: value });
+    invalidateLocationPrefsCache();
     if (!result.success) {
       setLocationServices(!value);
       notifyError(result.message || 'Something went wrong. Please try again.');
+      return;
+    }
+    if (value) {
+      // Turning the in-app toggle on should also ask for OS permission once.
+      try {
+        await Location.requestForegroundPermissionsAsync();
+      } catch {
+        // ignore — user can retry from Distance filter / Map
+      }
     }
   };
 

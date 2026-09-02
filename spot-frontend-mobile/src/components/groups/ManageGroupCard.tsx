@@ -10,18 +10,12 @@ type Props = {
   group: Group;
   variant: 'managed' | 'joined';
   onManage: () => void; // managed variant — opens ManageGroupRequestsScreen
-  onViewDetails: () => void; // joined variant — opens GroupDetailScreen
+  onViewDetails: () => void; // opens GroupDetailScreen (same as guest browse)
 };
 
 /**
- * Manage Groups list card — two layouts per the Pencil frames:
- * - `managed` ("Manage Group - Managed by Me"): centered logo + name +
- *   "Admin" pill + member count, full-width filled "Manage" button.
- * - `joined` ("Manage Group - Joined Groups"): horizontal icon tile + name
- *   + member count, full-width filled "View Group" button.
- * `pendingRequestCount` shows as a small badge on the managed card only —
- * approvals themselves happen in ManageGroupsScreen's Pending section
- * (Groups plan resolved decision #5), not from this card.
+ * Manage Groups list card — mirrors ManageMatchCard: tap card body → detail,
+ * Manage / View Group buttons keep their own actions.
  */
 export default function ManageGroupCard({ group, variant, onManage, onViewDetails }: Props) {
   const pendingCount = group.pendingRequestCount ?? 0;
@@ -30,24 +24,30 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
   if (variant === 'joined') {
     return (
       <View style={styles.joinedCard}>
-        <View style={styles.joinedRow}>
-          <View style={styles.iconTile}>
-            {logo ? (
-              <Image source={{ uri: logo }} style={styles.iconTileImage} />
-            ) : (
-              <Ionicons name="people" size={22} color={colors.primaryDark} />
-            )}
-          </View>
-          <View style={styles.joinedText}>
-            <Text style={styles.joinedName} numberOfLines={1} ellipsizeMode="tail">
-              {group.name}
-            </Text>
-            <View style={styles.memberRow}>
-              <Ionicons name="person" size={12} color={colors.outline} />
-              <Text style={styles.memberText}>{group.memberCount} members</Text>
+        <TouchableOpacity
+          testID={`manage-group-card-${group.groupId}`}
+          onPress={onViewDetails}
+          activeOpacity={0.85}
+        >
+          <View style={styles.joinedRow}>
+            <View style={styles.iconTile}>
+              {logo ? (
+                <Image source={{ uri: logo }} style={styles.iconTileImage} />
+              ) : (
+                <Ionicons name="people" size={22} color={colors.primaryDark} />
+              )}
+            </View>
+            <View style={styles.joinedText}>
+              <Text style={styles.joinedName} numberOfLines={1} ellipsizeMode="tail">
+                {group.name}
+              </Text>
+              <View style={styles.memberRow}>
+                <Ionicons name="person" size={12} color={colors.outline} />
+                <Text style={styles.memberText}>{group.memberCount} members</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity testID={`view-group-${group.groupId}`} style={styles.primaryButton} onPress={onViewDetails}>
           <Text style={styles.primaryButtonText}>View Group</Text>
         </TouchableOpacity>
@@ -62,23 +62,30 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
           <Text style={styles.pendingBadgeText}>{pendingCount} pending</Text>
         </View>
       )}
-      <View style={styles.logoLarge}>
-        {logo ? (
-          <Image source={{ uri: logo }} style={styles.logoLargeImage} />
-        ) : (
-          <Ionicons name="shield" size={30} color={colors.primaryDark} />
-        )}
-      </View>
-      <Text style={styles.managedName} numberOfLines={1} ellipsizeMode="tail">
-        {group.name}
-      </Text>
-      <View style={styles.adminPill}>
-        <Text style={styles.adminPillText}>Admin</Text>
-      </View>
-      <View style={styles.memberRow}>
-        <Ionicons name="people" size={14} color={colors.bodyText} />
-        <Text style={styles.managedMemberText}>{group.memberCount} members</Text>
-      </View>
+      <TouchableOpacity
+        testID={`manage-group-card-${group.groupId}`}
+        onPress={onViewDetails}
+        activeOpacity={0.85}
+        style={styles.managedBody}
+      >
+        <View style={styles.logoLarge}>
+          {logo ? (
+            <Image source={{ uri: logo }} style={styles.logoLargeImage} />
+          ) : (
+            <Ionicons name="shield" size={30} color={colors.primaryDark} />
+          )}
+        </View>
+        <Text style={styles.managedName} numberOfLines={1} ellipsizeMode="tail">
+          {group.name}
+        </Text>
+        <View style={styles.adminPill}>
+          <Text style={styles.adminPillText}>Admin</Text>
+        </View>
+        <View style={styles.memberRow}>
+          <Ionicons name="people" size={14} color={colors.bodyText} />
+          <Text style={styles.managedMemberText}>{group.memberCount} members</Text>
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity testID={`manage-group-${group.groupId}`} style={styles.primaryButton} onPress={onManage}>
         <Ionicons name="settings-outline" size={16} color={colors.white} />
         <Text style={styles.primaryButtonText}>Manage</Text>
@@ -96,6 +103,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  managedBody: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    width: '100%',
   },
   pendingBadge: {
     alignSelf: 'flex-end',

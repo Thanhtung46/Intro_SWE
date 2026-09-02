@@ -232,7 +232,7 @@ export type ListTournamentsQuery = {
   city?: string;
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20, all three together
+  radiusKm?: number; // 0-50, all three together
   favorited?: boolean;
   limit?: number;
   offset?: number;

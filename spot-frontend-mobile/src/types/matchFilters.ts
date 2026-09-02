@@ -20,10 +20,10 @@ export type MatchFilters = {
   favorited?: boolean;
   // Distance mode — mutually exclusive with the free-text search bar's
   // `location` at the API level; all three must be set together. Mirrors
-  // GroupFilters/TournamentFilters (expo-location, 1-20km).
+  // GroupFilters/TournamentFilters (expo-location, 0-50km).
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20
+  radiusKm?: number; // 0-50
 };
 
 export const EMPTY_MATCH_FILTERS: MatchFilters = { skill: [], format: [] };

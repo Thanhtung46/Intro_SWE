@@ -1,15 +1,14 @@
 import { useRouter } from 'expo-router';
 import JoinMatchMapScreen from '@/screens/matches/JoinMatchMapScreen';
 
-// Thin route (.claude/rules/code-style.md).
-export default function JoinMatchMapRoute() {
+export default function GroupsMapRoute() {
   const router = useRouter();
 
   return (
     <JoinMatchMapScreen
-      mode="matches"
+      mode="groups"
       onBack={() => router.back()}
-      onOpenItem={(matchId) => router.push(`/matches/${matchId}`)}
+      onOpenItem={(groupId) => router.push(`/groups/${groupId}`)}
     />
   );
 }

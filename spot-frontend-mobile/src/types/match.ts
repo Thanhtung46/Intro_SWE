@@ -56,6 +56,10 @@ export type Match = {
   notes: string | null;
   venueName: string;
   venueAddress: string;
+  province?: string | null;
+  provinceName?: string | null;
+  city?: string | null;
+  cityName?: string | null;
   latitude: number | null;
   longitude: number | null;
   startsAt: string;
@@ -146,7 +150,7 @@ export type ListMatchesQuery = {
   city?: string; // VN admin-unit code (pre-2025) — requires province
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20, requires latitude+longitude too
+  radiusKm?: number; // 0-50, requires latitude+longitude too
   favorited?: boolean;
   hostUserId?: number;
   limit?: number; // default 20, max 50
@@ -244,6 +248,11 @@ export type CreateMatchPayload = {
   courtCount?: number;
   courts: { name: string }[];
 };
+
+/** PATCH /matches/:id — host partial update before startsAt. */
+export type UpdateMatchPayload = Partial<
+  Omit<CreateMatchPayload, 'courts'> & { courts: { name: string }[] }
+>;
 
 // POST /matches/bulk — Vmito-style recurring publish. `template` omits the
 // schedule fields (startsAt/endsAt), which live per-entry in `schedules`.

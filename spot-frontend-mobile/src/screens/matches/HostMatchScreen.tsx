@@ -2,6 +2,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   findNodeHandle,
   Platform,
@@ -26,10 +27,12 @@ import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
 import { getMe } from '@/services/authService';
 import {
   getErrorMessage,
+  getMatchDetail,
   getVenueSuggestions,
   getVnAdminTree,
   hostMatch,
   hostMatchBulk,
+  updateMatch,
 } from '@/services/matchService';
 import { hostMatchSchema } from '@/schemas/hostMatchSchema';
 import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
@@ -38,9 +41,21 @@ import type { VnProvince } from '@/types/geo';
 
 type Props = {
   sport: Sport;
+  /** When set, form loads that match and PATCHes instead of creating. */
+  matchId?: number;
   onBack: () => void;
   onCreated: () => void;
+  onUpdated?: () => void;
 };
+
+function skillCodesFromRange(sport: Sport, skillMin: string | null, skillMax: string | null, allLevels: boolean): string[] {
+  if (allLevels || !skillMin) return [];
+  const skills = skillsForSport(sport);
+  const minRank = skills.find((s) => s.code === skillMin)?.rank;
+  const maxRank = skills.find((s) => s.code === (skillMax || skillMin))?.rank ?? minRank;
+  if (minRank == null || maxRank == null) return [];
+  return skills.filter((s) => s.rank >= minRank && s.rank <= maxRank).map((s) => s.code);
+}
 
 type CourtField = { key: string; name: string };
 
@@ -144,10 +159,17 @@ function nextCourtKey(): string {
  * (every kèo is public); adding either would be a UI control with nothing
  * behind it.
  */
-export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
+export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onUpdated }: Props) {
+  const isEdit = matchId != null;
   // Host identity (read-only)
   const [hostName, setHostName] = useState('');
   const [hostPhone, setHostPhone] = useState('');
+  const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    isEdit ? 'loading' : 'ready'
+  );
+  const [loadError, setLoadError] = useState('');
+  const [filledCount, setFilledCount] = useState(1);
+  const lockCoreFields = isEdit && filledCount > 1;
 
   // Location
   const [venueName, setVenueName] = useState('');
@@ -240,6 +262,71 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
     }).catch(() => {});
     getVnAdminTree().then((tree) => setProvinces(tree.provinces)).catch(() => setProvinces([]));
   }, []);
+
+  useEffect(() => {
+    if (matchId == null) return;
+    let cancelled = false;
+    setLoadStatus('loading');
+    getMatchDetail(matchId)
+      .then((detail) => {
+        if (cancelled) return;
+        if (!detail.isHost) {
+          setLoadError('Only the host can edit this match.');
+          setLoadStatus('error');
+          return;
+        }
+        const m = detail.match;
+        if (m.status === 'CANCELLED' || m.status === 'COMPLETED') {
+          setLoadError(`This match is ${m.status.toLowerCase()} and cannot be edited.`);
+          setLoadStatus('error');
+          return;
+        }
+        if (new Date(m.startsAt).getTime() <= Date.now()) {
+          setLoadError('Cannot edit a match that has already started.');
+          setLoadStatus('error');
+          return;
+        }
+        setFilledCount(m.filledCount);
+        setVenueName(m.venueName);
+        setVenueAddress(m.venueAddress);
+        setProvince(m.province ?? '');
+        setCity(m.city ?? '');
+        setLatitude(m.latitude);
+        setLongitude(m.longitude);
+        setLocationLocked(Boolean(m.province && m.city));
+        setTitle(m.title);
+        setNotes(m.notes ?? '');
+        setCoverUrl(m.coverUrl ?? '');
+        const starts = new Date(m.startsAt);
+        const ends = new Date(m.endsAt);
+        setDate(toIsoDate(starts));
+        setTimeFrom(toHm(starts));
+        setTimeTo(toHm(ends));
+        setCourts(
+          m.courts.length
+            ? m.courts.map((c) => ({ key: nextCourtKey(), name: c.name ?? '' }))
+            : [{ key: nextCourtKey(), name: '' }]
+        );
+        setAllLevels(m.allLevels);
+        setSkillCodes(skillCodesFromRange(m.sport, m.skillMin, m.skillMax, m.allLevels));
+        setFormat(m.format);
+        setMaxPlayers(String(m.maxPlayers));
+        setJoinMode(m.joinMode);
+        setFeeType(m.feeType);
+        setPriceMin(m.priceMin != null ? String(m.priceMin) : '');
+        setPriceMax(m.priceMax != null ? String(m.priceMax) : '');
+        setIsRecurring(false);
+        setLoadStatus('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(getErrorMessage(err));
+        setLoadStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
 
   useEffect(() => {
     const query = venueName.trim();
@@ -383,9 +470,9 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
       feeType,
       priceMin: priceMin === '' ? undefined : priceMin,
       priceMax: priceMax === '' ? undefined : priceMax,
-      isRecurring,
-      recurringWeekdays,
-      recurringWeeks: recurringWeeks === '' ? undefined : recurringWeeks,
+      isRecurring: isEdit ? false : isRecurring,
+      recurringWeekdays: isEdit ? [] : recurringWeekdays,
+      recurringWeeks: isEdit || recurringWeeks === '' ? undefined : recurringWeeks,
     });
 
     if (!parsed.success) {
@@ -410,6 +497,8 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
     setFieldErrors({});
 
     const values = parsed.data;
+    // Edit is always a single occurrence — never bulk/recurring.
+    const editMode = isEdit && matchId != null;
     const template: Omit<CreateMatchPayload, 'startsAt' | 'endsAt'> = {
       sport,
       format: values.format as MatchFormat,
@@ -423,7 +512,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
       latitude: values.latitude,
       longitude: values.longitude,
       isMultiDay: false,
-      isRecurring: values.isRecurring,
+      isRecurring: editMode ? false : values.isRecurring,
       maxPlayers: values.maxPlayers,
       allLevels: values.allLevels,
       skillMin: values.allLevels ? undefined : skillMin,
@@ -437,7 +526,20 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
 
     setIsSubmitting(true);
     try {
-      if (values.isRecurring) {
+      const [fromH, fromM] = values.timeFrom.split(':').map(Number);
+      const [toH, toM] = values.timeTo.split(':').map(Number);
+      const startsAtDate = parseIsoDate(values.date);
+      startsAtDate.setHours(fromH, fromM, 0, 0);
+      const endsAtDate = parseIsoDate(values.date);
+      endsAtDate.setHours(toH, toM, 0, 0);
+      const startsAt = startsAtDate.toISOString();
+      const endsAt = endsAtDate.toISOString();
+
+      if (editMode) {
+        await updateMatch(matchId, { ...template, startsAt, endsAt });
+        if (onUpdated) onUpdated();
+        else onCreated();
+      } else if (values.isRecurring) {
         const schedules = buildSchedules();
         const payload: CreateMatchBulkPayload = { template, schedules };
         const result = await hostMatchBulk(payload);
@@ -451,13 +553,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         }
         if (result.totalCreated > 0) onCreated();
       } else {
-        const [fromH, fromM] = values.timeFrom.split(':').map(Number);
-        const [toH, toM] = values.timeTo.split(':').map(Number);
-        const startsAtDate = parseIsoDate(values.date);
-        startsAtDate.setHours(fromH, fromM, 0, 0);
-        const endsAtDate = parseIsoDate(values.date);
-        endsAtDate.setHours(toH, toM, 0, 0);
-        await hostMatch({ ...template, startsAt: startsAtDate.toISOString(), endsAt: endsAtDate.toISOString() });
+        await hostMatch({ ...template, startsAt, endsAt });
         onCreated();
       }
     } catch (err) {
@@ -467,13 +563,29 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
     }
   }
 
+  if (loadStatus === 'loading') {
+    return (
+      <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
+        <ActivityIndicator color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (loadStatus === 'error') {
+    return (
+      <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
+        <ErrorBanner message={loadError || 'Could not load match.'} onRetry={onBack} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity testID="host-match-back" style={styles.backButton} onPress={onBack}>
           <Ionicons name="arrow-back" size={18} color={colors.headingText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Host a Match</Text>
+        <Text style={styles.headerTitle}>{isEdit ? 'Edit Match' : 'Host a Match'}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
@@ -760,18 +872,23 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         </Section>
 
         <Section title="Entry Fee" icon="cash-outline">
+          {lockCoreFields ? (
+            <Text style={styles.helperText}>Fee is locked after players have joined.</Text>
+          ) : null}
           <View style={styles.feeToggleRow}>
             <TouchableOpacity
               testID="host-match-fee-gender"
-              style={[styles.feeToggleButton, feeType === 'GENDER_RANGE' && styles.feeToggleButtonActive]}
-              onPress={() => setFeeType('GENDER_RANGE')}
+              style={[styles.feeToggleButton, feeType === 'GENDER_RANGE' && styles.feeToggleButtonActive, lockCoreFields && styles.feeToggleButtonDisabled]}
+              onPress={() => !lockCoreFields && setFeeType('GENDER_RANGE')}
+              disabled={lockCoreFields}
             >
               <Text style={[styles.feeToggleText, feeType === 'GENDER_RANGE' && styles.feeToggleTextActive]}>By Gender</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="host-match-fee-split"
-              style={[styles.feeToggleButton, feeType === 'SPLIT_EVENLY' && styles.feeToggleButtonActive]}
-              onPress={() => setFeeType('SPLIT_EVENLY')}
+              style={[styles.feeToggleButton, feeType === 'SPLIT_EVENLY' && styles.feeToggleButtonActive, lockCoreFields && styles.feeToggleButtonDisabled]}
+              onPress={() => !lockCoreFields && setFeeType('SPLIT_EVENLY')}
+              disabled={lockCoreFields}
             >
               <Text style={[styles.feeToggleText, feeType === 'SPLIT_EVENLY' && styles.feeToggleTextActive]}>Split Evenly</Text>
             </TouchableOpacity>
@@ -782,12 +899,13 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                 <Field label="Male Fee (VND)" error={fieldErrors.priceMax} fieldKey="priceMax" setFieldRef={setFieldRef}>
                   <TextInput
                     testID="host-match-price-male"
-                    style={styles.input}
+                    style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                     placeholder="0"
                     placeholderTextColor={colors.outline}
                     value={priceMax}
                     onChangeText={setPriceMax}
                     keyboardType="numeric"
+                    editable={!lockCoreFields}
                   />
                 </Field>
               </View>
@@ -795,12 +913,13 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                 <Field label="Female Fee (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
                   <TextInput
                     testID="host-match-price-female"
-                    style={styles.input}
+                    style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                     placeholder="0"
                     placeholderTextColor={colors.outline}
                     value={priceMin}
                     onChangeText={setPriceMin}
                     keyboardType="numeric"
+                    editable={!lockCoreFields}
                   />
                 </Field>
               </View>
@@ -809,17 +928,19 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
             <Field label="Total Price (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
               <TextInput
                 testID="host-match-price-total"
-                style={styles.input}
+                style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                 placeholder="0"
                 placeholderTextColor={colors.outline}
                 value={priceMin}
                 onChangeText={setPriceMin}
                 keyboardType="numeric"
+                editable={!lockCoreFields}
               />
             </Field>
           )}
         </Section>
 
+        {!isEdit ? (
         <Section
           title="Recurring Match"
           icon="repeat-outline"
@@ -871,8 +992,12 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
             </>
           )}
         </Section>
+        ) : null}
 
             <Section title="Format & Squad" icon="people-outline">
+              {lockCoreFields ? (
+                <Text style={styles.helperText}>Format is locked after players have joined.</Text>
+              ) : null}
               <View ref={setFieldRef('format')} collapsable={false}>
               <View style={styles.skillGrid}>
                 {formatsForSport(sport).map((opt) => {
@@ -881,7 +1006,8 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                     <TouchableOpacity
                       key={opt.value}
                       testID={`host-match-format-${opt.value}`}
-                      style={[styles.skillChip, selected && styles.skillChipSelected]}
+                      style={[styles.skillChip, selected && styles.skillChipSelected, lockCoreFields && styles.skillChipDisabled]}
+                      disabled={lockCoreFields}
                       onPress={() => {
                         setFormat(opt.value);
                         const min = minPlayersForFormat(opt.value);
@@ -956,7 +1082,11 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
             </View>
           </Section>
 
-        <SubmitButton label={isRecurring ? 'Publish Matches' : 'Publish Match'} loading={isSubmitting} onPress={handleSubmit} />
+        <SubmitButton
+          label={isEdit ? 'Save Changes' : isRecurring ? 'Publish Matches' : 'Publish Match'}
+          loading={isSubmitting}
+          onPress={handleSubmit}
+        />
         </View>
       </ScrollView>
 
@@ -1044,6 +1174,13 @@ function Field({
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+  centerFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.screenBackground,
+    padding: spacing.md,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1174,6 +1311,7 @@ const styles = StyleSheet.create({
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   skillChip: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, backgroundColor: colors.white },
   skillChipSelected: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  skillChipDisabled: { opacity: 0.55 },
   skillChipText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
   skillChipTextSelected: { color: colors.white },
 
@@ -1185,6 +1323,7 @@ const styles = StyleSheet.create({
 
   feeToggleRow: { flexDirection: 'row', gap: spacing.xxs, padding: spacing.xxs, borderRadius: 12, backgroundColor: colors.iconBackground },
   feeToggleButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 10 },
+  feeToggleButtonDisabled: { opacity: 0.55 },
   feeToggleButtonActive: {
     backgroundColor: colors.white,
     shadowColor: colors.primaryDark,

@@ -9,6 +9,7 @@ import SetTournamentWinnersScreen from '@/screens/tournaments/SetTournamentWinne
 import { getErrorMessage } from '@/services/apiErrors';
 import { getTournamentDetail, getTournamentPlayers } from '@/services/tournamentService';
 import type { TournamentDetail, TournamentTeam } from '@/types/tournament';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — pre-fetches tournament + accepted
 // teams for the winners picker.
@@ -47,7 +48,7 @@ export default function SetWinnersRoute() {
       <SetTournamentWinnersScreen
         tournament={tournament}
         teams={teams}
-        onBack={() => router.back()}
+        onBack={() => safeBack(router, `/tournaments/${tournamentId}`)}
         onSaved={() => router.replace(`/tournaments/${tournamentId}`)}
       />
     );

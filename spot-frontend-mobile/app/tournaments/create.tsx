@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import CreateTournamentScreen from '@/screens/tournaments/CreateTournamentScreen';
 import type { Sport } from '@/types/match';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — sport comes from the Homepage tab
 // (MatchesHomepageScreen's FAB "Create a Tournament"), same as
@@ -13,7 +14,7 @@ export default function CreateTournamentRoute() {
     <CreateTournamentScreen
       sport={sport ?? 'FOOTBALL'}
       mode="create"
-      onBack={() => router.back()}
+      onBack={() => safeBack(router, '/matches')}
       onSaved={(tournamentId) => router.replace(`/tournaments/${tournamentId}`)}
       onHostMatch={() => router.replace({ pathname: '/matches/host-form', params: { sport: sport ?? 'FOOTBALL' } })}
     />
