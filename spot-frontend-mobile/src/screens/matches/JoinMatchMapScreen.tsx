@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
+import AppMap, { type AppMapMarker, type UserLocation } from '@/components/common/AppMap';
 import { BottomNavBar } from '@/components/common/BottomNavBar';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import MatchCard from '@/components/matches/MatchCard';
@@ -81,6 +82,26 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status: perm } = await Location.requestForegroundPermissionsAsync();
+        if (perm !== 'granted' || cancelled) return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        }
+      } catch {
+        // Map still works without GPS.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchMatches = useCallback(async () => {
     setStatus('loading');
@@ -119,9 +140,12 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
   const markers: AppMapMarker[] = useMemo(() => spreadOverlappingMarkers(mappableMatches), [mappableMatches]);
 
   const initialRegion = useMemo(() => {
+    if (userLocation) {
+      return { ...DEFAULT_REGION, latitude: userLocation.latitude, longitude: userLocation.longitude };
+    }
     const first = mappableMatches[0];
     return first ? { ...DEFAULT_REGION, latitude: first.latitude, longitude: first.longitude } : DEFAULT_REGION;
-  }, [mappableMatches]);
+  }, [mappableMatches, userLocation]);
 
   const selectedMatch = matches.find((m) => m.matchId === selectedMatchId) ?? null;
 
@@ -177,6 +201,7 @@ export default function JoinMatchMapScreen({ onBack, onOpenMatch }: Props) {
               markers={markers}
               onSelectMarker={(id) => setSelectedMatchId(Number(id))}
               initialRegion={initialRegion}
+              userLocation={userLocation}
             />
             {matches.length > 0 && mappableMatches.length === 0 && (
               <View style={styles.noPinsNotice}>

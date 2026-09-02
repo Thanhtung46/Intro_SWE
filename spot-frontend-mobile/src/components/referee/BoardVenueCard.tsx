@@ -1,7 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  GestureResponderEvent,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -17,8 +24,8 @@ type Props = {
   applyLoading?: boolean;
 };
 
-/** Job Board venue card (Pencil "Referee Job Board" frame). No hourly
- *  price / "Book Field" — that is a player artefact. */
+/** Job Board venue card (Pencil "Referee Job Board" frame). Nested actions
+ *  stopPropagation so favorite / directions / apply don't open detail. */
 export default function BoardVenueCard({
   venue,
   onPress,
@@ -28,6 +35,14 @@ export default function BoardVenueCard({
   applyLoading,
 }: Props) {
   const { t } = useLanguage();
+
+  const stop =
+    (action: () => void) =>
+    (e: GestureResponderEvent) => {
+      e.stopPropagation();
+      action();
+    };
+
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onPress}>
       <View style={styles.cover}>
@@ -39,14 +54,14 @@ export default function BoardVenueCard({
         />
         <View style={styles.coverTop}>
           <View style={styles.coverLeft}>
-            <TouchableOpacity testID="board-venue-favorite" style={styles.iconBtn} onPress={onToggleFavorite}>
+            <TouchableOpacity testID="board-venue-favorite" style={styles.iconBtn} onPress={stop(onToggleFavorite)}>
               <Ionicons
                 name={venue.isFavorited ? 'heart' : 'heart-outline'}
                 size={16}
                 color={venue.isFavorited ? colors.error : colors.white}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} onPress={onDirections}>
+            <TouchableOpacity testID="board-venue-directions" style={styles.iconBtn} onPress={stop(onDirections)}>
               <Ionicons name="paper-plane-outline" size={15} color={colors.white} />
             </TouchableOpacity>
           </View>
@@ -57,7 +72,7 @@ export default function BoardVenueCard({
             </View>
           ) : null}
         </View>
-        <TouchableOpacity style={styles.applyBtn} onPress={onApply} disabled={applyLoading}>
+        <TouchableOpacity style={styles.applyBtn} onPress={stop(onApply)} disabled={applyLoading}>
           {applyLoading ? (
             <ActivityIndicator color={colors.white} size="small" />
           ) : (

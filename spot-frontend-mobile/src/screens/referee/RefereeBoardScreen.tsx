@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,16 +22,18 @@ import { getErrorMessage } from '@/services/apiErrors';
 import { buildBoardQuery, getRefereeBoard, getRefereeMe, registerVenue, setVenueFavorite } from '@/services/refereeService';
 import type { BoardVenue, RefereeSport } from '@/types/referee';
 import { EMPTY_REFEREE_BOARD_FILTERS, RefereeBoardFilters } from '@/types/refereeFilters';
-import { openDirections } from '@/utils/directions';
+import { openVenueDirections } from '@/utils/directions';
 import { showAlert } from '@/utils/showAlert';
 
 type Status = 'loading' | 'ready' | 'error';
 
 type Props = {
-  onOpenVenue: (venueId: number) => void;
+  onOpenVenue: (venue: BoardVenue) => void;
+  onOpenMap: () => void;
 };
 
-export default function RefereeBoardScreen({ onOpenVenue }: Props) {
+export default function RefereeBoardScreen({ onOpenVenue, onOpenMap }: Props) {
+  const router = useRouter();
   const { t } = useLanguage();
   const [certifiedSports, setCertifiedSports] = useState<RefereeSport[] | null>(null);
   const [sport, setSport] = useState<RefereeSport | null>(null);
@@ -127,7 +130,7 @@ export default function RefereeBoardScreen({ onOpenVenue }: Props) {
             <Ionicons name="options-outline" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.mapBtn} onPress={() => showAlert(t('referee.board.mapComingSoon'))}>
+        <TouchableOpacity testID="referee-board-map" style={styles.mapBtn} onPress={onOpenMap}>
           <Ionicons name="map-outline" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -161,10 +164,10 @@ export default function RefereeBoardScreen({ onOpenVenue }: Props) {
               <BoardVenueCard
                 key={venue.venueId}
                 venue={venue}
-                onPress={() => onOpenVenue(venue.venueId)}
+                onPress={() => onOpenVenue(venue)}
                 onToggleFavorite={() => handleFavorite(venue)}
                 onDirections={() =>
-                  openDirections({
+                  openVenueDirections(router, {
                     latitude: venue.latitude ?? null,
                     longitude: venue.longitude ?? null,
                     venueName: venue.name,

@@ -15,15 +15,17 @@ export type AppMapMarker = {
 
 export type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
 
+export type UserLocation = { latitude: number; longitude: number };
+
+export type RouteLatLng = [number, number];
+
 // Metro/webpack picks this file over AppMap.tsx when bundling for web —
-// react-native-webview's web support is unreliable for this use case, and
-// `npm run web` isn't this app's primary target (see AppMap.tsx). Same
-// props signature as the native file so call sites don't need a Platform
-// check of their own.
 type Props = {
   markers: AppMapMarker[];
   onSelectMarker?: (id: string) => void;
   initialRegion: Region;
+  userLocation?: UserLocation | null;
+  routeCoordinates?: RouteLatLng[] | null;
 };
 
 export default function AppMap(_props: Props) {

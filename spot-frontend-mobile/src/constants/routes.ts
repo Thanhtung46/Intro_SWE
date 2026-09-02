@@ -30,6 +30,7 @@ export const ROUTES = {
   REFEREE_ACTIVATED: '/referee/activated',
   REFEREE_INVITATIONS: '/referee/invitations',
   REFEREE_BOARD: '/referee/board',
+  REFEREE_BOARD_MAP: '/referee/map',
   REFEREE_SCHEDULE: '/referee/schedule',
   REFEREE_EARNINGS: '/referee/earnings',
   REFEREE_SETTINGS: '/referee/settings',
@@ -40,6 +41,21 @@ export const ROUTES = {
  * plain string, so it can't live in ROUTES above. */
 export function venueDetailRoute(id: string): string {
   return `/venue/${id}`;
+}
+
+/** Referee job-board venue detail (Apply + in-app directions). */
+export function refereeVenueDetailRoute(
+  venueId: number | string,
+  opts: { sport: string; favorited?: boolean } = { sport: 'Football' }
+): { pathname: '/referee/venues/[id]'; params: { id: string; sport: string; favorited?: string } } {
+  return {
+    pathname: '/referee/venues/[id]',
+    params: {
+      id: String(venueId),
+      sport: opts.sport,
+      ...(opts.favorited ? { favorited: '1' } : {}),
+    },
+  };
 }
 
 /** Dynamic route to a referee assignment detail (app/referee/assignments/[id].tsx). */

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +13,7 @@ import { getErrorMessage } from '@/services/apiErrors';
 import { acceptAssignment, declineAssignment, getAssignmentDetail } from '@/services/refereeService';
 import { getVenueDetail, PublicVenue } from '@/services/venueService';
 import type { AssignmentDetail } from '@/types/referee';
-import { openDirections } from '@/utils/directions';
+import { openVenueDirections } from '@/utils/directions';
 import { formatVnd } from '@/utils/format';
 import { formatDayLabel, formatTimeRange } from '@/utils/refereeFormat';
 import { showAlert } from '@/utils/showAlert';
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export default function AssignmentDetailScreen({ assignmentId, onBack, onDone }: Props) {
+  const router = useRouter();
   const { t } = useLanguage();
   const [assignment, setAssignment] = useState<AssignmentDetail | null>(null);
   const [venue, setVenue] = useState<PublicVenue | null>(null);
@@ -165,7 +167,7 @@ export default function AssignmentDetailScreen({ assignmentId, onBack, onDone }:
               <TouchableOpacity
                 style={styles.directionsBtn}
                 onPress={() =>
-                  openDirections({
+                  openVenueDirections(router, {
                     latitude: venue?.latitude ?? null,
                     longitude: venue?.longitude ?? null,
                     venueName: assignment.venueName,

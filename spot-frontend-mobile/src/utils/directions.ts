@@ -9,12 +9,9 @@ type Venue = {
 };
 
 /**
- * Opens the device's default maps app with GPS turn-by-turn directions to a
- * match's venue. Google Maps' universal `/maps/dir/?api=1` link opens the
- * native Google/Apple Maps app when installed, falling back to the browser
- * otherwise. Used as the fallback action inside VenueMapScreen (real
- * turn-by-turn needs the user's GPS + a routing API call — not built yet)
- * and directly wherever coords are missing (see openVenueDirections below).
+ * Opens the device's default maps app with turn-by-turn directions.
+ * Kept as a low-level helper; UI screens use in-app VenueMapScreen +
+ * Geoapify routing instead (see openVenueDirections).
  */
 export function openDirections(venue: Venue): void {
   const destination =
@@ -26,13 +23,8 @@ export function openDirections(venue: Venue): void {
 }
 
 /**
- * The paper-plane icon's actual handler (MatchCard, Check Profile, Join
- * Match Map — Figma "Paper-plane = directions, not share"). Always opens
- * SPOT's own venue map (app/matches/venue-map.tsx) first — never jumps
- * straight to the external Maps app. VenueMapScreen itself shows an
- * "Open in Google Maps" button (openDirections(), above) for when the host
- * actually wants turn-by-turn directions; without lat/lng it falls back to
- * a text-only view there instead of a pin (see VenueMapScreen.tsx).
+ * Paper-plane / Map CTA — always opens SPOT's in-app VenueMapScreen
+ * (GPS home pin + route polyline). Never jumps to an external maps app.
  */
 export function openVenueDirections(router: ImperativeRouter, venue: Venue): void {
   router.push({
