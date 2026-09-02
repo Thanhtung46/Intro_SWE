@@ -217,14 +217,29 @@ exists beyond what's listed above.
 ## Common Commands
 
 ```bash
-npm install           # plain install works now, see Known Gotchas
-npm start            # expo start
-npm run android       # expo start --android
-npm run ios           # expo start --ios
-npm run web           # expo start --web
-npm test              # jest config exists; currently fails on missing expo-modules-core, see Known Gotchas
+npm install            # install dependencies
+npm start              # expo start (Metro). Then press a / i / w
+npm run android        # expo run:android — build + install Dev Client APK (first time / after native changes)
+npm run ios            # expo run:ios
+npm run web            # expo start --web
+npm test               # jest config exists; currently fails on missing expo-modules-core, see Known Gotchas
 npm run test:watch
 ```
+
+**Android first-time (required once per emulator/device):** this app ships
+`expo-dev-client` (AI voice / native modules). `npm start` → `a` will fail
+with `No development build (com.anonymous.spotapp)` until the APK is
+installed. Fix:
+
+```bash
+# Need JDK 17+ (Android Studio's bundled JBR is fine). Then:
+npm run android        # builds + installs com.anonymous.spotapp on the emulator
+```
+
+After that, daily flow is just `npm start` → press `a` (or open the **SPOT**
+app on the emulator). Do **not** log in to Expo Go for this path.
+
+Web does not need a Dev Client: `npm start` → `w`.
 
 Production builds go through EAS, not local scripts (`eas.json` already
 configures `development`/`preview`/`production` profiles):
