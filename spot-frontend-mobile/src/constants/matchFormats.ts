@@ -14,6 +14,31 @@ const FORMATS_BY_SPORT: Record<Sport, { value: MatchFormat; label: string }[]> =
   ],
 };
 
+/** Minimum maxPlayers (includes host) — mirrors MATCH_FORMAT_MIN_PLAYERS on BE. */
+export const FORMAT_MIN_PLAYERS: Record<MatchFormat, number> = {
+  SINGLES: 2,
+  DOUBLES: 4,
+  FIVE_A_SIDE: 10,
+  SEVEN_A_SIDE: 14,
+  ELEVEN_A_SIDE: 22,
+};
+
+export const MATCH_MAX_PLAYERS = 40;
+
+export function minPlayersForFormat(format: MatchFormat | string | null | undefined): number {
+  if (!format) return 2;
+  return FORMAT_MIN_PLAYERS[format as MatchFormat] ?? 2;
+}
+
 export function formatsForSport(sport: Sport): { value: MatchFormat; label: string }[] {
   return FORMATS_BY_SPORT[sport];
+}
+
+export function formatLabel(format: MatchFormat | string | null | undefined): string {
+  if (!format) return '';
+  for (const options of Object.values(FORMATS_BY_SPORT)) {
+    const hit = options.find((opt) => opt.value === format);
+    if (hit) return hit.label;
+  }
+  return String(format).replace(/_/g, ' ');
 }

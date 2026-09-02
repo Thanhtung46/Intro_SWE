@@ -152,12 +152,12 @@ function requireFeeGender(match, gender, message) {
   }
 }
 
-function shareForRequest(match, filledCount, joinerGender, guests) {
+function shareForRequest(match, joinerGender, guests) {
   const shareAmount = computeRequestShare({
     feeType: match.fee_type,
     priceMin: match.price_min,
     priceMax: match.price_max,
-    filledCount,
+    maxPlayers: match.max_players,
     joinerGender,
     guests,
   });
@@ -735,7 +735,7 @@ export async function joinMatch(userId, rawId, body) {
       const autoJoin = match.join_mode === JOIN_MODES.AUTO;
       const filledAfter = Number(match.filled_count) + heads;
       const shareAmount = autoJoin
-        ? shareForRequest(match, filledAfter, joiner.gender, dto.guests)
+        ? shareForRequest(match, joiner.gender, dto.guests)
         : null;
 
       const existing = await joinRequestRepository.findLatestByMatchUser(
@@ -923,12 +923,7 @@ export async function acceptJoinRequest(userId, rawMatchId, rawRequestId) {
         'Joiner gender must be male or female to accept this request',
       );
       const filledAfter = Number(match.filled_count) + heads;
-      const shareAmount = shareForRequest(
-        match,
-        filledAfter,
-        request.gender,
-        guests,
-      );
+      const shareAmount = shareForRequest(match, request.gender, guests);
 
       const updated = await joinRequestRepository.updateDecision(client, requestId, {
         status: JOIN_REQUEST_STATUSES.ACCEPTED,

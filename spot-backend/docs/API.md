@@ -158,7 +158,7 @@ Hai skill **độc lập** (một per sport). Unset = `null`. API lưu `code`. C
 | `outcome` (ended kèo) | `COMPLETED` \| `CANCELLED` + `outcomeMessage` |
 
 Host chiếm **1 slot** lúc tạo. Join: `filledCount += 1 + guests.length` (AUTO ngay; APPROVAL khi accept).  
-**`yourShare`**: preview runtime trên match (`ceil(priceMin / filledCount)`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
+**`yourShare`**: preview runtime trên match (`ceil(priceMin / maxPlayers)` cho `SPLIT_EVENLY`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
 Pitch global: cùng `venueName` + `venueAddress` + tên court + giờ chồng → `409`.
 
 ### Role (chọn ở Step 2)

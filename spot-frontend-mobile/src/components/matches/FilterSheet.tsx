@@ -115,11 +115,12 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
 
   useEffect(() => {
     if (!visible) return;
+    const allowedFormats = new Set(formatsForSport(sport).map((opt) => opt.value));
     setDate(initialFilters.date ?? '');
     setTimeFrom(initialFilters.timeFrom ?? '');
     setTimeTo(initialFilters.timeTo ?? '');
-    setSelectedSkills(initialFilters.skill);
-    setSelectedFormats(initialFilters.format ?? []);
+    setSelectedSkills(initialFilters.skill ?? []);
+    setSelectedFormats((initialFilters.format ?? []).filter((code) => allowedFormats.has(code)));
     setPriceMin(initialFilters.priceMin ?? PRICE_MIN);
     setPriceMax(initialFilters.priceMax ?? PRICE_MAX);
     setFavoritedOnly(initialFilters.favorited ?? false);
@@ -127,13 +128,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
     setCityCode(initialFilters.city ?? '');
     setRadiusKm(initialFilters.radiusKm ?? RADIUS_DEFAULT);
     setLocationMode(initialFilters.latitude != null ? 'distance' : 'location');
-  }, [visible, initialFilters]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const allowed = new Set(formatsForSport(sport).map((opt) => opt.value));
-    setSelectedFormats((prev) => prev.filter((code) => allowed.has(code)));
-  }, [sport, visible]);
+  }, [visible, initialFilters, sport]);
 
   useEffect(() => {
     if (!visible || provinces.length > 0) return;

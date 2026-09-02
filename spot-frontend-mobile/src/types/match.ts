@@ -72,7 +72,7 @@ export type Match = {
   feeType: FeeType;
   priceMin: number | null; // VND
   priceMax: number | null; // VND
-  yourShare: number | null; // VND — depends on caller's gender/feeType, see computeYourShare
+  yourShare: number | null; // VND — SPLIT_EVENLY: ceil(priceMin/maxPlayers); GENDER_RANGE: by viewer gender
   joinMode: JoinMode;
   status: MatchStatus;
   courtCount: number;

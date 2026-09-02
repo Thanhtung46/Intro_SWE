@@ -786,7 +786,7 @@ Decisions from Figma + [Vmito sessions/new](https://vmito.com/vi/sessions/new). 
 | **Skill** | Multi-chip → `skillMin`/`skillMax`; `allLevels` = full ladder. Per-sport labels in `sports.js`. |
 | **Fee** | Always on. `SPLIT_EVENLY` **or** `GENDER_RANGE` — **either sport** (VND). |
 | **Recurring** | Off → `POST /matches` (1 schedule). On → FE expand dates/weekdays → `POST /matches/bulk` (max 100 schedules). Partial 409 OK. |
-| **Advanced (FE required)** | `format`, `maxPlayers`, `coverUrl` (URL). `joinMode` default `AUTO`. |
+| **Advanced (FE required)** | `format`, `maxPlayers`, `coverUrl` (URL). `joinMode` default `AUTO`. `maxPlayers` min by format (incl. host): Singles 2, Doubles 4, 5v5 10, 7v7 14, 11v11 22; max 40. |
 | **Cover** | Supabase Storage on FE → `coverUrl`. No BE upload. |
 
 **Do not confuse:** `GET /matches?location=` = browse joinable kèo. `GET /matches/venue-suggestions` = Host venue reuse (wider pool).
@@ -963,12 +963,14 @@ Lowercase, strip Vietnamese diacritics and `đ`, collapse whitespace. So
 
 1. **Substring** — folded query appears inside folded `title`, `venue_name`,
    or `venue_address`.
-2. **Fuzzy** — query length ≥ `MATCH_SEARCH.FUZZY_MIN_CHARS` (3); max
-   `similarity()` across the three fields ≥ `LIST_SIMILARITY` (0.28). Handles
-   typos / near matches.
+2. **Fuzzy** — **single-token only** (no spaces), length ≥ `FUZZY_MIN_CHARS`
+   (4), max `similarity()` ≥ `LIST_SIMILARITY` (0.4). Multi-word queries like
+   `san t12` **do not** fuzzy-match neighbors (`san t19`).
 3. **Multi-word AND** — query contains spaces → every non-empty token must
-   appear somewhere in the combined haystack
-   `title + venue_name + venue_address`.
+   appear in the **same** field (`title` **or** `venue_name` **or**
+   `venue_address`). Tokens are **not** allowed to be split across fields
+   (avoids picking a venue suggestion then flooding the feed with unrelated
+   kèo that only share common words like "cầu" / "lông").
 
 **Suggestions (`suggestions[]`) — while user types**
 
@@ -983,8 +985,8 @@ debounce, e.g. 300 ms). Built from listable kèo only (same pool as browse:
 | `kind` | `title` \| `venueName` \| `venueAddress` |
 | Source | Distinct values from existing kèo (not Geoapify) |
 | Dedup | By folded `text`; best score wins |
-| Excludes | Suggestion text identical to folded query (no “search for what you typed”) |
-| Score threshold | `similarity` ≥ `SUGGEST_SIMILARITY` (0.2) per field |
+| Excludes | — |
+| Score threshold | exact / substring / same-field tokens; fuzzy only for single-token queries (length ≥ 4, ≥ `SUGGEST_SIMILARITY` 0.3) |
 | Sort | Score DESC, then text ASC |
 
 Example response fragment:
@@ -1044,7 +1046,7 @@ mine / `GET /users/:id`.
 - `joinMode`: `AUTO` (join → `ACCEPTED` immediately) or `APPROVAL` (`PENDING`
   until host accepts).
 - Fee: `GENDER_RANGE` (female `priceMin`, male `priceMax`) or `SPLIT_EVENLY`
-  (`priceMin` = total; `yourShare = ceil(priceMin / filledCount)`). No `FREE`.
+  (`priceMin` = total; `yourShare = ceil(priceMin / maxPlayers)`). No `FREE`.
   Payment is a stub: `paymentStatus: SUCCESS` + recorded `shareAmount`.
 - Recurring / multi-day flags exist, default off — do not generate extra dates.
 
@@ -1053,7 +1055,7 @@ mine / `GET /users/:id`.
 - Host counts as **1** at create (`filledCount: 1`).
 - Join adds `1 + guests.length` heads (AUTO immediately; APPROVAL on accept).
   FE “Send Request (2)” = that number.
-- **`yourShare`** (runtime on match card): `ceil(priceMin / filledCount)` preview for viewer.
+- **`yourShare`** (runtime on match card): `ceil(priceMin / maxPlayers)` preview for viewer.
 - **`shareAmount`** (on join request / accepted participant): locked at join/accept for joiner + guests; Figma “Paid: 50k”.
 - Join / accept / `POST` blocked when `endsAt <= now` (`assertJoinable`, `canJoin: false`).
 - Guests: `name`, `skill` (that sport’s ladder), `gender` `male`/`female`,

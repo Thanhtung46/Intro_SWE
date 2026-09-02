@@ -32,9 +32,13 @@ function optionalBoolean(value) {
 
 /** Comma / repeated query keys → unique string list (skill, format, …). */
 function csvQueryToList(value) {
-  const next = blankToUndefined(value);
+  let next = blankToUndefined(value);
   if (next === undefined) {
     return undefined;
+  }
+  // axios / qs bracket form can arrive as { '0': 'SINGLES' } instead of ['SINGLES'].
+  if (next && typeof next === 'object' && !Array.isArray(next)) {
+    next = Object.values(next);
   }
   const parts = (Array.isArray(next) ? next : [next]).flatMap((item) =>
     String(item)

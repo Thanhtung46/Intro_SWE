@@ -40,6 +40,8 @@ type Status = 'loading' | 'ready' | 'error';
 type Props = {
   onOpenMap: () => void;
   onOpenMatch: (matchId: number) => void;
+  /** Card "Join Match" CTA — should open join sheet (e.g. /matches/:id?join=1). */
+  onJoinMatch?: (matchId: number) => void;
   onHostMatch: (sport: Sport) => void;
   onManageMatches: () => void;
   onOpenGroup: (groupId: number) => void;
@@ -151,8 +153,8 @@ export default function MatchesHomepageScreen(props: Props) {
         date: filters.date,
         timeFrom: filters.timeFrom,
         timeTo: filters.timeTo,
-        skill: filters.skill.length ? filters.skill : undefined,
-        format: filters.format.length ? filters.format : undefined,
+        skill: filters.skill?.length ? filters.skill : undefined,
+        format: filters.format?.length ? filters.format : undefined,
         priceMin: filters.priceMin,
         priceMax: filters.priceMax,
         province: distanceMode ? undefined : filters.province,
@@ -274,8 +276,8 @@ export default function MatchesHomepageScreen(props: Props) {
   const fabActions = getFabActions(subTab, sport, props);
 
   const matchFiltersActive =
-    filters.skill.length > 0 ||
-    filters.format.length > 0 ||
+    (filters.skill?.length ?? 0) > 0 ||
+    (filters.format?.length ?? 0) > 0 ||
     !!filters.date ||
     !!filters.timeFrom ||
     !!filters.timeTo ||
@@ -459,6 +461,7 @@ export default function MatchesHomepageScreen(props: Props) {
             <MatchCard
               match={match}
               onPress={() => props.onOpenMatch(match.matchId)}
+              onJoin={() => (props.onJoinMatch ?? props.onOpenMatch)(match.matchId)}
               onToggleFavorite={() => handleToggleFavorite(match)}
               onDirections={() => openVenueDirections(router, match)}
             />

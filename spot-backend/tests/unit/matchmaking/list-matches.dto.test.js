@@ -81,6 +81,14 @@ describe('listMatchesQuerySchema', () => {
     assert.deepEqual(parsed.format, ['SINGLES', 'DOUBLES']);
   });
 
+  it('accepts format from bracket-object query shape', () => {
+    const parsed = listMatchesQuerySchema.parse({
+      sport: 'BADMINTON',
+      format: { 0: 'SINGLES' },
+    });
+    assert.deepEqual(parsed.format, ['SINGLES']);
+  });
+
   it('rejects football format when sport is badminton', () => {
     const result = listMatchesQuerySchema.safeParse({
       sport: 'BADMINTON',
@@ -197,28 +205,28 @@ describe('computeYourShare', () => {
     assert.equal(computeYourShare({ ...range, gender: 'male' }), 80000);
   });
 
-  it('splits priceMin by filledCount', () => {
+  it('splits priceMin by maxPlayers', () => {
     assert.equal(
       computeYourShare({
         feeType: 'SPLIT_EVENLY',
         priceMin: 1400000,
-        filledCount: 1,
-      }),
-      1400000,
-    );
-    assert.equal(
-      computeYourShare({
-        feeType: 'SPLIT_EVENLY',
-        priceMin: 1400000,
-        filledCount: 14,
+        maxPlayers: 14,
       }),
       100000,
     );
     assert.equal(
       computeYourShare({
         feeType: 'SPLIT_EVENLY',
+        priceMin: 1400000,
+        maxPlayers: 1,
+      }),
+      1400000,
+    );
+    assert.equal(
+      computeYourShare({
+        feeType: 'SPLIT_EVENLY',
         priceMin: 100000,
-        filledCount: 3,
+        maxPlayers: 3,
       }),
       33334,
     );

@@ -84,7 +84,7 @@ export function toPublicMatch(
       feeType: row.fee_type,
       priceMin: row.price_min,
       priceMax: row.price_max,
-      filledCount,
+      maxPlayers,
       gender,
     }),
     joinMode: row.join_mode,

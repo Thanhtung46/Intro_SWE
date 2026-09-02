@@ -16,6 +16,9 @@ export default function MatchesHomepageRoute() {
       <MatchesHomepageScreen
         onOpenMap={() => router.push('/matches/map')}
         onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)}
+        onJoinMatch={(matchId) =>
+          router.push({ pathname: '/matches/[id]', params: { id: String(matchId), join: '1' } })
+        }
         onHostMatch={(sport) => router.push({ pathname: '/matches/host-form', params: { sport } })}
         onManageMatches={() => router.push('/matches/mine')}
         onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}

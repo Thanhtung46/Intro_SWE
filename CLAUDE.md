@@ -153,6 +153,7 @@ npm install
 npm start          # expo start
 npm run android / ios / web
 npm test
+npx expo start --clear
 ```
 
 **Backend (`spot-backend/`):** runnable. From `spot-backend/`:

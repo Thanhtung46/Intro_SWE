@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,13 +11,15 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
 import { cancelJoinRequest, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
-import type { MatchDetail, Participant } from '@/types/match';
+import type { Guest, MatchDetail, Participant, Sport } from '@/types/match';
 import { formatMatchWhenParts, formatVnd } from '@/utils/format';
 
 type Status = 'loading' | 'ready' | 'error';
 
 type Props = {
   matchId: number;
+  /** When true (e.g. /matches/:id?join=1), open JoinMatchSheet once detail is ready. */
+  autoOpenJoin?: boolean;
   onBack: () => void;
   onOpenVenueMap: (venue: {
     venueName: string;
@@ -29,7 +31,14 @@ type Props = {
   onManageSquad?: () => void;
 };
 
-type SquadMember = { key: string; name: string; avatarUrl: string | null };
+type SquadMember = {
+  key: string;
+  name: string;
+  avatarUrl: string | null;
+  /** Real accounts only — guests have no profile to open. */
+  userId?: number;
+  guest?: Guest;
+};
 
 function buildSquadMembers(participants: Participant[]): SquadMember[] {
   const members: SquadMember[] = [];
@@ -39,12 +48,31 @@ function buildSquadMembers(participants: Participant[]): SquadMember[] {
       key: `player-${participant.userId}`,
       name: participant.fullName || 'Player',
       avatarUrl: participant.avatarUrl,
+      userId: participant.userId,
     });
     for (const guest of participant.guests) {
-      members.push({ key: `guest-${guest.guestId}`, name: guest.name, avatarUrl: null });
+      members.push({
+        key: `guest-${guest.guestId}`,
+        name: guest.name,
+        avatarUrl: null,
+        guest,
+      });
     }
   }
   return members;
+}
+
+function showGuestInfo(sport: Sport, guest: Guest) {
+  const skill = skillLabel(sport, guest.skill) || guest.skill;
+  const gender = guest.gender === 'female' ? 'F' : guest.gender === 'male' ? 'M' : null;
+  const lines = [
+    [gender, skill].filter(Boolean).join(' · ') || null,
+    guest.phoneNumber ? guest.phoneNumber : null,
+  ].filter(Boolean);
+  Alert.alert(
+    guest.name,
+    lines.length ? lines.join('\n') : 'Guest brought by a player — no SPOT account.',
+  );
 }
 
 /**
@@ -55,13 +83,21 @@ function buildSquadMembers(participants: Participant[]): SquadMember[] {
  * separate destination from the browse-all Join Match - Map screen
  * (`/matches/map`).
  */
-export default function MatchDetailScreen({ matchId, onBack, onOpenVenueMap, onOpenHostProfile, onManageSquad }: Props) {
+export default function MatchDetailScreen({
+  matchId,
+  autoOpenJoin = false,
+  onBack,
+  onOpenVenueMap,
+  onOpenHostProfile,
+  onManageSquad,
+}: Props) {
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
+  const didAutoOpenJoin = useRef(false);
 
   const fetchDetail = useCallback(async () => {
     setStatus('loading');
@@ -78,6 +114,13 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenVenueMap, onO
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  useEffect(() => {
+    if (!autoOpenJoin || didAutoOpenJoin.current || status !== 'ready' || !detail) return;
+    if (!detail.canJoin) return;
+    didAutoOpenJoin.current = true;
+    setJoinSheetVisible(true);
+  }, [autoOpenJoin, status, detail]);
 
   const handleConfirmCancelRequest = async () => {
     if (!detail) return;
@@ -226,20 +269,54 @@ export default function MatchDetailScreen({ matchId, onBack, onOpenVenueMap, onO
             )}
 
             <View style={styles.squadGrid}>
-              {squadMembers.map((member) => (
-                <View key={member.key} style={styles.squadCell}>
-                  <View style={styles.squadAvatar}>
-                    {member.avatarUrl ? (
-                      <Image source={{ uri: member.avatarUrl }} style={styles.squadAvatarImage} />
-                    ) : (
-                      <Text style={styles.squadAvatarText}>{member.name.charAt(0).toUpperCase()}</Text>
-                    )}
+              {squadMembers.map((member) => {
+                const cell = (
+                  <>
+                    <View style={[styles.squadAvatar, member.guest ? styles.squadAvatarGuest : undefined]}>
+                      {member.avatarUrl ? (
+                        <Image source={{ uri: member.avatarUrl }} style={styles.squadAvatarImage} />
+                      ) : (
+                        <Text style={styles.squadAvatarText}>{member.name.charAt(0).toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <Text style={styles.squadName} numberOfLines={1}>
+                      {member.name}
+                    </Text>
+                    {member.guest ? <Text style={styles.squadGuestLabel}>Guest</Text> : null}
+                  </>
+                );
+                if (member.userId != null) {
+                  return (
+                    <TouchableOpacity
+                      key={member.key}
+                      testID={`match-detail-squad-${member.userId}`}
+                      style={styles.squadCell}
+                      onPress={() => onOpenHostProfile(member.userId!)}
+                      activeOpacity={0.85}
+                    >
+                      {cell}
+                    </TouchableOpacity>
+                  );
+                }
+                if (member.guest) {
+                  return (
+                    <TouchableOpacity
+                      key={member.key}
+                      testID={`match-detail-guest-${member.guest.guestId}`}
+                      style={styles.squadCell}
+                      onPress={() => showGuestInfo(match.sport, member.guest!)}
+                      activeOpacity={0.85}
+                    >
+                      {cell}
+                    </TouchableOpacity>
+                  );
+                }
+                return (
+                  <View key={member.key} style={styles.squadCell}>
+                    {cell}
                   </View>
-                  <Text style={styles.squadName} numberOfLines={1}>
-                    {member.name}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
               {Array.from({ length: openSlots }).map((_, index) => (
                 <View key={`open-${index}`} style={styles.squadCell}>
                   <View style={styles.squadAvatarOpen}>
@@ -487,6 +564,13 @@ const styles = StyleSheet.create({
   squadAvatarImage: { width: '100%', height: '100%' },
   squadAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
   squadName: { fontSize: 10, color: colors.bodyText, maxWidth: 64 },
+  squadAvatarGuest: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.outline,
+    backgroundColor: colors.screenBackground,
+  },
+  squadGuestLabel: { fontSize: 9, fontWeight: '700', color: colors.outline },
   squadAvatarOpen: {
     width: 52,
     height: 52,

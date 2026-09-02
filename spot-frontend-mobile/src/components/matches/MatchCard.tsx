@@ -1,17 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { type GestureResponderEvent, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/MatchCoverImage';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel, skillTierColor } from '@/constants/matchSkills';
+import { formatLabel } from '@/constants/matchFormats';
 import type { Match } from '@/types/match';
 import { formatMatchWhen, formatVnd } from '@/utils/format';
 
 type Props = {
   match: Match;
   onPress: () => void;
+  /** Prefer for the Join Match CTA — opens join flow (detail + sheet). Falls back to onPress. */
+  onJoin?: () => void;
   onToggleFavorite: () => void;
   onDirections: () => void;
 };
@@ -27,12 +30,16 @@ type Props = {
  * src/utils/directions.ts. `onDirections` is a callback prop (not owned
  * here) so every screen can wire the same `openDirections(match)` helper.
  */
-export default function MatchCard({ match, onPress, onToggleFavorite, onDirections }: Props) {
+export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, onDirections }: Props) {
   const isFull = match.status === 'FULL' || match.spotsLeft < 1;
+  // Prefer runtime yourShare (SPLIT_EVENLY = ceil(total/maxPlayers); GENDER_RANGE by viewer gender).
+  // Fall back to listed prices when yourShare is null (e.g. GENDER_RANGE + viewer gender unknown).
   const priceLabel =
-    match.priceMax != null && match.priceMax !== match.priceMin
-      ? `${new Intl.NumberFormat('en-US').format(match.priceMin ?? 0)} - ${formatVnd(match.priceMax)}`
-      : formatVnd(match.priceMin);
+    match.yourShare != null
+      ? formatVnd(match.yourShare)
+      : match.priceMax != null && match.priceMax !== match.priceMin
+        ? `${new Intl.NumberFormat('en-US').format(match.priceMin ?? 0)} - ${formatVnd(match.priceMax)}`
+        : formatVnd(match.priceMin);
   const minLabel = skillLabel(match.sport, match.skillMin);
   const maxLabel = skillLabel(match.sport, match.skillMax);
   const extraParticipants = Math.max(0, match.filledCount - 1 - match.participantAvatars.length);
@@ -44,14 +51,28 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onDirectio
       <View style={styles.cardCover}>
         <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} />
         <View style={styles.cardCoverTopRow} pointerEvents="box-none">
-          <TouchableOpacity testID={`match-favorite-${match.matchId}`} style={styles.cardIconButton} onPress={onToggleFavorite}>
+          <TouchableOpacity
+            testID={`match-favorite-${match.matchId}`}
+            style={styles.cardIconButton}
+            onPress={(e: GestureResponderEvent) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+          >
             <Ionicons
               name={match.isFavorited ? 'heart' : 'heart-outline'}
               size={16}
               color={match.isFavorited ? colors.error : colors.white}
             />
           </TouchableOpacity>
-          <TouchableOpacity testID={`match-directions-${match.matchId}`} style={styles.cardIconButton} onPress={onDirections}>
+          <TouchableOpacity
+            testID={`match-directions-${match.matchId}`}
+            style={styles.cardIconButton}
+            onPress={(e: GestureResponderEvent) => {
+              e.stopPropagation();
+              onDirections();
+            }}
+          >
             <Ionicons name="paper-plane-outline" size={15} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -64,7 +85,11 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onDirectio
           <TouchableOpacity
             testID={`match-join-${match.matchId}`}
             style={[styles.joinButton, isFull && styles.joinButtonDisabled]}
-            onPress={onPress}
+            onPress={(e: GestureResponderEvent) => {
+              // Nested under card onPress — stop so we don't race to detail without join=1.
+              e.stopPropagation();
+              (onJoin ?? onPress)();
+            }}
             disabled={isFull}
           >
             <Text style={styles.joinButtonText}>{isFull ? 'Full' : 'Join Match'}</Text>
@@ -73,9 +98,14 @@ export default function MatchCard({ match, onPress, onToggleFavorite, onDirectio
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
-          {match.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.cardTitle, styles.cardTitleFlex]} numberOfLines={1} ellipsizeMode="tail">
+            {match.title}
+          </Text>
+          <View style={styles.formatBadge}>
+            <Text style={styles.formatBadgeText}>{formatLabel(match.format)}</Text>
+          </View>
+        </View>
 
         <View style={styles.cardHostRow}>
           <View style={styles.hostAvatar}>
@@ -222,7 +252,17 @@ const styles = StyleSheet.create({
   joinButtonText: { color: colors.white, fontWeight: '700', fontSize: 12 },
 
   cardBody: { padding: spacing.md, gap: spacing.xs },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   cardTitle: { fontSize: 18, fontWeight: '800', color: colors.headingText },
+  cardTitleFlex: { flex: 1, flexShrink: 1 },
+  formatBadge: {
+    flexShrink: 0,
+    backgroundColor: colors.iconBackground,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  formatBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primaryDark },
   cardHostRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
   hostAvatar: {
     width: 24,

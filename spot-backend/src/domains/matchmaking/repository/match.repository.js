@@ -9,12 +9,26 @@ import {
 
 const FOLD = 'schema_matchmaking.fold_search_text';
 
+/** All non-empty tokens of q must appear inside a single field (not spread across title+venue+address). */
+function tokensInSameField(q, field) {
+  return `(
+    ${q} LIKE '% %'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
+      WHERE length(tok.t) > 0
+        AND position(tok.t in ${field}) = 0
+    )
+  )`;
+}
+
 function locationPredicate(locationSlot) {
   const q = `${FOLD}(${locationSlot})`;
   const title = `${FOLD}(m.title)`;
   const venue = `${FOLD}(m.venue_name)`;
   const address = `${FOLD}(m.venue_address)`;
-  const hay = `(${title} || ' ' || ${venue} || ' ' || ${address})`;
+  // Fuzzy is single-token only. Multi-word ("san t12") must not fuzzy-match
+  // near neighbors like "san t19" — use full-phrase substring or same-field tokens.
   return `(
     ${q} <> ''
     AND (
@@ -22,22 +36,38 @@ function locationPredicate(locationSlot) {
       OR position(${q} in ${venue}) > 0
       OR position(${q} in ${address}) > 0
       OR (
-        length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+        ${q} NOT LIKE '% %'
+        AND length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
         AND GREATEST(
           similarity(${title}, ${q}),
           similarity(${venue}, ${q}),
           similarity(${address}, ${q})
         ) >= ${MATCH_SEARCH.LIST_SIMILARITY}
       )
-      OR (
-        ${q} LIKE '% %'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
-          WHERE length(tok.t) > 0
-            AND position(tok.t in ${hay}) = 0
-        )
-      )
+      OR ${tokensInSameField(q, title)}
+      OR ${tokensInSameField(q, venue)}
+      OR ${tokensInSameField(q, address)}
+    )
+  )`;
+}
+
+/** Score a folded field for suggestion ranking — exact / substring beat fuzzy. */
+function suggestionFieldScore(field, q) {
+  return `CASE
+    WHEN ${field} = ${q} THEN 1.0::float
+    WHEN position(${q} in ${field}) > 0 THEN 0.95::float
+    ELSE similarity(${field}, ${q})::float
+  END`;
+}
+
+function suggestionFieldPredicate(field, q) {
+  return `(
+    position(${q} in ${field}) > 0
+    OR ${tokensInSameField(q, field)}
+    OR (
+      ${q} NOT LIKE '% %'
+      AND length(${q}) >= ${MATCH_SEARCH.FUZZY_MIN_CHARS}
+      AND similarity(${field}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
     )
   )`;
 }
@@ -397,30 +427,27 @@ export async function listSearchSuggestions(client, filters) {
        FROM (
          SELECT m.title AS text,
                 'title'::text AS kind,
-                similarity(${title}, ${q})::float AS score
+                ${suggestionFieldScore(title, q)} AS score
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${title} <> ${q}
-           AND similarity(${title}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(title, q)}
          UNION ALL
          SELECT m.venue_name,
                 'venueName',
-                similarity(${venue}, ${q})::float
+                ${suggestionFieldScore(venue, q)}
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${venue} <> ${q}
-           AND similarity(${venue}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(venue, q)}
          UNION ALL
          SELECT m.venue_address,
                 'venueAddress',
-                similarity(${address}, ${q})::float
+                ${suggestionFieldScore(address, q)}
          FROM schema_matchmaking.matches m
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${address} <> ${q}
-           AND similarity(${address}, ${q}) >= ${MATCH_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(address, q)}
        ) s
      ) ranked
      WHERE rn = 1

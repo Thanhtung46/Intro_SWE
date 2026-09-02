@@ -41,6 +41,26 @@ import type { VnAdminTree } from '@/types/geo';
 export { getErrorMessage };
 
 /**
+ * Flatten list query for axios: arrays → CSV (`format=SINGLES,DOUBLES`).
+ * Avoids `format[]=` which some runtimes drop so Format filter never applies.
+ */
+function toMatchListParams(query: ListMatchesQuery): Record<string, string | number | boolean> {
+  const params: Record<string, string | number | boolean> = {};
+  (Object.entries(query) as [keyof ListMatchesQuery, ListMatchesQuery[keyof ListMatchesQuery]][]).forEach(
+    ([key, value]) => {
+      if (value === undefined || value === null) return;
+      if (Array.isArray(value)) {
+        if (value.length === 0) return;
+        params[key] = value.join(',');
+        return;
+      }
+      params[key] = value as string | number | boolean;
+    }
+  );
+  return params;
+}
+
+/**
  * GET /matches — Matches Homepage (`95:2417`) + Filter sheet (`87:1903`).
  * `location` is a substring match on venueName/venueAddress — no
  * geocoding/NLP; `province`/`city` (VN admin-unit codes) filter separately,
@@ -48,7 +68,7 @@ export { getErrorMessage };
  */
 export async function listMatches(query: ListMatchesQuery = {}): Promise<ListMatchesResult> {
   try {
-    const res = await apiClient.get('/matches', { params: query });
+    const res = await apiClient.get('/matches', { params: toMatchListParams(query) });
     return {
       matches: res.data.matches as Match[],
       total: res.data.total as number,

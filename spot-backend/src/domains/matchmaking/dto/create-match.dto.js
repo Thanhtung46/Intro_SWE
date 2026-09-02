@@ -5,8 +5,10 @@ import {
   FEE_TYPE_CODES,
   JOIN_MODE_CODES,
   MATCH_FORMATS,
+  MATCH_MAX_PLAYERS,
   MATCH_MIN_DURATION_MINUTES,
   isFormatForSport,
+  minPlayersForFormat,
 } from '../../../shared/constants/matchmaking.js';
 import { optionalHttpUrl } from '../../../shared/validation/httpUrl.js';
 import { isVnCityInProvince } from '../../../shared/constants/vn-admin.js';
@@ -86,7 +88,7 @@ export const createMatchSchema = z
       .number({ required_error: 'maxPlayers is required' })
       .int('maxPlayers must be an integer')
       .min(2, 'maxPlayers must be at least 2')
-      .max(40, 'maxPlayers must be at most 40'),
+      .max(MATCH_MAX_PLAYERS, `maxPlayers must be at most ${MATCH_MAX_PLAYERS}`),
     allLevels: z.boolean().optional().default(false),
     skillMin: z.string().optional(),
     skillMax: z.string().optional(),
@@ -128,6 +130,15 @@ export const createMatchSchema = z
         path: ['format'],
         message: `Format ${data.format} is not valid for ${data.sport}`,
       });
+    } else {
+      const minPlayers = minPlayersForFormat(data.format);
+      if (data.maxPlayers < minPlayers) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['maxPlayers'],
+          message: `maxPlayers must be at least ${minPlayers} for ${data.format}`,
+        });
+      }
     }
 
     const hasLat = data.latitude != null;

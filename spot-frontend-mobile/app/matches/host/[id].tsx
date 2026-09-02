@@ -13,6 +13,9 @@ export default function CheckProfileRoute() {
       hostUserId={hostUserId}
       onBack={() => router.back()}
       onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)}
+      onJoinMatch={(matchId) =>
+        router.push({ pathname: '/matches/[id]', params: { id: String(matchId), join: '1' } })
+      }
     />
   );
 }

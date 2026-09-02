@@ -1,8 +1,9 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  findNodeHandle,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,7 @@ import PinDropModal from '@/components/matches/PinDropModal';
 import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { formatsForSport } from '@/constants/matchFormats';
+import { formatsForSport, minPlayersForFormat } from '@/constants/matchFormats';
 import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
 import { getMe } from '@/services/authService';
 import {
@@ -45,6 +46,47 @@ type CourtField = { key: string; name: string };
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BULK_MAX_SCHEDULES = 100;
+
+/** Form top→bottom order — used to scroll to the first invalid field. */
+const FIELD_ORDER = [
+  'title',
+  'venueName',
+  'venueAddress',
+  'province',
+  'city',
+  'date',
+  'timeFrom',
+  'timeTo',
+  'courts',
+  'skillCodes',
+  'priceMin',
+  'priceMax',
+  'recurringWeekdays',
+  'recurringWeeks',
+  'format',
+  'maxPlayers',
+  'coverUrl',
+] as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Match Title',
+  venueName: 'Venue name',
+  venueAddress: 'Address',
+  province: 'Province',
+  city: 'Ward/commune',
+  date: 'Date',
+  timeFrom: 'Start Time',
+  timeTo: 'End Time',
+  courts: 'Courts',
+  skillCodes: 'Skill Level',
+  priceMin: 'Price',
+  priceMax: 'Male Fee',
+  recurringWeekdays: 'Weekdays',
+  recurringWeeks: 'Number of Weeks',
+  format: 'Format',
+  maxPlayers: 'Max Players',
+  coverUrl: 'Cover Image URL',
+};
 
 // @react-native-community/datetimepicker has no web build, so on web fall
 // back to the browser's own native date/time inputs. `date` is held as an
@@ -118,7 +160,6 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
   const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([]);
   const [venueSuggestionsVisible, setVenueSuggestionsVisible] = useState(false);
   const [pinPickerVisible, setPinPickerVisible] = useState(false);
-  const [locationFieldHeight, setLocationFieldHeight] = useState(0);
   // True once Province/Ward were filled from a trusted DB venue suggestion
   // (applyVenueSuggestion) — greys them out read-only. Editing the venue
   // name again, or dropping a pin on the map instead, unlocks them so the
@@ -138,9 +179,8 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
   const [showTimeFromPicker, setShowTimeFromPicker] = useState(false);
   const [showTimeToPicker, setShowTimeToPicker] = useState(false);
 
-  // Courts
+  // Courts — editable list in place (no separate draft field).
   const [courts, setCourts] = useState<CourtField[]>([{ key: nextCourtKey(), name: '' }]);
-  const [newCourtName, setNewCourtName] = useState('');
 
   // Skill
   const [allLevels, setAllLevels] = useState(false);
@@ -164,6 +204,34 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const fieldRefs = useRef<Record<string, View | null>>({});
+
+  const setFieldRef = (key: string) => (node: View | null) => {
+    fieldRefs.current[key] = node;
+  };
+
+  const scrollToFirstError = (errors: Record<string, string>) => {
+    const firstKey =
+      FIELD_ORDER.find((key) => errors[key]) ?? Object.keys(errors)[0];
+    if (!firstKey) return;
+    const fieldNode = fieldRefs.current[firstKey];
+    const contentNode = contentRef.current;
+    if (!fieldNode || !contentNode) return;
+    const relativeTo = findNodeHandle(contentNode);
+    if (relativeTo == null) return;
+    // Defer until after error text mounts (layout can shift slightly).
+    requestAnimationFrame(() => {
+      fieldNode.measureLayout(
+        relativeTo,
+        (_x, y) => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true });
+        },
+        () => {}
+      );
+    });
+  };
 
   useEffect(() => {
     getMe().then((profile) => {
@@ -210,8 +278,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
   }
 
   function addCourt() {
-    setCourts((prev) => [...prev, { key: nextCourtKey(), name: newCourtName.trim() }]);
-    setNewCourtName('');
+    setCourts((prev) => [...prev, { key: nextCourtKey(), name: '' }]);
   }
 
   function removeCourt(key: string) {
@@ -220,7 +287,19 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
 
   function updateCourtName(key: string, name: string) {
     setCourts((prev) => prev.map((c) => (c.key === key ? { ...c, name } : c)));
+    setFieldErrors((prev) => {
+      if (!prev.courts) return prev;
+      const next = { ...prev };
+      delete next.courts;
+      return next;
+    });
   }
+
+  const courtDuplicateWarning = useMemo(() => {
+    const names = courts.map((c) => c.name.trim().toLowerCase()).filter(Boolean);
+    if (names.length < 2) return null;
+    return new Set(names).size !== names.length ? 'Court names must be unique' : null;
+  }, [courts]);
 
   // Expands the (anchor date, weekdays, weekCount) trio into concrete
   // schedule dates — starts at the anchor's own week, walks forward
@@ -316,7 +395,16 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         if (!errors[key]) errors[key] = issue.message;
       }
       setFieldErrors(errors);
-      setSubmitError('Please fix the highlighted fields.');
+      const orderedKeys = [
+        ...FIELD_ORDER.filter((key) => errors[key]),
+        ...Object.keys(errors).filter((key) => !FIELD_ORDER.includes(key as (typeof FIELD_ORDER)[number])),
+      ];
+      const summary = orderedKeys
+        .slice(0, 3)
+        .map((key) => `${FIELD_LABELS[key] ?? key}: ${errors[key]}`)
+        .join('\n');
+      setSubmitError(summary || 'Please fix the highlighted fields.');
+      scrollToFirstError(errors);
       return;
     }
     setFieldErrors({});
@@ -389,11 +477,16 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         <View style={styles.backButtonSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View ref={contentRef} collapsable={false}>
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
         <Section title="General Information" icon="information-circle-outline">
-          <Field label="Match Title" error={fieldErrors.title}>
+          <Field label="Match Title" error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef}>
             <TextInput
               testID="host-match-title"
               style={styles.input}
@@ -416,9 +509,9 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
             />
           </Field>
 
-          <Field label="Venue name" error={fieldErrors.venueName}>
+          <Field label="Venue name" error={fieldErrors.venueName} fieldKey="venueName" setFieldRef={setFieldRef}>
             <View style={styles.locationFieldWrap}>
-              <View style={styles.pickerField} onLayout={(e) => setLocationFieldHeight(e.nativeEvent.layout.height)}>
+              <View style={styles.pickerField}>
                 <TextInput
                   testID="host-match-venue-name"
                   style={styles.locationInput}
@@ -436,13 +529,20 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                   <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
                 </TouchableOpacity>
               </View>
+              {/* In-flow (not absolute) — absolute overlays inside ScrollView get painted
+                  under Address/Province on Android and look like ghosted layers. */}
               {venueSuggestionsVisible && venueSuggestions.length > 0 && (
-                <View style={[styles.suggestionsBox, { top: locationFieldHeight + spacing.xxs }]}>
+                <ScrollView
+                  testID="host-match-venue-suggestions"
+                  style={styles.suggestionsBox}
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
                   {venueSuggestions.map((s, index) => (
                     <TouchableOpacity
                       key={`${s.venueName}-${index}`}
                       testID={`host-match-venue-suggestion-${index}`}
-                      style={styles.suggestionRow}
+                      style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
                       onPress={() => applyVenueSuggestion(s)}
                     >
                       <Ionicons name="location-outline" size={14} color={colors.outline} />
@@ -452,12 +552,12 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                       </View>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               )}
             </View>
           </Field>
 
-          <Field label="Address" error={fieldErrors.venueAddress}>
+          <Field label="Address" error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef}>
             <TextInput
               testID="host-match-venue-address"
               style={styles.input}
@@ -469,29 +569,31 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           </Field>
 
           <View style={styles.row}>
-            <SelectField
-              label="Province/City"
-              placeholder="Select province"
-              value={province}
-              onChange={(v) => {
-                setProvince(v);
-                setCity('');
-              }}
-              options={provinces.map((p) => ({ label: p.name, value: p.code }))}
-              error={fieldErrors.province}
-              containerStyle={styles.rowItem}
-              disabled={locationLocked}
-            />
-            <SelectField
-              label="Ward/Commune"
-              placeholder={province ? 'Select ward' : 'Pick province'}
-              value={city}
-              onChange={setCity}
-              options={cityOptions}
-              error={fieldErrors.city}
-              containerStyle={styles.rowItem}
-              disabled={locationLocked}
-            />
+            <View ref={setFieldRef('province')} collapsable={false} style={styles.rowItem}>
+              <SelectField
+                label="Province/City"
+                placeholder="Select province"
+                value={province}
+                onChange={(v) => {
+                  setProvince(v);
+                  setCity('');
+                }}
+                options={provinces.map((p) => ({ label: p.name, value: p.code }))}
+                error={fieldErrors.province}
+                disabled={locationLocked}
+              />
+            </View>
+            <View ref={setFieldRef('city')} collapsable={false} style={styles.rowItem}>
+              <SelectField
+                label="Ward/Commune"
+                placeholder={province ? 'Select ward' : 'Pick province'}
+                value={city}
+                onChange={setCity}
+                options={cityOptions}
+                error={fieldErrors.city}
+                disabled={locationLocked}
+              />
+            </View>
           </View>
         </Section>
 
@@ -512,7 +614,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         </Section>
 
         <Section title="Schedule" icon="calendar-outline">
-          <Field label="Date" error={fieldErrors.date}>
+          <Field label="Date" error={fieldErrors.date} fieldKey="date" setFieldRef={setFieldRef}>
             {IS_WEB ? (
               <WebDateTimeInput type="date" value={date} min={toIsoDate(new Date())} onChange={setDate} />
             ) : (
@@ -533,7 +635,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           </Field>
           <View style={styles.row}>
             <View style={styles.rowItem}>
-              <Field label="Start Time" error={fieldErrors.timeFrom}>
+              <Field label="Start Time" error={fieldErrors.timeFrom} fieldKey="timeFrom" setFieldRef={setFieldRef}>
                 {IS_WEB ? (
                   <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} />
                 ) : (
@@ -545,7 +647,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
               </Field>
             </View>
             <View style={styles.rowItem}>
-              <Field label="End Time" error={fieldErrors.timeTo}>
+              <Field label="End Time" error={fieldErrors.timeTo} fieldKey="timeTo" setFieldRef={setFieldRef}>
                 {IS_WEB ? (
                   <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} />
                 ) : (
@@ -578,52 +680,51 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         </Section>
 
         <Section title="Court Configuration" icon="grid-outline">
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
-              <Field label="No. of Courts">
-                <TextInput style={[styles.input, styles.readOnlyInput]} value={String(courts.length)} editable={false} />
-              </Field>
-            </View>
-            <View style={styles.rowItem}>
-              <Field label="Court Name">
-                <TextInput
-                  testID="host-match-new-court-name"
-                  style={styles.input}
-                  placeholder="e.g., Court 3 & 4"
-                  placeholderTextColor={colors.outline}
-                  value={newCourtName}
-                  onChangeText={setNewCourtName}
-                  onSubmitEditing={addCourt}
-                />
-              </Field>
-            </View>
+          <View ref={setFieldRef('courts')} collapsable={false} style={styles.courtList}>
+            {courts.map((court, index) => {
+              const normalized = court.name.trim().toLowerCase();
+              const isDuplicate =
+                normalized.length > 0 &&
+                courts.some((other) => other.key !== court.key && other.name.trim().toLowerCase() === normalized);
+              return (
+                <View key={court.key} style={styles.courtRow}>
+                  <Text style={styles.courtIndex}>{index + 1}</Text>
+                  <TextInput
+                    testID={`host-match-court-${index}`}
+                    style={[styles.input, styles.courtInput, isDuplicate && styles.courtInputDuplicate]}
+                    placeholder={index === 0 ? 'e.g. Court A / Sân 1' : `Court ${index + 1} name`}
+                    placeholderTextColor={colors.outline}
+                    value={court.name}
+                    onChangeText={(t) => updateCourtName(court.key, t)}
+                  />
+                  {courts.length > 1 && (
+                    <TouchableOpacity
+                      testID={`host-match-remove-court-${index}`}
+                      style={styles.removeCourtButton}
+                      onPress={() => removeCourt(court.key)}
+                    >
+                      <Ionicons name="close" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            {courtDuplicateWarning ? (
+              <Text testID="host-match-court-duplicate-error" style={styles.fieldError}>
+                {courtDuplicateWarning}
+              </Text>
+            ) : fieldErrors.courts ? (
+              <Text style={styles.fieldError}>{fieldErrors.courts}</Text>
+            ) : null}
+            <TouchableOpacity testID="host-match-add-court" style={styles.addCourtButton} onPress={addCourt}>
+              <Ionicons name="add" size={16} color={colors.primaryDark} />
+              <Text style={styles.addCourtText}>Add Court</Text>
+            </TouchableOpacity>
           </View>
-          {fieldErrors.courts ? <Text style={styles.fieldError}>{fieldErrors.courts}</Text> : null}
-          <TouchableOpacity testID="host-match-add-court" style={styles.addCourtButton} onPress={addCourt}>
-            <Ionicons name="add" size={16} color={colors.primaryDark} />
-            <Text style={styles.addCourtText}>Add Court</Text>
-          </TouchableOpacity>
-
-          {courts.map((court, index) => (
-            <View key={court.key} style={styles.courtRow}>
-              <TextInput
-                testID={`host-match-court-${index}`}
-                style={[styles.input, styles.courtInput]}
-                placeholder={`Court ${index + 1} name`}
-                placeholderTextColor={colors.outline}
-                value={court.name}
-                onChangeText={(t) => updateCourtName(court.key, t)}
-              />
-              {courts.length > 1 && (
-                <TouchableOpacity testID={`host-match-remove-court-${index}`} style={styles.removeCourtButton} onPress={() => removeCourt(court.key)}>
-                  <Ionicons name="close" size={16} color={colors.error} />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
         </Section>
 
         <Section title="Skill Level" icon="stats-chart-outline">
+          <View ref={setFieldRef('skillCodes')} collapsable={false}>
           <TouchableOpacity
             testID="host-match-all-levels"
             style={[styles.allLevelsBanner, allLevels && styles.allLevelsBannerActive]}
@@ -655,9 +756,10 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
               {fieldErrors.skillCodes ? <Text style={styles.fieldError}>{fieldErrors.skillCodes}</Text> : null}
             </>
           )}
+          </View>
         </Section>
 
-        <Section title="Entry Fee" icon="cash-outline" subtitle="Fee enabled">
+        <Section title="Entry Fee" icon="cash-outline">
           <View style={styles.feeToggleRow}>
             <TouchableOpacity
               testID="host-match-fee-gender"
@@ -677,7 +779,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           {feeType === 'GENDER_RANGE' ? (
             <View style={styles.row}>
               <View style={styles.rowItem}>
-                <Field label="Male Fee (VND)" error={fieldErrors.priceMax}>
+                <Field label="Male Fee (VND)" error={fieldErrors.priceMax} fieldKey="priceMax" setFieldRef={setFieldRef}>
                   <TextInput
                     testID="host-match-price-male"
                     style={styles.input}
@@ -690,7 +792,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                 </Field>
               </View>
               <View style={styles.rowItem}>
-                <Field label="Female Fee (VND)" error={fieldErrors.priceMin}>
+                <Field label="Female Fee (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
                   <TextInput
                     testID="host-match-price-female"
                     style={styles.input}
@@ -704,7 +806,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
               </View>
             </View>
           ) : (
-            <Field label="Total Price (VND)" error={fieldErrors.priceMin}>
+            <Field label="Total Price (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
               <TextInput
                 testID="host-match-price-total"
                 style={styles.input}
@@ -733,6 +835,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           {isRecurring && (
             <>
               <Text style={styles.helperText}>Repeats on these weekdays, starting from the Date above.</Text>
+              <View ref={setFieldRef('recurringWeekdays')} collapsable={false}>
               <View style={styles.skillGrid}>
                 {WEEKDAY_LABELS.map((label, day) => {
                   const selected = recurringWeekdays.includes(day);
@@ -749,8 +852,9 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                 })}
               </View>
               {fieldErrors.recurringWeekdays ? <Text style={styles.fieldError}>{fieldErrors.recurringWeekdays}</Text> : null}
+              </View>
 
-              <Field label="Number of Weeks" error={fieldErrors.recurringWeeks}>
+              <Field label="Number of Weeks" error={fieldErrors.recurringWeeks} fieldKey="recurringWeeks" setFieldRef={setFieldRef}>
                 <TextInput
                   testID="host-match-recurring-weeks"
                   style={styles.input}
@@ -769,6 +873,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
         </Section>
 
             <Section title="Format & Squad" icon="people-outline">
+              <View ref={setFieldRef('format')} collapsable={false}>
               <View style={styles.skillGrid}>
                 {formatsForSport(sport).map((opt) => {
                   const selected = format === opt.value;
@@ -777,7 +882,14 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                       key={opt.value}
                       testID={`host-match-format-${opt.value}`}
                       style={[styles.skillChip, selected && styles.skillChipSelected]}
-                      onPress={() => setFormat(opt.value)}
+                      onPress={() => {
+                        setFormat(opt.value);
+                        const min = minPlayersForFormat(opt.value);
+                        const current = Number(maxPlayers);
+                        if (!maxPlayers.trim() || !Number.isFinite(current) || current < min) {
+                          setMaxPlayers(String(min));
+                        }
+                      }}
                     >
                       <Text style={[styles.skillChipText, selected && styles.skillChipTextSelected]}>{opt.label}</Text>
                     </TouchableOpacity>
@@ -785,18 +897,24 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
                 })}
               </View>
               {fieldErrors.format ? <Text style={styles.fieldError}>{fieldErrors.format}</Text> : null}
+              </View>
 
-              <Field label="Max Players" error={fieldErrors.maxPlayers}>
+              <Field label="Max Players" error={fieldErrors.maxPlayers} fieldKey="maxPlayers" setFieldRef={setFieldRef}>
                 <TextInput
                   testID="host-match-max-players"
                   style={styles.input}
-                  placeholder="e.g. 14"
+                  placeholder={format ? `e.g. ${minPlayersForFormat(format)}` : 'e.g. 14'}
                   placeholderTextColor={colors.outline}
                   value={maxPlayers}
                   onChangeText={setMaxPlayers}
                   keyboardType="numeric"
                 />
               </Field>
+              {format ? (
+                <Text style={styles.helperText}>
+                  At least {minPlayersForFormat(format)} for {formatsForSport(sport).find((o) => o.value === format)?.label ?? format} (including you as host).
+                </Text>
+              ) : null}
               <Field label="Cover Image URL (Optional)">
                 <TextInput
                   testID="host-match-cover-url"
@@ -839,6 +957,7 @@ export default function HostMatchScreen({ sport, onBack, onCreated }: Props) {
           </Section>
 
         <SubmitButton label={isRecurring ? 'Publish Matches' : 'Publish Match'} loading={isSubmitting} onPress={handleSubmit} />
+        </View>
       </ScrollView>
 
       <PinDropModal
@@ -897,9 +1016,25 @@ function Section({
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  fieldKey,
+  setFieldRef,
+  children,
+}: {
+  label: string;
+  error?: string;
+  fieldKey?: string;
+  setFieldRef?: (key: string) => (node: View | null) => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={styles.field}>
+    <View
+      style={styles.field}
+      collapsable={false}
+      ref={fieldKey && setFieldRef ? setFieldRef(fieldKey) : undefined}
+    >
       <Text style={styles.fieldLabel}>{label}</Text>
       {children}
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
@@ -964,26 +1099,16 @@ const styles = StyleSheet.create({
   readOnlyInput: { backgroundColor: colors.iconBackground, color: colors.bodyText },
   locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
 
-  // Absolute overlay (not in normal flow) so opening the dropdown doesn't
-  // shove Address/Province/Ward down the screen — `top` is set inline from
-  // the measured pickerField height (locationFieldHeight).
-  locationFieldWrap: { position: 'relative', zIndex: 20, elevation: 20 },
+  locationFieldWrap: { gap: spacing.xxs },
   suggestionsBox: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    maxHeight: 180,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: 10,
     backgroundColor: colors.white,
-    overflow: 'hidden',
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 20,
   },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder },
   suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
   suggestionSubtext: { fontSize: 11, color: colors.outline },
   flexShrink: { flexShrink: 1 },
@@ -1005,8 +1130,17 @@ const styles = StyleSheet.create({
   pickerValue: { fontSize: 14, color: colors.headingText },
   pickerPlaceholder: { fontSize: 14, color: colors.outline },
 
+  courtList: { gap: spacing.sm },
   courtRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  courtIndex: {
+    width: 22,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.outline,
+    textAlign: 'center',
+  },
   courtInput: { flex: 1 },
+  courtInputDuplicate: { borderColor: colors.error },
   removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.errorBackground, alignItems: 'center', justifyContent: 'center' },
   addCourtButton: {
     flexDirection: 'row',
