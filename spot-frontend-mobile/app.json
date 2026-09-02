@@ -19,7 +19,6 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-speech-recognition",
       "@react-native-community/datetimepicker",
       [
         "expo-location",
