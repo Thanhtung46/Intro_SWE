@@ -6,7 +6,7 @@ import ErrorBanner from '@/components/common/ErrorBanner';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { useLanguage } from '@/context/LanguageContext';
-import { MONTH_NAMES_EN, WEEKDAYS_MIN_EN } from '@/i18n/translations';
+import { MONTH_NAMES_EN, MONTH_NAMES_VI, WEEKDAYS_MIN_EN, WEEKDAYS_MIN_VI } from '@/i18n/translations';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getRefereeSchedule } from '@/services/refereeService';
 import type { ScheduleItem } from '@/types/referee';
@@ -32,7 +32,9 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 export default function RefereeScheduleScreen({ onOpenAssignment }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const monthNames = language === 'vi' ? MONTH_NAMES_VI : MONTH_NAMES_EN;
+  const weekdayLabels = language === 'vi' ? WEEKDAYS_MIN_VI : WEEKDAYS_MIN_EN;
   const [month, setMonth] = useState(currentMonth());
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -86,14 +88,14 @@ export default function RefereeScheduleScreen({ onOpenAssignment }: Props) {
             <Ionicons name="chevron-back" size={20} color={colors.headingText} />
           </TouchableOpacity>
           <Text style={styles.calMonth}>
-            {MONTH_NAMES_EN[meta.monthIndex]} {meta.year}
+            {monthNames[meta.monthIndex]} {meta.year}
           </Text>
           <TouchableOpacity onPress={() => setMonth((m) => shiftMonth(m, 1))} hitSlop={8}>
             <Ionicons name="chevron-forward" size={20} color={colors.headingText} />
           </TouchableOpacity>
         </View>
         <View style={styles.weekRow}>
-          {WEEKDAYS_MIN_EN.map((d) => (
+          {weekdayLabels.map((d) => (
             <Text key={d} style={styles.weekday}>
               {d}
             </Text>

@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
+import InfoDialog from '@/components/common/InfoDialog';
 import InvitationCard from '@/components/referee/InvitationCard';
 import MyVenueCard from '@/components/referee/MyVenueCard';
 import { colors } from '@/constants/colors';
@@ -17,7 +18,8 @@ import {
   getPendingInvitations,
 } from '@/services/refereeService';
 import type { MatchInvitation, VenueRegistration } from '@/types/referee';
-import { showAlert } from '@/utils/showAlert';
+
+type ResultDialog = { tone: 'success' | 'warning'; title: string; message: string };
 
 type Tab = 'pending' | 'confirmed' | 'completed';
 type CompletedFilter = 'all' | 'completed' | 'declined';
@@ -47,6 +49,7 @@ export default function RefereeInvitationsScreen({ onOpenAssignment, onGoToBoard
   const [completedFilter, setCompletedFilter] = useState<CompletedFilter>('all');
   const [busyId, setBusyId] = useState<number | null>(null);
   const [cancelTarget, setCancelTarget] = useState<VenueRegistration | null>(null);
+  const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
 
   const fetchTab = useCallback(
     async (which: Tab, filter: CompletedFilter) => {
@@ -85,10 +88,14 @@ export default function RefereeInvitationsScreen({ onOpenAssignment, onGoToBoard
     try {
       await acceptAssignment(a.assignmentId);
       setMatchInvitations((prev) => prev.filter((x) => x.assignmentId !== a.assignmentId));
-      showAlert(t('referee.invitations.accepted'));
+      setResultDialog({ tone: 'success', title: t('common.success'), message: t('referee.invitations.accepted') });
     } catch (e) {
       const msg = getErrorMessage(e);
-      showAlert(/already accepted/i.test(msg) ? t('referee.invitations.alreadyTaken') : msg);
+      setResultDialog({
+        tone: 'warning',
+        title: t('common.error'),
+        message: /already accepted/i.test(msg) ? t('referee.invitations.alreadyTaken') : msg,
+      });
       fetchTab('pending', completedFilter);
     } finally {
       setBusyId(null);
@@ -100,9 +107,9 @@ export default function RefereeInvitationsScreen({ onOpenAssignment, onGoToBoard
     try {
       await declineAssignment(a.assignmentId);
       setMatchInvitations((prev) => prev.filter((x) => x.assignmentId !== a.assignmentId));
-      showAlert(t('referee.invitations.declined'));
+      setResultDialog({ tone: 'success', title: t('common.success'), message: t('referee.invitations.declined') });
     } catch (e) {
-      showAlert(getErrorMessage(e));
+      setResultDialog({ tone: 'warning', title: t('common.error'), message: getErrorMessage(e) });
     } finally {
       setBusyId(null);
     }
@@ -116,7 +123,7 @@ export default function RefereeInvitationsScreen({ onOpenAssignment, onGoToBoard
       await cancelVenueRegistration(target.venueId, target.sportType);
       setMyVenues((prev) => prev.filter((v) => v.registrationId !== target.registrationId));
     } catch (e) {
-      showAlert(getErrorMessage(e));
+      setResultDialog({ tone: 'warning', title: t('common.error'), message: getErrorMessage(e) });
     }
   };
 
@@ -229,6 +236,14 @@ export default function RefereeInvitationsScreen({ onOpenAssignment, onGoToBoard
         cancelLabel={t('referee.invitations.keepIt')}
         onConfirm={confirmCancelVenue}
         onCancel={() => setCancelTarget(null)}
+      />
+
+      <InfoDialog
+        visible={resultDialog != null}
+        tone={resultDialog?.tone ?? 'success'}
+        title={resultDialog?.title ?? ''}
+        message={resultDialog?.message ?? ''}
+        onDismiss={() => setResultDialog(null)}
       />
     </View>
   );

@@ -301,6 +301,30 @@ if (ratingPrompt.data?.bookingId !== bookingId) {
   throw new Error('Rating prompt missing bookingId for FE navigation');
 }
 
+const earningsMonthly = await get('/referee/earnings/monthly?months=6', refToken);
+log('earnings monthly', earningsMonthly);
+assertOk('earnings monthly', earningsMonthly, 200);
+if (!Array.isArray(earningsMonthly.json.buckets)) {
+  throw new Error('earnings/monthly must return a buckets array');
+}
+
+const earningsMonthlyBad = await get('/referee/earnings/monthly?months=99', refToken);
+log('earnings monthly (months out of range)', earningsMonthlyBad);
+assertOk('earnings monthly rejects months > 12', earningsMonthlyBad, 400);
+
+const nowMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }).slice(0, 7);
+const historyThisMonth = await get(`/referee/earnings/history?month=${nowMonth}`, refToken);
+log('earnings history (this month)', historyThisMonth);
+assertOk('earnings history month-scoped', historyThisMonth, 200);
+if (historyThisMonth.json.month !== nowMonth) {
+  throw new Error('earnings/history should echo the month filter');
+}
+const historyFarPast = await get('/referee/earnings/history?month=2000-01', refToken);
+assertOk('earnings history empty past month', historyFarPast, 200);
+if (historyFarPast.json.total !== 0) {
+  throw new Error('earnings/history month=2000-01 should have total 0');
+}
+
 const refereeReview = await post(
   '/reviews/referee',
   { bookingId, rating: 4.5 },

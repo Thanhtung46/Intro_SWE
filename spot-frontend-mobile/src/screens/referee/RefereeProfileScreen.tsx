@@ -7,6 +7,7 @@ import ErrorBanner from '@/components/common/ErrorBanner';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { useLanguage } from '@/context/LanguageContext';
+import type { TranslationKey } from '@/i18n/translations';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getRefereeCertifications, getRefereeMe } from '@/services/refereeService';
 import type { RefereeCertification, RefereeProfile } from '@/types/referee';
@@ -16,15 +17,19 @@ type Props = {
   onEdit: () => void;
 };
 
-const KIND_LABEL: Record<string, string> = {
-  ID_FRONT: 'ID card (front)',
-  ID_BACK: 'ID card (back)',
-  VFF_LICENSE: 'VFF national license',
-  CERT_UPDATE: 'Certification update',
+const KIND_LABEL_KEY: Record<string, TranslationKey> = {
+  ID_FRONT: 'referee.docKind.ID_FRONT',
+  ID_BACK: 'referee.docKind.ID_BACK',
+  VFF_LICENSE: 'referee.docKind.VFF_LICENSE',
+  CERT_UPDATE: 'referee.docKind.CERT_UPDATE',
 };
 
 export default function RefereeProfileScreen({ onBack, onEdit }: Props) {
   const { t } = useLanguage();
+  const docKindLabel = (kind?: string | null) => {
+    const key = kind ? KIND_LABEL_KEY[kind] : undefined;
+    return key ? t(key) : t('referee.docKind.fallback');
+  };
   const [profile, setProfile] = useState<RefereeProfile | null>(null);
   const [certs, setCerts] = useState<RefereeCertification[]>([]);
   const [error, setError] = useState('');
@@ -65,7 +70,7 @@ export default function RefereeProfileScreen({ onBack, onEdit }: Props) {
         </View>
       ) : error || !profile ? (
         <View style={styles.center}>
-          <ErrorBanner message={error || 'Could not load your profile.'} onRetry={load} />
+          <ErrorBanner message={error || t('referee.profile.loadError')} onRetry={load} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
@@ -105,7 +110,7 @@ export default function RefereeProfileScreen({ onBack, onEdit }: Props) {
                 size={20}
                 color={colors.primary}
               />
-              <Text style={styles.certName}>{KIND_LABEL[cert.documentKind ?? ''] ?? 'Document'}</Text>
+              <Text style={styles.certName}>{docKindLabel(cert.documentKind)}</Text>
               <Text
                 style={[
                   styles.certStatus,

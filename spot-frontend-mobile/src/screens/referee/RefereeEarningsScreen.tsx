@@ -1,22 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
+import EarningsChart, { EarningsChartDatum } from '@/components/referee/EarningsChart';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { useLanguage } from '@/context/LanguageContext';
-import { MONTH_ABBR_EN } from '@/i18n/translations';
+import { MONTH_ABBR_EN, MONTH_ABBR_VI } from '@/i18n/translations';
 import { getErrorMessage } from '@/services/apiErrors';
-import { getRefereeEarnings, getRefereeEarningsHistory } from '@/services/refereeService';
-import type { ChartPoint, EarningsHistoryItem } from '@/types/referee';
+import {
+  getRefereeEarnings,
+  getRefereeEarningsHistory,
+  getRefereeEarningsMonthly,
+} from '@/services/refereeService';
+import type { ChartPoint, EarningsBucket, EarningsHistoryItem } from '@/types/referee';
 import { formatVnd } from '@/utils/format';
-import { bangkokYmd, currentMonth } from '@/utils/refereeFormat';
+import {
+  bangkokYmd,
+  currentMonth,
+  formatWhen,
+  recentMonths,
+  weekKeyOf,
+  weeksOfMonth,
+} from '@/utils/refereeFormat';
 
 type Status = 'loading' | 'ready' | 'error';
-const PAGE = 20;
-const CHART_HEIGHT = 140;
-const MIN_BAR = 4;
+type ChartMode = 'week' | 'month';
+const MONTHS_BACK = 6;
+const HISTORY_PREVIEW = 2; // rows shown before "View All"
+const HISTORY_MAX = 50; // one page is plenty for a single month
 
 function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split('-').map(Number);
@@ -24,24 +37,23 @@ function shiftMonth(month: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function barLabel(day: string): string {
-  // BE sends a full ISO UTC timestamp, not YYYY-MM-DD — bucket in Bangkok.
-  const [, m, d] = bangkokYmd(day).split('-');
-  return `${MONTH_ABBR_EN[Number(m) - 1]} ${Number(d)}`;
-}
-
 export default function RefereeEarningsScreen() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const monthAbbr = language === 'vi' ? MONTH_ABBR_VI : MONTH_ABBR_EN;
   const [month, setMonth] = useState(currentMonth());
+  const [chartMode, setChartMode] = useState<ChartMode>('week');
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [totalFeeVnd, setTotalFeeVnd] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([]);
+  const [monthlyBuckets, setMonthlyBuckets] = useState<EarningsBucket[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
 
   const [history, setHistory] = useState<EarningsHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const fetchEarnings = useCallback(async () => {
     setStatus((s) => (s === 'ready' ? s : 'loading'));
@@ -58,28 +70,93 @@ export default function RefereeEarningsScreen() {
     }
   }, [month]);
 
-  const fetchHistory = useCallback(async (offset: number) => {
+  // Match History tracks the month picker: only that month's completed matches.
+  const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
+    setHistoryExpanded(false);
     try {
-      const res = await getRefereeEarningsHistory(PAGE, offset);
-      setHistory((prev) => (offset === 0 ? res.items : [...prev, ...res.items]));
+      const res = await getRefereeEarningsHistory({ month, limit: HISTORY_MAX });
+      setHistory(res.items);
       setHistoryTotal(res.total);
     } catch {
       // history is secondary — surface the main error path only
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [month]);
+
+  const todayYmd = bangkokYmd(new Date().toISOString());
+  const thisMonth = currentMonth();
+
+  // The month-trend chart is always the last N months up to *now* — the
+  // month-picker arrows only scope the total card + the weekly view.
+  const fetchMonthly = useCallback(async () => {
+    setMonthlyLoading(true);
+    try {
+      const res = await getRefereeEarningsMonthly({ anchor: thisMonth, months: MONTHS_BACK });
+      setMonthlyBuckets(res.buckets);
+    } catch {
+      setMonthlyBuckets([]);
+    } finally {
+      setMonthlyLoading(false);
+    }
+  }, [thisMonth]);
 
   useEffect(() => {
     fetchEarnings();
   }, [fetchEarnings]);
 
   useEffect(() => {
-    fetchHistory(0);
+    fetchHistory();
   }, [fetchHistory]);
 
-  const maxAmount = Math.max(1, ...chartPoints.map((p) => p.amountVnd));
+  useEffect(() => {
+    if (chartMode === 'month') fetchMonthly();
+  }, [chartMode, fetchMonthly]);
+
+  const weekData = useMemo<EarningsChartDatum[]>(() => {
+    const sums: Record<string, number> = {};
+    for (const p of chartPoints) {
+      const wk = weekKeyOf(bangkokYmd(p.day));
+      sums[wk] = (sums[wk] ?? 0) + p.amountVnd;
+    }
+    return weeksOfMonth(month).map((w) => {
+      const amountVnd = sums[w.key] ?? 0;
+      return {
+        key: w.key,
+        label: t('referee.earnings.weekLabel').replace('{n}', String(w.index)),
+        amountVnd,
+        // "not started yet" only when the week's Monday is ahead *and* there's
+        // nothing recorded (earnings prove the period has happened).
+        future: amountVnd === 0 && w.key > todayYmd,
+      };
+    });
+  }, [chartPoints, month, t, todayYmd]);
+
+  const monthData = useMemo<EarningsChartDatum[]>(() => {
+    const byKey = Object.fromEntries(monthlyBuckets.map((b) => [b.key, b.amountVnd]));
+    return recentMonths(thisMonth, MONTHS_BACK).map((m) => {
+      const amountVnd = byKey[m.key] ?? 0;
+      return {
+        key: m.key,
+        label: monthAbbr[m.monthIndex],
+        amountVnd,
+        future: amountVnd === 0 && m.key > thisMonth,
+      };
+    });
+  }, [monthlyBuckets, thisMonth, monthAbbr]);
+
+  const isWeek = chartMode === 'week';
+  const chartData = isWeek ? weekData : monthData;
+  // Accent bar = the period the user is looking at: the current week when the
+  // picker is on the calendar-current month, or the picked month itself in
+  // month mode. (The month *window* is still fixed to the last N calendar
+  // months — see the caption below.)
+  const currentKey = isWeek
+    ? month === thisMonth
+      ? weekKeyOf(todayYmd)
+      : undefined
+    : month;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -106,37 +183,47 @@ export default function RefereeEarningsScreen() {
 
       {status === 'ready' ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('referee.earnings.performanceGrowth')}</Text>
-          {chartPoints.length === 0 ? (
-            <Text style={styles.empty}>{t('referee.earnings.emptyChart')}</Text>
-          ) : (
-            <View style={styles.chart}>
-              {chartPoints.map((p) => (
-                <View key={p.day} style={styles.barCol}>
-                  <Text style={styles.barValue}>{Math.round(p.amountVnd / 1000)}k</Text>
-                  <View
-                    style={[
-                      styles.bar,
-                      { height: Math.max(MIN_BAR, (p.amountVnd / maxAmount) * CHART_HEIGHT) },
-                    ]}
-                  />
-                  <Text style={styles.barLabel}>{barLabel(p.day)}</Text>
-                </View>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>{t('referee.earnings.performanceGrowth')}</Text>
+            <View style={styles.modeToggle}>
+              {(['week', 'month'] as ChartMode[]).map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.modeButton, chartMode === m && styles.modeButtonActive]}
+                  onPress={() => setChartMode(m)}
+                >
+                  <Text style={[styles.modeText, chartMode === m && styles.modeTextActive]}>
+                    {t(m === 'week' ? 'referee.earnings.viewWeek' : 'referee.earnings.viewMonth')}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
+          </View>
+          {chartMode === 'month' ? (
+            <Text style={styles.chartNote}>
+              {t('referee.earnings.monthlyNote').replace('{n}', String(MONTHS_BACK))}
+            </Text>
+          ) : null}
+          {chartMode === 'month' && monthlyLoading ? (
+            <ActivityIndicator color={colors.primary} style={styles.chartLoader} />
+          ) : (
+            <EarningsChart data={chartData} currentKey={currentKey} />
           )}
         </View>
       ) : null}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('referee.earnings.matchHistory')}</Text>
-        {history.length === 0 && !historyLoading ? (
+        {historyLoading ? (
+          <ActivityIndicator color={colors.primary} style={styles.chartLoader} />
+        ) : history.length === 0 ? (
           <Text style={styles.empty}>{t('referee.earnings.emptyHistory')}</Text>
         ) : null}
-        {history.map((h) => (
+        {(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((h) => (
           <View key={h.assignmentId} style={styles.historyRow}>
             <View style={styles.historyLeft}>
               <Text style={styles.historyVenue}>{h.venueName}</Text>
+              <Text style={styles.historyMeta}>{formatWhen(h.startsAt, null)}</Text>
               <Text style={styles.historyMeta}>
                 {h.sportType}
                 {h.playerName ? ` · ${h.playerName}` : ''}
@@ -145,13 +232,13 @@ export default function RefereeEarningsScreen() {
             <Text style={styles.historyFee}>{formatVnd(h.feeVnd)}</Text>
           </View>
         ))}
-        {history.length < historyTotal ? (
-          <TouchableOpacity style={styles.loadMore} onPress={() => fetchHistory(history.length)} disabled={historyLoading}>
-            {historyLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <Text style={styles.loadMoreText}>{t('referee.earnings.loadMore')}</Text>
-            )}
+        {historyTotal > HISTORY_PREVIEW ? (
+          <TouchableOpacity style={styles.loadMore} onPress={() => setHistoryExpanded((v) => !v)}>
+            <Text style={styles.loadMoreText}>
+              {historyExpanded
+                ? t('referee.earnings.showLess')
+                : t('referee.earnings.viewAll').replace('{n}', String(historyTotal))}
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -171,12 +258,15 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.lg },
   section: { backgroundColor: colors.white, borderRadius: 16, padding: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.headingText },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modeToggle: { flexDirection: 'row', backgroundColor: colors.selectedBackground, borderRadius: 10, padding: 3 },
+  modeButton: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 8 },
+  modeButtonActive: { backgroundColor: colors.primary },
+  modeText: { fontSize: 12, fontWeight: '700', color: colors.subtitle },
+  modeTextActive: { color: colors.white },
+  chartLoader: { marginVertical: spacing.xl },
+  chartNote: { fontSize: 11, color: colors.subtitle, marginTop: -spacing.xs },
   empty: { fontSize: 13, color: colors.subtitle, paddingVertical: spacing.sm },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, minHeight: CHART_HEIGHT + 40, paddingTop: spacing.md },
-  barCol: { flex: 1, alignItems: 'center', gap: 4 },
-  barValue: { fontSize: 10, color: colors.subtitle },
-  bar: { width: '70%', borderRadius: 6, backgroundColor: colors.primary },
-  barLabel: { fontSize: 9, color: colors.subtitle },
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

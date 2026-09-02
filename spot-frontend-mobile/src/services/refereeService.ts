@@ -8,6 +8,7 @@ import type {
   BoardQuery,
   BoardResult,
   EarningsHistoryResponse,
+  EarningsMonthlyResponse,
   EarningsResponse,
   MatchInvitation,
   PendingInvitationsPayload,
@@ -222,10 +223,32 @@ export async function getRefereeEarnings(month?: string): Promise<EarningsRespon
   }
 }
 
-/** GET /referee/earnings/history?limit=&offset=. */
-export async function getRefereeEarningsHistory(limit = 20, offset = 0): Promise<EarningsHistoryResponse> {
+/** GET /referee/earnings/monthly?anchor=YYYY-MM&months=N — monthly totals for the trend chart. */
+export async function getRefereeEarningsMonthly(
+  opts: { anchor?: string; months?: number } = {},
+): Promise<EarningsMonthlyResponse> {
   try {
-    const res = await apiClient.get('/referee/earnings/history', { params: { limit, offset } });
+    const params: Record<string, string | number> = {};
+    if (opts.anchor) params.anchor = opts.anchor;
+    if (opts.months) params.months = opts.months;
+    const res = await apiClient.get('/referee/earnings/monthly', { params });
+    return res.data as EarningsMonthlyResponse;
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load your earnings. Check your network and try again.");
+  }
+}
+
+/** GET /referee/earnings/history?limit=&offset=. */
+export async function getRefereeEarningsHistory(
+  opts: { month?: string; limit?: number; offset?: number } = {},
+): Promise<EarningsHistoryResponse> {
+  try {
+    const params: Record<string, string | number> = {
+      limit: opts.limit ?? 20,
+      offset: opts.offset ?? 0,
+    };
+    if (opts.month) params.month = opts.month;
+    const res = await apiClient.get('/referee/earnings/history', { params });
     return res.data as EarningsHistoryResponse;
   } catch (err) {
     throwFromAxiosError(err, "Couldn't load your earnings history. Check your network and try again.");

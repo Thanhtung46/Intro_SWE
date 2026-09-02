@@ -3078,11 +3078,45 @@ Tổng thu nhập tháng + chart points (data thật từ assignment `COMPLETED`
 
 ---
 
+### 19.14b `GET /referee/earnings/monthly`
+
+Monthly totals for the Performance Growth "Month" chart mode — one bucket per
+month with earnings, over a trailing window. Same source as `earnings`
+(assignment `COMPLETED`, bucketed by `completed_at` in Asia/Bangkok).
+
+**Query:**
+
+| Param | Default | Notes |
+| :--- | :--- | :--- |
+| `anchor` | current month (Bangkok) | `YYYY-MM` — the newest month in the window |
+| `months` | `6` | `2`–`12`; window = `months` back through `anchor` |
+
+**Success `200`** (sparse — months with no earnings are omitted; FE zero-fills):
+
+```json
+{
+  "anchor": "2026-09",
+  "months": 6,
+  "currency": "VND",
+  "buckets": [
+    { "key": "2026-07", "amountVnd": 450000, "matchCount": 3 },
+    { "key": "2026-09", "amountVnd": 300000, "matchCount": 2 }
+  ]
+}
+```
+
+`months` outside `2`–`12` → `400 Validation failed`.
+
+---
+
 ### 19.15 `GET /referee/earnings/history`
 
-Lịch sử paginated.
+Lịch sử paginated. Optional `month` scopes it to matches completed in that month
+(Asia/Bangkok) — the FE "Match History" card uses this so it tracks the month picker.
 
-**Query:** `limit` (default 20, max 50), `offset` (default 0).
+**Query:** `month=YYYY-MM` (optional), `limit` (default 20, max 50), `offset` (default 0).
+
+`month` echoed back on the response as `"month"` (`null` when omitted).
 
 **Success `200`**
 

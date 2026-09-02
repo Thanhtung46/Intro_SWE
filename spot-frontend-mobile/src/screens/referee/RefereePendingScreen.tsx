@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { useLanguage } from '@/context/LanguageContext';
+import type { TranslationKey } from '@/i18n/translations';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getRefereeCertifications } from '@/services/refereeService';
 import type { RefereeCertification } from '@/types/referee';
@@ -16,17 +17,21 @@ type Props = {
 
 const SUPPORT_EMAIL = 'support@spot.example.com';
 
-const KIND_LABEL: Record<string, string> = {
-  ID_FRONT: 'ID card (front)',
-  ID_BACK: 'ID card (back)',
-  VFF_LICENSE: 'VFF national license',
-  CERT_UPDATE: 'Certification update',
+const KIND_LABEL_KEY: Record<string, TranslationKey> = {
+  ID_FRONT: 'referee.docKind.ID_FRONT',
+  ID_BACK: 'referee.docKind.ID_BACK',
+  VFF_LICENSE: 'referee.docKind.VFF_LICENSE',
+  CERT_UPDATE: 'referee.docKind.CERT_UPDATE',
 };
 
 /** "Application Under Review" (Pencil "Document Verification" frame).
  *  Step tracker derived from the submitted documents' review status. */
 export default function RefereePendingScreen({ onLogout }: Props) {
   const { t } = useLanguage();
+  const docKindLabel = (kind?: string | null) => {
+    const key = kind ? KIND_LABEL_KEY[kind] : undefined;
+    return key ? t(key) : t('referee.docKind.fallback');
+  };
   const [certs, setCerts] = useState<RefereeCertification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +108,7 @@ export default function RefereePendingScreen({ onLogout }: Props) {
               size={20}
               color={colors.primary}
             />
-            <Text style={styles.docName}>{KIND_LABEL[cert.documentKind ?? ''] ?? 'Document'}</Text>
+            <Text style={styles.docName}>{docKindLabel(cert.documentKind)}</Text>
             <Ionicons
               name={
                 cert.status === 'APPROVED'

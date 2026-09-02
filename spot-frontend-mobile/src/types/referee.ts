@@ -179,6 +179,20 @@ export interface EarningsResponse {
   chartPoints: ChartPoint[];
 }
 
+/** GET /referee/earnings/monthly?anchor=YYYY-MM&months=N */
+export interface EarningsBucket {
+  key: string; // "YYYY-MM"
+  amountVnd: number;
+  matchCount: number;
+}
+
+export interface EarningsMonthlyResponse {
+  anchor: string;
+  months: number;
+  currency: 'VND';
+  buckets: EarningsBucket[];
+}
+
 /** GET /referee/earnings/history */
 export interface EarningsHistoryItem {
   index: number;
@@ -197,6 +211,7 @@ export interface EarningsHistoryResponse {
   total: number;
   limit: number;
   offset: number;
+  month: string | null;
 }
 
 /** POST /users/me/verification-requests/batch document entry. */

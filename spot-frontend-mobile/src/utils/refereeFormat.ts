@@ -54,3 +54,75 @@ export function formatWhen(startsAt: string, endsAt: string | null): string {
 export function currentMonth(): string {
   return bangkokYmd(new Date().toISOString()).slice(0, 7);
 }
+
+// ---- Earnings chart helpers ----------------------------------------------
+
+/**
+ * Short VND label for chart axes / bar tops. Rounds first, then picks the
+ * unit, so a value that rounds up across a threshold is promoted (999_999 →
+ * "1.0tr", not "1000k"). Non-positive / non-finite → "0đ".
+ */
+export function formatCompactVnd(vnd: number): string {
+  if (!Number.isFinite(vnd) || vnd <= 0) return '0đ';
+  if (vnd < 1_000) return `${Math.round(vnd)}đ`;
+  if (vnd < 1_000_000) {
+    const k = Math.round(vnd / 1_000);
+    return k >= 1_000 ? `${(k / 1_000).toFixed(1)}tr` : `${k}k`;
+  }
+  return `${(vnd / 1_000_000).toFixed(1)}tr`;
+}
+
+function addUtcDays(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The single source of truth for "which week does a day belong to" — the ISO
+ * Monday on/before `ymd` ("YYYY-MM-DD"). Used for both bucketing the earnings
+ * day-points and computing the current-week key, so they always line up.
+ */
+export function weekKeyOf(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  const daysSinceMonday = (d.getUTCDay() + 6) % 7; // getUTCDay: 0=Sun..6=Sat
+  return addUtcDays(ymd, -daysSinceMonday);
+}
+
+/**
+ * The weeks that overlap a month, as { key = ISO-Monday date, index = 1-based }.
+ * Week 1's Monday can fall in the previous month (e.g. 2026-09 starts on a
+ * Tuesday → week 1 key = "2026-08-31").
+ */
+export function weeksOfMonth(month: string): { key: string; index: number }[] {
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lastYmd = `${month}-${String(lastDay).padStart(2, '0')}`;
+  const weeks: { key: string; index: number }[] = [];
+  let cur = weekKeyOf(`${month}-01`);
+  let i = 1;
+  while (cur <= lastYmd) {
+    weeks.push({ key: cur, index: i });
+    cur = addUtcDays(cur, 7);
+    i += 1;
+  }
+  return weeks;
+}
+
+/**
+ * The `count` months ending at `anchor` ("YYYY-MM"), oldest first, as
+ * { key = "YYYY-MM", monthIndex = 0-11 } (caller maps monthIndex → a localized
+ * abbreviation).
+ */
+export function recentMonths(anchor: string, count: number): { key: string; monthIndex: number }[] {
+  const [y, m] = anchor.split('-').map(Number);
+  const out: { key: string; monthIndex: number }[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    out.push({
+      key: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`,
+      monthIndex: d.getUTCMonth(),
+    });
+  }
+  return out;
+}

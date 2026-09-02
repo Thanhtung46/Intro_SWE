@@ -39,7 +39,7 @@ export default function BoardVenueCard({
         />
         <View style={styles.coverTop}>
           <View style={styles.coverLeft}>
-            <TouchableOpacity style={styles.iconBtn} onPress={onToggleFavorite}>
+            <TouchableOpacity testID="board-venue-favorite" style={styles.iconBtn} onPress={onToggleFavorite}>
               <Ionicons
                 name={venue.isFavorited ? 'heart' : 'heart-outline'}
                 size={16}

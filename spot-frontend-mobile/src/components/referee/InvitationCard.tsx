@@ -37,7 +37,7 @@ export default function InvitationCard({ invitation, onPress, onApprove, onDecli
     <TouchableOpacity activeOpacity={onPress ? 0.85 : 1} onPress={onPress} style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={styles.player}>{invitation.playerName ?? 'Player'}</Text>
+          <Text style={styles.player}>{invitation.playerName ?? t('referee.invitations.playerFallback')}</Text>
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={13} color={colors.subtitle} />
             <Text style={styles.meta}>

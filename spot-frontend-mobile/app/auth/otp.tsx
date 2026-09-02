@@ -20,7 +20,11 @@ export default function OtpRoute() {
       router.replace(role === 'owner' ? ROUTES.OWNER_REGISTER : ROUTES.REFEREE_REGISTER);
       return;
     }
-    router.push({ pathname: ROUTES.AUTH_CHOOSE_ROLE, params: { email } });
+    // A PLAYER reaches here with a verified, active account but no session
+    // token (the backend only issues one for pending Owner/Referee). Role was
+    // already chosen before this screen, so send them to login, not back to
+    // choose-role.
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   return <OtpScreen email={email} onVerified={handleVerified} />;

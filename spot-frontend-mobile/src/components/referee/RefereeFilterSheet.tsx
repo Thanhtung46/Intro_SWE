@@ -75,14 +75,14 @@ export default function RefereeFilterSheet({ visible, initialFilters, onClose, o
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          showAlert('Location needed', 'Allow location access to search courts near you, or switch to Location.');
+          showAlert(t('referee.filter.locationNeededTitle'), t('referee.filter.locationNeededBody'));
           return;
         }
         const pos = await Location.getCurrentPositionAsync({});
         onApply({ mode: 'distance', lat: pos.coords.latitude, lng: pos.coords.longitude, radiusKm });
         onClose();
       } catch {
-        showAlert('Location unavailable', "Couldn't get your current location.");
+        showAlert(t('referee.filter.locationUnavailableTitle'), t('referee.filter.locationUnavailableBody'));
       } finally {
         setLocating(false);
       }

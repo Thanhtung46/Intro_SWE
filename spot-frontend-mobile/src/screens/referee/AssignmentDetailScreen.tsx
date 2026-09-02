@@ -91,7 +91,7 @@ export default function AssignmentDetailScreen({ assignmentId, onBack, onDone }:
         </View>
       ) : error || !assignment ? (
         <View style={styles.center}>
-          <ErrorBanner message={error || 'Assignment not found.'} onRetry={load} />
+          <ErrorBanner message={error || t('referee.assignment.notFound')} onRetry={load} />
         </View>
       ) : (
         <>
