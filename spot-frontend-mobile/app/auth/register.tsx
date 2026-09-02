@@ -7,7 +7,10 @@ export default function RegisterRoute() {
   return (
     <RegisterScreen
       onBack={() => router.back()}
-      onRegistered={(email) => router.push({ pathname: ROUTES.AUTH_OTP, params: { email } })}
+      // Backend flow is register → select role → verify OTP (the OTP verify
+      // only issues a pending Owner/Referee token once the role is set), so
+      // step 2 is always choose-role, never OTP directly.
+      onRegistered={(email) => router.push({ pathname: ROUTES.AUTH_CHOOSE_ROLE, params: { email } })}
     />
   );
 }

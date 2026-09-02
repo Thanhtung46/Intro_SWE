@@ -294,6 +294,7 @@ export async function sumEarningsForMonth(client, refereeId, monthStart, monthEn
      FROM schema_referee.referee_assignments a
      WHERE a.referee_id = $1
        AND a.status = $2
+       AND a.completed_at <= CURRENT_TIMESTAMP
        AND a.completed_at >= $3::timestamptz
        AND a.completed_at < $4::timestamptz`,
     [
@@ -314,6 +315,7 @@ export async function earningsChartPoints(client, refereeId, monthStart, monthEn
      FROM schema_referee.referee_assignments a
      WHERE a.referee_id = $1
        AND a.status = $2
+       AND a.completed_at <= CURRENT_TIMESTAMP
        AND a.completed_at >= $3::timestamptz
        AND a.completed_at < $4::timestamptz
      GROUP BY 1
@@ -328,7 +330,42 @@ export async function earningsChartPoints(client, refereeId, monthStart, monthEn
   return rows;
 }
 
-export async function listEarningsHistory(client, refereeId, { limit, offset }) {
+export async function earningsByMonth(client, refereeId, rangeStart, rangeEnd) {
+  const { rows } = await client.query(
+    `SELECT
+       to_char(
+         date_trunc('month', a.completed_at AT TIME ZONE 'Asia/Bangkok'),
+         'YYYY-MM'
+       ) AS key,
+       COALESCE(SUM(a.fee_vnd), 0)::numeric AS amount,
+       COUNT(*)::int AS match_count
+     FROM schema_referee.referee_assignments a
+     WHERE a.referee_id = $1
+       AND a.status = $2
+       AND a.completed_at <= CURRENT_TIMESTAMP
+       AND a.completed_at >= $3::timestamptz
+       AND a.completed_at < $4::timestamptz
+     GROUP BY 1
+     ORDER BY 1 ASC`,
+    [
+      refereeId,
+      REFEREE_ASSIGNMENT_STATUSES.COMPLETED,
+      rangeStart,
+      rangeEnd,
+    ],
+  );
+  return rows;
+}
+
+export async function listEarningsHistory(
+  client,
+  refereeId,
+  { limit, offset, monthStart, monthEnd },
+) {
+  const scoped = Boolean(monthStart && monthEnd);
+  const listParams = [refereeId, REFEREE_ASSIGNMENT_STATUSES.COMPLETED, limit, offset];
+  if (scoped) listParams.push(monthStart, monthEnd);
+
   const { rows } = await client.query(
     `SELECT a.assignment_id, a.booking_id, a.fee_vnd, a.completed_at,
             v.name AS venue_name,
@@ -342,16 +379,24 @@ export async function listEarningsHistory(client, refereeId, { limit, offset }) 
      JOIN schema_auth.users pu ON pu.user_id = b.player_id
      LEFT JOIN schema_auth.user_profiles pp ON pp.user_id = pu.user_id
      WHERE a.referee_id = $1 AND a.status = $2
+       AND a.completed_at <= CURRENT_TIMESTAMP${
+       scoped ? ' AND a.completed_at >= $5::timestamptz AND a.completed_at < $6::timestamptz' : ''
+     }
      ORDER BY a.completed_at DESC NULLS LAST
      LIMIT $3 OFFSET $4`,
-    [refereeId, REFEREE_ASSIGNMENT_STATUSES.COMPLETED, limit, offset],
+    listParams,
   );
 
+  const countParams = [refereeId, REFEREE_ASSIGNMENT_STATUSES.COMPLETED];
+  if (scoped) countParams.push(monthStart, monthEnd);
   const { rows: countRows } = await client.query(
     `SELECT COUNT(*)::int AS total
      FROM schema_referee.referee_assignments
-     WHERE referee_id = $1 AND status = $2`,
-    [refereeId, REFEREE_ASSIGNMENT_STATUSES.COMPLETED],
+     WHERE referee_id = $1 AND status = $2
+       AND completed_at <= CURRENT_TIMESTAMP${
+       scoped ? ' AND completed_at >= $3::timestamptz AND completed_at < $4::timestamptz' : ''
+     }`,
+    countParams,
   );
 
   return { rows, total: countRows[0]?.total ?? 0 };

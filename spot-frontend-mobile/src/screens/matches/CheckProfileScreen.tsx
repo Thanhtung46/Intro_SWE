@@ -20,6 +20,7 @@ type Props = {
   hostUserId: number;
   onBack: () => void;
   onOpenMatch: (matchId: number) => void;
+  onJoinMatch?: (matchId: number) => void;
 };
 
 const SKILL_SPORTS: { sport: Sport; key: string }[] = [
@@ -47,7 +48,7 @@ const HOSTED_MATCHES_PREVIEW_COUNT = 1;
  * "Host phone" — only on match detail when caller is host/accepted
  * participant), so there's nothing to show here even though Figma mocks one.
  */
-export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch }: Props) {
+export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, onJoinMatch }: Props) {
   const router = useRouter();
   const [profile, setProfile] = useState<HostProfile | null>(null);
   const [hostedMatches, setHostedMatches] = useState<Match[]>([]);
@@ -202,6 +203,7 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch }: 
                     key={match.matchId}
                     match={match}
                     onPress={() => onOpenMatch(match.matchId)}
+                    onJoin={() => (onJoinMatch ?? onOpenMatch)(match.matchId)}
                     onToggleFavorite={() => handleToggleFavorite(match)}
                     onDirections={() => openVenueDirections(router, match)}
                   />

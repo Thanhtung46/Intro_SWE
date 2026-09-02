@@ -12,6 +12,7 @@ import { listTournaments, setTournamentFavorite } from '@/services/tournamentSer
 import type { Sport } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
 import type { TournamentFilters } from '@/types/tournamentFilters';
+import { formatDistanceKm, haversineKm } from '@/utils/location';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -20,9 +21,12 @@ type Props = {
   appliedLocation: string;
   filters: TournamentFilters;
   filterVisible: boolean;
+  viewerCoords?: { latitude: number; longitude: number } | null;
   onCloseFilter: () => void;
   onApplyFilters: (filters: TournamentFilters) => void;
   onOpenTournament: (tournamentId: number) => void;
+  /** Card "Join Tournament" — opens captain registration form. */
+  onJoinTournament: (tournamentId: number) => void;
 };
 
 /**
@@ -37,9 +41,11 @@ export default function TournamentsBrowseScreen({
   appliedLocation,
   filters,
   filterVisible,
+  viewerCoords = null,
   onCloseFilter,
   onApplyFilters,
   onOpenTournament,
+  onJoinTournament,
 }: Props) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -113,14 +119,29 @@ export default function TournamentsBrowseScreen({
             <Text style={styles.emptyStateText}>No tournaments found. Try a different sport or search.</Text>
           </View>
         ) : (
-          tournaments.map((tournament) => (
-            <TournamentCard
-              key={tournament.tournamentId}
-              tournament={tournament}
-              onPress={() => onOpenTournament(tournament.tournamentId)}
-              onToggleFavorite={() => handleToggleFavorite(tournament)}
-            />
-          ))
+          tournaments.map((tournament) => {
+            const distanceLabel =
+              viewerCoords && tournament.latitude != null && tournament.longitude != null
+                ? formatDistanceKm(
+                    haversineKm(
+                      viewerCoords.latitude,
+                      viewerCoords.longitude,
+                      tournament.latitude,
+                      tournament.longitude
+                    )
+                  )
+                : null;
+            return (
+              <TournamentCard
+                key={tournament.tournamentId}
+                tournament={tournament}
+                distanceLabel={distanceLabel}
+                onPress={() => onOpenTournament(tournament.tournamentId)}
+                onJoin={() => onJoinTournament(tournament.tournamentId)}
+                onToggleFavorite={() => handleToggleFavorite(tournament)}
+              />
+            );
+          })
         )}
       </ScrollView>
 

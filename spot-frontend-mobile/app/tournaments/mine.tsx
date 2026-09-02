@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import ManageTournamentsScreen from '@/screens/tournaments/ManageTournamentsScreen';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — reached from the Tournaments
 // sub-tab's FAB "Manage Tournaments" (MatchesHomepageScreen). Both the card's
@@ -10,7 +11,7 @@ export default function ManageTournamentsRoute() {
 
   return (
     <ManageTournamentsScreen
-      onBack={() => router.back()}
+      onBack={() => safeBack(router, '/matches')}
       onOpenTournament={(tournamentId) => router.push(`/tournaments/${tournamentId}`)}
     />
   );

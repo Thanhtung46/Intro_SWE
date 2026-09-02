@@ -23,7 +23,7 @@ const BADMINTON_SKILLS: { code: string; rank: number; label: string }[] = [
   { code: 'BEGINNER_MINUS', rank: 1, label: 'Beginner-' },
   { code: 'BEGINNER', rank: 2, label: 'Beginner' },
   { code: 'BEGINNER_PLUS', rank: 3, label: 'Beginner+' },
-  { code: 'LOW_AVERAGE', rank: 4, label: 'Low avg' },
+  { code: 'LOW_AVERAGE', rank: 4, label: 'Low Avg' },
   { code: 'AVERAGE_MINUS', rank: 5, label: 'Avg-' },
   { code: 'AVERAGE', rank: 6, label: 'Avg' },
   { code: 'AVERAGE_PLUS', rank: 7, label: 'Avg+' },

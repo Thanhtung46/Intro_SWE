@@ -24,6 +24,8 @@ type Props = {
   groupId: number;
   onBack: () => void;
   onEditGroup: () => void;
+  /** After transferring admin — leave the admin console (caller is no longer admin). */
+  onAdminTransferred: () => void;
 };
 
 /**
@@ -34,7 +36,12 @@ type Props = {
  * Managed tab) — just the Members list with Kick/Make-Admin actions, plus
  * Edit Group and Disband Group entry points.
  */
-export default function ManageGroupRequestsScreen({ groupId, onBack, onEditGroup }: Props) {
+export default function ManageGroupRequestsScreen({
+  groupId,
+  onBack,
+  onEditGroup,
+  onAdminTransferred,
+}: Props) {
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -53,6 +60,11 @@ export default function ManageGroupRequestsScreen({ groupId, onBack, onEditGroup
         // Backend caps members `limit` at 50 (list-members.dto.js) — 100 → 400.
         listGroupMembers(groupId, { limit: 50 }),
       ]);
+      // Someone else is admin now (transfer from another device, stale stack, etc.).
+      if (detail.myRole !== 'ADMIN') {
+        onAdminTransferred();
+        return;
+      }
       setGroup(detail);
       setMembers(membersResult.members);
       setStatus('ready');
@@ -60,7 +72,7 @@ export default function ManageGroupRequestsScreen({ groupId, onBack, onEditGroup
       setErrorMessage(getErrorMessage(err));
       setStatus('error');
     }
-  }, [groupId]);
+  }, [groupId, onAdminTransferred]);
 
   useEffect(() => {
     fetchData();
@@ -84,14 +96,18 @@ export default function ManageGroupRequestsScreen({ groupId, onBack, onEditGroup
   const handleConfirmTransfer = async () => {
     if (!transferTarget) return;
     const userId = transferTarget.userId;
+    const name = transferTarget.fullName ?? 'the new admin';
     setTransferTarget(null);
     setActingUserId(userId);
     try {
       await transferGroupAdmin(groupId, userId);
-      await fetchData();
+      Alert.alert(
+        'Admin transferred',
+        `${name} is now the admin. You're a regular member — leaving Manage.`,
+        [{ text: 'OK', onPress: onAdminTransferred }]
+      );
     } catch (err) {
       Alert.alert('Something went wrong', getErrorMessage(err));
-    } finally {
       setActingUserId(null);
     }
   };

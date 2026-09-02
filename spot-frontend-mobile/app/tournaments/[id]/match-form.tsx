@@ -9,6 +9,7 @@ import EditTournamentMatchScreen from '@/screens/tournaments/EditTournamentMatch
 import { getErrorMessage } from '@/services/apiErrors';
 import { getTournamentDetail, getTournamentPlayers, listTournamentMatches } from '@/services/tournamentService';
 import type { TournamentDetail, TournamentMatch, TournamentTeam } from '@/types/tournament';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — pre-fetches the tournament + its
 // accepted teams (and, when ?matchId is present, the match being edited) so
@@ -17,6 +18,7 @@ export default function TournamentMatchFormRoute() {
   const router = useRouter();
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const tournamentId = Number(id);
+  const detailHref = `/tournaments/${tournamentId}`;
 
   const [tournament, setTournament] = useState<TournamentDetail | null>(null);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
@@ -52,9 +54,9 @@ export default function TournamentMatchFormRoute() {
         tournament={tournament}
         teams={teams}
         initialMatch={match}
-        onBack={() => router.back()}
-        onSaved={() => router.replace(`/tournaments/${tournamentId}`)}
-        onDeleted={() => router.replace(`/tournaments/${tournamentId}`)}
+        onBack={() => safeBack(router, detailHref)}
+        onSaved={() => router.replace(detailHref)}
+        onDeleted={() => router.replace(detailHref)}
       />
     );
   }

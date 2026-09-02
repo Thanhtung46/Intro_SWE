@@ -9,6 +9,7 @@ import CreateTournamentScreen from '@/screens/tournaments/CreateTournamentScreen
 import { getErrorMessage } from '@/services/apiErrors';
 import { getTournamentDetail } from '@/services/tournamentService';
 import type { TournamentDetail } from '@/types/tournament';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — pre-fetches the tournament so
 // CreateTournamentScreen has no loading state of its own in edit mode
@@ -44,7 +45,7 @@ export default function EditTournamentRoute() {
         mode="edit"
         tournamentId={tournamentId}
         initialTournament={tournament}
-        onBack={() => router.back()}
+        onBack={() => safeBack(router, `/tournaments/${tournamentId}`)}
         onSaved={(savedId) => router.replace(`/tournaments/${savedId}`)}
         onHostMatch={() => router.replace('/matches')}
       />

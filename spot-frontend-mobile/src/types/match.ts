@@ -56,6 +56,10 @@ export type Match = {
   notes: string | null;
   venueName: string;
   venueAddress: string;
+  province?: string | null;
+  provinceName?: string | null;
+  city?: string | null;
+  cityName?: string | null;
   latitude: number | null;
   longitude: number | null;
   startsAt: string;
@@ -72,7 +76,7 @@ export type Match = {
   feeType: FeeType;
   priceMin: number | null; // VND
   priceMax: number | null; // VND
-  yourShare: number | null; // VND — depends on caller's gender/feeType, see computeYourShare
+  yourShare: number | null; // VND — SPLIT_EVENLY: ceil(priceMin/maxPlayers); GENDER_RANGE: by viewer gender
   joinMode: JoinMode;
   status: MatchStatus;
   courtCount: number;
@@ -126,6 +130,7 @@ export type Participant = {
 export type MatchDetail = {
   match: Match;
   canJoin: boolean;
+  isHost?: boolean;
   yourRequest: JoinRequest | null;
   participants: Participant[];
 };
@@ -137,6 +142,7 @@ export type ListMatchesQuery = {
   timeFrom?: string; // HH:mm
   timeTo?: string; // HH:mm
   skill?: string[]; // skill codes for `sport`, max 10
+  format?: MatchFormat[]; // SINGLES/DOUBLES or FIVE_A_SIDE/… for `sport`
   priceMin?: number; // VND
   priceMax?: number; // VND
   location?: string; // substring match on venueName OR venueAddress — not geocoded
@@ -144,7 +150,7 @@ export type ListMatchesQuery = {
   city?: string; // VN admin-unit code (pre-2025) — requires province
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20, requires latitude+longitude too
+  radiusKm?: number; // 0-50, requires latitude+longitude too
   favorited?: boolean;
   hostUserId?: number;
   limit?: number; // default 20, max 50
@@ -242,6 +248,11 @@ export type CreateMatchPayload = {
   courtCount?: number;
   courts: { name: string }[];
 };
+
+/** PATCH /matches/:id — host partial update before startsAt. */
+export type UpdateMatchPayload = Partial<
+  Omit<CreateMatchPayload, 'courts'> & { courts: { name: string }[] }
+>;
 
 // POST /matches/bulk — Vmito-style recurring publish. `template` omits the
 // schedule fields (startsAt/endsAt), which live per-entry in `schedules`.

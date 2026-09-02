@@ -210,12 +210,22 @@ export function parseEarningsQueryDto(query) {
 }
 
 export const earningsHistoryQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM').optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export function parseEarningsHistoryQueryDto(query) {
   return earningsHistoryQuerySchema.parse(query ?? {});
+}
+
+export const earningsMonthlyQuerySchema = z.object({
+  anchor: z.string().regex(/^\d{4}-\d{2}$/, 'anchor must be YYYY-MM').optional(),
+  months: z.coerce.number().int().min(2).max(12).optional().default(6),
+});
+
+export function parseEarningsMonthlyQueryDto(query) {
+  return earningsMonthlyQuerySchema.parse(query ?? {});
 }
 
 export const venueIdParamSchema = z.object({

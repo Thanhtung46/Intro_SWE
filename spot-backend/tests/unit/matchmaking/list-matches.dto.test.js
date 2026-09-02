@@ -73,6 +73,37 @@ describe('listMatchesQuerySchema', () => {
     assert.deepEqual(parsed.skill, ['REC_BASIC', 'ELITE']);
   });
 
+  it('accepts format filters for badminton', () => {
+    const parsed = listMatchesQuerySchema.parse({
+      sport: 'BADMINTON',
+      format: 'SINGLES,DOUBLES',
+    });
+    assert.deepEqual(parsed.format, ['SINGLES', 'DOUBLES']);
+  });
+
+  it('accepts format from bracket-object query shape', () => {
+    const parsed = listMatchesQuerySchema.parse({
+      sport: 'BADMINTON',
+      format: { 0: 'SINGLES' },
+    });
+    assert.deepEqual(parsed.format, ['SINGLES']);
+  });
+
+  it('rejects football format when sport is badminton', () => {
+    const result = listMatchesQuerySchema.safeParse({
+      sport: 'BADMINTON',
+      format: 'FIVE_A_SIDE',
+    });
+    assert.equal(result.success, false);
+  });
+
+  it('requires sport when filtering by format', () => {
+    const result = listMatchesQuerySchema.safeParse({
+      format: 'SINGLES',
+    });
+    assert.equal(result.success, false);
+  });
+
   it('accepts favorited=true from query string', () => {
     const parsed = listMatchesQuerySchema.parse({ favorited: 'true' });
     assert.equal(parsed.favorited, true);
@@ -112,11 +143,11 @@ describe('listMatchesQuerySchema', () => {
     assert.equal(result.success, false);
   });
 
-  it('rejects radiusKm above 20', () => {
+  it('rejects radiusKm above 50', () => {
     const result = listMatchesQuerySchema.safeParse({
       latitude: '10.7',
       longitude: '106.7',
-      radiusKm: '21',
+      radiusKm: '51',
     });
     assert.equal(result.success, false);
   });
@@ -174,28 +205,28 @@ describe('computeYourShare', () => {
     assert.equal(computeYourShare({ ...range, gender: 'male' }), 80000);
   });
 
-  it('splits priceMin by filledCount', () => {
+  it('splits priceMin by maxPlayers', () => {
     assert.equal(
       computeYourShare({
         feeType: 'SPLIT_EVENLY',
         priceMin: 1400000,
-        filledCount: 1,
-      }),
-      1400000,
-    );
-    assert.equal(
-      computeYourShare({
-        feeType: 'SPLIT_EVENLY',
-        priceMin: 1400000,
-        filledCount: 14,
+        maxPlayers: 14,
       }),
       100000,
     );
     assert.equal(
       computeYourShare({
         feeType: 'SPLIT_EVENLY',
+        priceMin: 1400000,
+        maxPlayers: 1,
+      }),
+      1400000,
+    );
+    assert.equal(
+      computeYourShare({
+        feeType: 'SPLIT_EVENLY',
         priceMin: 100000,
-        filledCount: 3,
+        maxPlayers: 3,
       }),
       33334,
     );

@@ -161,7 +161,7 @@ export type ListGroupsQuery = {
   city?: string; // requires province
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20, requires latitude+longitude too
+  radiusKm?: number; // 0-50, requires latitude+longitude too
   favorited?: boolean;
   limit?: number;
   offset?: number;

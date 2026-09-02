@@ -7,7 +7,20 @@ import { getOnboardingCompleted } from '@/utils/onboardingStorage';
 import { clearAllTokens, getToken } from '@/utils/authStorage';
 import { ROUTES } from '@/constants/routes';
 
-type Destination = typeof ROUTES.ONBOARDING | typeof ROUTES.AUTH_LOGIN | typeof ROUTES.HOME;
+type Destination =
+  | typeof ROUTES.ONBOARDING
+  | typeof ROUTES.AUTH_LOGIN
+  | typeof ROUTES.HOME
+  | typeof ROUTES.REFEREE_INVITATIONS
+  | typeof ROUTES.REFEREE_PENDING;
+
+/** Where a logged-in user lands based on their role/status. */
+function homeForUser(user?: { role?: string; status?: string }): Destination {
+  if (user?.role === 'REFEREE') {
+    return user.status === 'ACTIVE' ? ROUTES.REFEREE_INVITATIONS : ROUTES.REFEREE_PENDING;
+  }
+  return ROUTES.HOME;
+}
 
 const AUTO_NAVIGATE_ENABLED = true;
 
@@ -48,8 +61,9 @@ export default function Splash() {
           if (cancelled) return;
 
           if (check.success) {
-            setDestination(ROUTES.HOME);
-          } else if (check.statusCode === 401) {
+            setDestination(homeForUser(check.user));
+          } else if (check.statusCode === 401 || !check.statusCode) {
+            // 401 = expired token; no statusCode = network/timeout — don't block splash forever.
             await clearAllTokens();
             if (cancelled) return;
             setDestination(ROUTES.AUTH_LOGIN);

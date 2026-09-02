@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
-import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { SelectField } from '@/components/SelectField';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getVnAdminTree } from '@/services/matchService';
+import { promptLocationFailure, requestCurrentPosition } from '@/utils/location';
 import type { TournamentFilters } from '@/types/tournamentFilters';
 import type { VnProvince } from '@/types/geo';
 
@@ -21,15 +20,15 @@ type Props = {
 
 type LocationMode = 'location' | 'distance';
 
-const RADIUS_MIN = 1;
-const RADIUS_MAX = 20;
+const RADIUS_MIN = 0;
+const RADIUS_MAX = 50;
 const RADIUS_DEFAULT = 10;
 const SLIDER_INSET = spacing.md;
 
 /**
  * Tournament browse filter sheet — copied from GroupFilterSheet.tsx with the
  * Skill Level section removed (tournaments have no skill gate — TOURNAMENT_PLAN.md).
- * Location (province/ward + favorited) vs Distance (1–20km radius via
+ * Location (province/ward + favorited) vs Distance (0–50km radius via
  * expo-location) radio; the two modes are XOR at the API level, and both are XOR
  * with the shared free-text search bar.
  */
@@ -79,24 +78,18 @@ export default function TournamentFilterSheet({ visible, initialFilters, onClose
     if (locationMode === 'distance') {
       setLocating(true);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(
-            'Location needed',
-            'Allow location access to search tournaments near you, or switch back to Location.'
-          );
+        const pos = await requestCurrentPosition({ offerEnable: true });
+        if (!pos.ok) {
+          promptLocationFailure(pos.reason);
           return;
         }
-        const pos = await Location.getCurrentPositionAsync({});
         onApply({
           ...base,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
           radiusKm,
         });
         onClose();
-      } catch {
-        Alert.alert('Location unavailable', "Couldn't get your current location. Try again or switch back to Location.");
       } finally {
         setLocating(false);
       }

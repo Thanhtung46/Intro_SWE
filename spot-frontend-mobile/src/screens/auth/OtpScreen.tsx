@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { OtpInput } from '@/components/OtpInput';
 import { otpSchema } from '@/schemas/otpSchema';
-import { resendOtp, verifyOtp } from '@/services/authService';
+import { resendOtp, verifyOtp, VerifyOtpResult } from '@/services/authService';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemeColors } from '@/constants/theme';
@@ -23,9 +23,11 @@ export default function OtpScreen({
   mode = 'verify',
 }: {
   email: string;
-  /** Receives the 6-digit code — callers that don't need it can ignore the
-   * argument. */
-  onVerified: (otp: string) => void;
+  /** Receives the 6-digit code, plus (in 'verify' mode) the full
+   * /auth/otp/verify response — a PENDING Owner/Referee gets an
+   * accessToken/refreshToken + `nextStep` there. Callers that don't need
+   * either argument can ignore them. */
+  onVerified: (otp: string, result?: VerifyOtpResult) => void;
   /** OTP purpose sent to the backend (REGISTER, FORGOT_PASSWORD, ...). */
   purpose?: string;
   /**
@@ -81,7 +83,7 @@ export default function OtpScreen({
 
     if (response.success) {
       verifiedRef.current = true;
-      onVerified(result.data);
+      onVerified(result.data, response);
       return;
     }
 
