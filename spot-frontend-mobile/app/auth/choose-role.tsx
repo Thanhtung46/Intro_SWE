@@ -5,6 +5,7 @@ import ChooseRoleScreen from '@/screens/auth/ChooseRoleScreen';
 import { selectRole } from '@/services/authService';
 import type { Role } from '@/types/auth';
 import { ROUTES } from '@/constants/routes';
+import { setRefreshToken, setToken } from '@/utils/authStorage';
 
 const DESTINATION: Record<Role, string> = {
   player: ROUTES.HOME,
@@ -13,11 +14,13 @@ const DESTINATION: Record<Role, string> = {
 };
 
 /**
- * "/auth/choose-role" — Register step 2 (spot-backend's register→role→
- * otp→login flow). Reached two ways:
- * - From app/auth/register.tsx with an `email` param — a real account
- *   exists, so Continue calls POST /auth/role for it, then goes to OTP
- *   verification (required for every role, not just Owner/Referee).
+ * "/auth/choose-role" — Register step 3 (spot-backend's register→otp→
+ * role→login flow). Reached two ways:
+ * - From app/auth/otp.tsx with an `email` param — a real, OTP-verified
+ *   account exists, so Continue calls POST /auth/role for it. For a
+ *   PENDING Owner/Referee the backend returns a session token +
+ *   `nextStep: SUBMIT_VERIFICATION`, so we store it and go straight to the
+ *   verification-document upload; a PLAYER just goes to login.
  * - From app/onboarding.tsx with no `email` — no account exists yet, so
  *   this falls back to the old placeholder navigation (DESTINATION) with
  *   no API call, same as before this fix.
@@ -57,7 +60,16 @@ export default function ChooseRoleRoute() {
 
     // replace, not push: the role is now committed server-side, so coming
     // back here would only hit a 409 "role already selected".
-    router.replace({ pathname: '/auth/otp', params: { email, role: selectedRole } });
+    if (result.nextStep === 'SUBMIT_VERIFICATION' && result.accessToken) {
+      await setToken(result.accessToken);
+      if (result.refreshToken) await setRefreshToken(result.refreshToken);
+      router.replace(
+        selectedRole === 'owner' ? ROUTES.OWNER_REGISTER : ROUTES.REFEREE_REGISTER
+      );
+      return;
+    }
+    // PLAYER (ACTIVE, no token issued at this step) → log in.
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   return (

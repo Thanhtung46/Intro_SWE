@@ -421,6 +421,20 @@ export function getErrorMessage(error: unknown): string {
 export interface SelectRoleResult {
   success: boolean;
   message?: string;
+  // For a PENDING Owner/Referee whose email is already verified (the
+  // register → OTP → role flow), spot-backend returns a session token +
+  // `nextStep: 'SUBMIT_VERIFICATION'` so the account can upload its
+  // verification documents before login works.
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
+}
+
+interface SelectRoleBody {
+  message?: string;
+  nextStep?: string;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 const ROLE_TO_BACKEND: Record<Role, string> = {
@@ -431,8 +445,16 @@ const ROLE_TO_BACKEND: Record<Role, string> = {
 
 export async function selectRole(email: string, role: Role): Promise<SelectRoleResult> {
   try {
-    await client.post(`${API_URL}/auth/role`, { email, role: ROLE_TO_BACKEND[role] });
-    return { success: true };
+    const res = await client.post<SelectRoleBody>(`${API_URL}/auth/role`, {
+      email,
+      role: ROLE_TO_BACKEND[role],
+    });
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
+    };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
 

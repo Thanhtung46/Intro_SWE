@@ -645,7 +645,7 @@ export async function selectRole(input) {
       status,
     });
 
-    return {
+    const response = {
       message:
         status === USER_STATUSES.PENDING
           ? 'Role selected. Account is pending approval.'
@@ -653,6 +653,25 @@ export async function selectRole(input) {
       nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
       user: await publicUserWithSkills(client, updated),
     };
+
+    // Register → OTP → Role: email is already verified by now, so issue the
+    // pending Owner/Referee session token + SUBMIT_VERIFICATION here (same as
+    // POST /auth/otp/verify does when the role is chosen first). Without this
+    // a pending Owner/Referee has no token to submit verification documents.
+    if (
+      user.email_verified_at &&
+      status === USER_STATUSES.PENDING &&
+      (role === USER_ROLES.OWNER || role === USER_ROLES.REFEREE)
+    ) {
+      const refreshed = await userRepository.findById(client, updated.user_id);
+      response.accessToken = signAccessToken(refreshed);
+      response.refreshToken = signRefreshToken(refreshed);
+      response.tokenType = 'Bearer';
+      response.expiresIn = getAccessTokenTtlSeconds();
+      response.nextStep = 'SUBMIT_VERIFICATION';
+    }
+
+    return response;
   } finally {
     client.release();
   }
