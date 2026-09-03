@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
+import { REFEREE_FEE_VND } from '@/constants/booking';
 import { comingSoon } from '@/utils/comingSoon';
 import { showAlert } from '@/utils/showAlert';
 import { openVenueDirections } from '@/utils/directions';
@@ -13,8 +14,9 @@ import { useLanguage } from '@/context/LanguageContext';
 import { TranslationKey } from '@/i18n/translations';
 import SelectPitchTimeModal, { Pitch } from '@/components/booking/SelectPitchTimeModal';
 import AppMap, { AppMapMarker, Region } from '@/components/common/AppMap';
+import ImageLightbox from '@/components/common/ImageLightbox';
 import { getVenueDetail, getVenueImages, PublicField, PublicVenueImage } from '@/services/venueService';
-import { getVenueRating } from '@/services/reviewService';
+import { getVenueRating, listVenueReviews, VenueReview } from '@/services/reviewService';
 
 // Ho Chi Minh City center — same fallback BookingMapScreen uses when a venue
 // has no pinned coords yet, so the map still renders instead of blank/text.
@@ -47,7 +49,7 @@ const DEFAULT_VENUE_EXTRAS = {
   heroImage: VENUE_PLACEHOLDER_IMAGE,
   verified: false,
   schedule: { dateLabel: 'No upcoming booking', timeLabel: '', pitchLabel: 'Pick a pitch below to book one' },
-  extraService: { label: 'Hire a Referee', priceLabel: '+ 150,000 VND' },
+  extraService: { label: 'Hire a Referee', priceLabel: `+ ${formatVnd(REFEREE_FEE_VND)} VND` },
   contact: { name: 'Venue Management', phone: '', avatarUrl: null },
 };
 
@@ -104,11 +106,16 @@ function getTabs(t: (key: TranslationKey) => string): { key: Tab; label: string 
 
 type Props = {
   venueId: string;
+  /** Active sport tab the player came from (e.g. Booking screen) — when set,
+   * scopes fields/pitches to that sport only, since one venue can host both
+   * football and badminton courts and a player shouldn't be able to book
+   * the wrong one. */
+  sport?: string;
   onBack: () => void;
 };
 
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
-export default function VenueDetailScreen({ venueId, onBack }: Props) {
+export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
   const TABS = getTabs(t);
@@ -116,9 +123,12 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
   const [fields, setFields] = useState<PublicField[]>([]);
   const [reviewRating, setReviewRating] = useState<{ avgRating: number; ratingCount: number } | null>(null);
   const [reviewRatingError, setReviewRatingError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<VenueReview[]>([]);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
   const [images, setImages] = useState<PublicVenueImage[]>([]);
   const [imagesError, setImagesError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
   const [refereeHired, setRefereeHired] = useState(false);
   const [pitchTimeVisible, setPitchTimeVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('about');
@@ -126,10 +136,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
 
   useEffect(() => {
     if (!Number.isInteger(numericVenueId)) return;
-    getVenueDetail(numericVenueId).then((result) => {
+    setHeroImageFailed(false);
+    getVenueDetail(numericVenueId, sport).then((result) => {
       if (!result.success || !result.venue) return;
       const apiVenue = result.venue;
-      const apiFields = result.fields ?? [];
+      // Soft-deleted courts (owner "delete facility") stay INACTIVE, not
+      // removed — hide them here so players can't select an unbookable court.
+      const apiFields = (result.fields ?? []).filter((f) => f.status !== 'INACTIVE');
       const prices = apiFields.map((f) => f.pricePerHour);
       setFields(apiFields);
       setVenue({
@@ -144,7 +157,12 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
         capacityLabel: `${apiFields.length} ${apiFields.length === 1 ? t('venueDetail.pitchSingular') : t('venueDetail.pitchPlural')}`,
         latitude: apiVenue.latitude,
         longitude: apiVenue.longitude,
-        pitches: apiFields.map((f) => ({ fieldId: f.fieldId, name: f.name, format: f.sportType })),
+        pitches: apiFields.map((f) => ({
+          fieldId: f.fieldId,
+          name: f.name,
+          format: f.sportType,
+          pricePerHour: f.pricePerHour,
+        })),
         price: prices.length ? formatVnd(Math.min(...prices)) : '—',
         priceUnit: 'VND / hr',
         ...DEFAULT_VENUE_EXTRAS,
@@ -166,6 +184,16 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
       }
     });
 
+    listVenueReviews(numericVenueId).then((result) => {
+      if (result.success) {
+        setReviews(result.reviews ?? []);
+        setReviewsError(null);
+      } else {
+        setReviews([]);
+        setReviewsError(result.message ?? t('common.genericError'));
+      }
+    });
+
     getVenueImages(numericVenueId).then((result) => {
       if (result.success) {
         setImages(result.images ?? []);
@@ -175,7 +203,7 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
         setImagesError(result.message ?? t('common.genericError'));
       }
     });
-  }, [numericVenueId]);
+  }, [numericVenueId, sport]);
 
   const parsedHours = parseHours(venue.hours);
   const hasCoords = venue.latitude != null && venue.longitude != null;
@@ -204,7 +232,12 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.hero}>
-          <Image source={venue.heroImage} style={styles.heroImage} resizeMode="cover" />
+          <Image
+            source={images[0]?.imageUrl && !heroImageFailed ? { uri: images[0].imageUrl } : venue.heroImage}
+            style={styles.heroImage}
+            resizeMode="cover"
+            onError={() => setHeroImageFailed(true)}
+          />
           <View style={styles.heroActions}>
             <TouchableOpacity
               style={styles.heroButton}
@@ -213,14 +246,6 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               accessibilityLabel="Back"
             >
               <Ionicons name="arrow-back" size={18} color={colors.headingText} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.heroButton}
-              onPress={() => setSaved((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel="Save venue"
-            >
-              <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? '#DC2626' : colors.headingText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -420,8 +445,56 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
               ) : (
                 <Text style={styles.amenityText}>{t('venueDetail.noReviewsYet')}</Text>
               )}
-              <Text style={styles.amenityText}>{t('venueDetail.reviewCommentsUnavailable')}</Text>
             </View>
+
+            {reviewsError ? (
+              <Text style={styles.amenityText}>{reviewsError}</Text>
+            ) : reviews.length === 0 ? (
+              reviewRating && <Text style={styles.amenityText}>{t('venueDetail.noReviewsYet')}</Text>
+            ) : (
+              <View style={{ gap: 16 }}>
+                {reviews.map((review) => (
+                  <View key={review.reviewId} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      {review.playerAvatarUrl ? (
+                        <Image source={{ uri: review.playerAvatarUrl }} style={styles.reviewAvatarImage} />
+                      ) : (
+                        <View style={styles.contactAvatar}>
+                          <Text style={styles.contactAvatarText}>
+                            {(review.playerName ?? '?').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reviewPlayerName}>
+                          {review.playerName ?? t('venueDetail.anonymousPlayer')}
+                        </Text>
+                        <View style={styles.reviewStarsRow}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Ionicons
+                              key={i}
+                              name={i < review.rating ? 'star' : 'star-outline'}
+                              size={13}
+                              color="#D97706"
+                            />
+                          ))}
+                        </View>
+                      </View>
+                      <Text style={styles.reviewDate}>
+                        {new Date(review.createdAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    {review.reviewText && <Text style={styles.reviewText}>{review.reviewText}</Text>}
+                    {review.reply && (
+                      <View style={styles.reviewReply}>
+                        <Text style={styles.reviewReplyLabel}>{t('venueDetail.ownerReplyLabel')}</Text>
+                        <Text style={styles.reviewText}>{review.reply.replyText}</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -438,13 +511,15 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
                 <Text style={styles.amenityText}>{t('venueDetail.noPhotosYet')}</Text>
               ) : (
                 <View style={styles.galleryGrid}>
-                  {images.map((image) => (
-                    <Image
-                      key={image.imageId}
-                      source={{ uri: image.imageUrl }}
-                      style={styles.galleryImage}
-                      resizeMode="cover"
-                    />
+                  {images.map((image, index) => (
+                    <TouchableOpacity
+                      key={`${image.source}-${image.imageId}`}
+                      onPress={() => setLightboxIndex(index)}
+                      accessibilityRole="button"
+                      accessibilityLabel="View photo"
+                    >
+                      <Image source={{ uri: image.imageUrl }} style={styles.galleryImage} resizeMode="cover" />
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
@@ -452,6 +527,13 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <ImageLightbox
+        visible={lightboxIndex != null}
+        images={images}
+        initialIndex={lightboxIndex ?? 0}
+        onClose={() => setLightboxIndex(null)}
+      />
 
       {/* Sticky bottom bar */}
       <View style={styles.bottomBar}>
@@ -485,6 +567,8 @@ export default function VenueDetailScreen({ venueId, onBack }: Props) {
         pitches={venue.pitches}
         openHour={parsedHours[0]}
         closeHour={parsedHours[1]}
+        hireReferee={refereeHired}
+        refereeFeeVnd={REFEREE_FEE_VND}
         onClose={() => setPitchTimeVisible(false)}
         onConfirm={() => setPitchTimeVisible(false)}
       />
@@ -834,6 +918,55 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+  },
+  reviewCard: {
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  reviewAvatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  reviewPlayerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.headingText,
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 2,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: colors.bodyText,
+  },
+  reviewText: {
+    fontSize: 14,
+    color: colors.bodyText,
+    lineHeight: 20,
+  },
+  reviewReply: {
+    marginTop: 4,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    gap: 4,
+  },
+  reviewReplyLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
   contactAvatarText: {
     fontSize: 18,

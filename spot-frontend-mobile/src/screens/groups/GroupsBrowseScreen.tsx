@@ -9,7 +9,7 @@ import GroupFilterSheet from '@/components/groups/GroupFilterSheet';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage } from '@/services/apiErrors';
-import { joinGroup, listGroups, setGroupFavorite } from '@/services/groupService';
+import { joinGroup, listGroups } from '@/services/groupService';
 import type { Group } from '@/types/group';
 import type { Sport } from '@/types/match';
 import type { GroupFilters } from '@/types/groupFilters';
@@ -94,16 +94,6 @@ export default function GroupsBrowseScreen({
     fetchGroups();
   }, [fetchGroups]);
 
-  const handleToggleFavorite = async (group: Group) => {
-    const nextFavorited = !group.isFavorited;
-    setGroups((prev) => prev.map((g) => (g.groupId === group.groupId ? { ...g, isFavorited: nextFavorited } : g)));
-    try {
-      await setGroupFavorite(group.groupId, nextFavorited);
-    } catch (err) {
-      setGroups((prev) => prev.map((g) => (g.groupId === group.groupId ? { ...g, isFavorited: group.isFavorited } : g)));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   const handleJoin = async (group: Group) => {
     if (joiningGroupId != null) return;
@@ -165,7 +155,6 @@ export default function GroupsBrowseScreen({
                 joining={joiningGroupId === group.groupId}
                 onPress={() => onOpenGroup(group.groupId)}
                 onJoin={() => handleJoin(group)}
-                onToggleFavorite={() => handleToggleFavorite(group)}
               />
             );
           })

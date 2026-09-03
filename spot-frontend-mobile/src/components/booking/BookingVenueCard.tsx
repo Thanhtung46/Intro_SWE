@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,42 +9,43 @@ import { useTheme } from '@/context/ThemeContext';
 import { VenueBase } from '@/types/venue';
 
 export type BookingVenue = VenueBase & {
-  price: string;
   rating: number;
   address: string;
   hours: string;
+  latitude: number | null;
+  longitude: number | null;
+  /** e.g. "Sân 5, Sân 7" for football venues with multiple court sizes; null
+   * for badminton or when the venue only has one unlabeled size. */
+  courtTypeLabel: string | null;
 };
 
 type Props = {
   venue: BookingVenue;
   onBookPress: () => void;
-  onFavoritePress?: () => void;
   onNavigatePress?: () => void;
 };
 
 /** Immersive venue card — Figma node 79:1405 ("Venue Card 1", Booking Field screen). */
-export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, onNavigatePress }: Props) {
+export default function BookingVenueCard({ venue, onBookPress, onNavigatePress }: Props) {
   const { t } = useLanguage();
   const { colors: c } = useTheme();
   const styles = useMemo(() => getStyles(c), [c]);
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <View style={styles.card}>
       <View style={styles.photoWrap}>
-        <Image source={venue.image} style={styles.photo} resizeMode="cover" />
+        <Image
+          source={imageFailed ? venue.fallbackImage : venue.image}
+          style={styles.photo}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        />
         <LinearGradient
           colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0)']}
           style={StyleSheet.absoluteFill}
         />
 
         <View style={styles.topLeftActions}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={onFavoritePress}
-            accessibilityRole="button"
-            accessibilityLabel={t('booking.saveVenueLabel')}
-          >
-            <Ionicons name="heart-outline" size={18} color={c.primary} />
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={onNavigatePress}
@@ -61,10 +62,6 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
         </View>
 
         <View style={styles.bottomRow}>
-          <View style={styles.priceBadge}>
-            <Text style={styles.priceValue}>{venue.price}</Text>
-            <Text style={styles.priceUnit}>/hr</Text>
-          </View>
           <TouchableOpacity style={styles.bookButton} onPress={onBookPress} activeOpacity={0.85}>
             <Text style={styles.bookButtonText}>{t('home.bookField')}</Text>
           </TouchableOpacity>
@@ -73,10 +70,12 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
 
       <View style={styles.details}>
         <Text style={styles.name}>{venue.name}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons name="location" size={13} color={c.textSecondaryAlt} />
-          <Text style={styles.metaText}>{venue.distanceLabel}{t('booking.awaySuffix')}</Text>
-        </View>
+        {venue.distanceLabel ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location" size={13} color={c.textSecondaryAlt} />
+            <Text style={styles.metaText}>{venue.distanceLabel}</Text>
+          </View>
+        ) : null}
         <View style={styles.metaRow}>
           <Ionicons name="business-outline" size={13} color={c.textSecondaryAlt} />
           <Text style={styles.metaText}>{venue.address}</Text>
@@ -85,6 +84,12 @@ export default function BookingVenueCard({ venue, onBookPress, onFavoritePress, 
           <Ionicons name="time-outline" size={13} color={c.textSecondaryAlt} />
           <Text style={styles.metaText}>{t('booking.openPrefix')}{venue.hours}</Text>
         </View>
+        {venue.courtTypeLabel && (
+          <View style={styles.metaRow}>
+            <Ionicons name="grid-outline" size={13} color={c.textSecondaryAlt} />
+            <Text style={styles.metaText}>{venue.courtTypeLabel}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -146,25 +151,6 @@ function getStyles(c: ThemeColors) {
       alignItems: 'flex-end',
       justifyContent: 'space-between',
       gap: 12,
-    },
-    priceBadge: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      gap: 4,
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 12,
-      backgroundColor: c.venueCardChipBg,
-    },
-    priceValue: {
-      fontSize: 24,
-      fontWeight: '900',
-      color: c.primary,
-    },
-    priceUnit: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: c.textSecondaryAlt,
     },
     bookButton: {
       flex: 1,

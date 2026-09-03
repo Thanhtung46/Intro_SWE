@@ -1,7 +1,8 @@
 import pool from '../../../shared/database/pool.js';
 import redis from '../../../shared/database/redis.js';
-import config from '../../../shared/config/env.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
+import { safeVerificationExt } from '../../../shared/middleware/verificationUpload.js';
+import { uploadBufferToStorage } from '../../../shared/utils/supabaseStorage.js';
 import {
   VERIFICATION_REQUEST_TYPES,
   VERIFICATION_STATUSES,
@@ -265,7 +266,8 @@ export async function uploadVerificationDocument(userId, file) {
     throw new AppError('Document file is required (field name: document)', 400);
   }
 
-  const documentUrl = `${config.publicBaseUrl}/uploads/verification/${file.filename}`;
+  const objectPath = `verification/${userId}-${Date.now()}${safeVerificationExt(file.originalname)}`;
+  const documentUrl = await uploadBufferToStorage(objectPath, file.buffer, file.mimetype);
 
   return {
     message: 'Document uploaded',

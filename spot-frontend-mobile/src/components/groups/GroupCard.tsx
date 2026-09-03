@@ -20,7 +20,6 @@ type Props = {
   onPress: () => void;
   /** Card "Join Group" CTA — joins immediately without opening detail. */
   onJoin: () => void;
-  onToggleFavorite: () => void;
   joining?: boolean;
   /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
   distanceLabel?: string | null;
@@ -37,7 +36,6 @@ export default function GroupCard({
   group,
   onPress,
   onJoin,
-  onToggleFavorite,
   joining = false,
   distanceLabel,
 }: Props) {
@@ -58,17 +56,6 @@ export default function GroupCard({
         {/* Same remote+default layering as MatchCard — Unsplash fail no longer leaves a blank hero. */}
         <MatchCoverImage sport={group.sport} coverUrl={group.coverUrl} />
         <View style={styles.coverScrim} />
-        <TouchableOpacity
-          testID={`group-favorite-${group.groupId}`}
-          style={styles.favoriteButton}
-          onPress={onToggleFavorite}
-        >
-          <Ionicons
-            name={group.isFavorited ? 'heart' : 'heart-outline'}
-            size={16}
-            color={group.isFavorited ? colors.error : colors.white}
-          />
-        </TouchableOpacity>
         <View style={styles.coverText}>
           <Text style={styles.coverName} numberOfLines={1} ellipsizeMode="tail">
             {group.name}
@@ -134,17 +121,6 @@ const styles = StyleSheet.create({
   },
   cover: { height: 190, justifyContent: 'flex-end' },
   coverScrim: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
-  favoriteButton: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.glassIconButtonBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   coverText: { padding: spacing.md, gap: 2 },
   coverName: { fontSize: 20, fontWeight: '800', color: colors.white },
   coverTagline: { fontSize: 13, color: colors.white, opacity: 0.9 },

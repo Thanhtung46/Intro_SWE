@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -21,11 +21,17 @@ type Props = {
 export default function VenueCard({ venue, onPress }: Props) {
   const { colors: themeColors } = useTheme();
   const styles = useMemo(() => getStyles(themeColors), [themeColors]);
+  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.photoWrap}>
-        <Image source={venue.image} style={styles.photo} resizeMode="cover" />
+        <Image
+          source={imageFailed ? venue.fallbackImage : venue.image}
+          style={styles.photo}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        />
         <View style={styles.distanceBadge}>
           <Ionicons name="location" size={11} color={themeColors.textSecondaryAlt} />
           <Text style={styles.distanceText}>{venue.distanceLabel}</Text>

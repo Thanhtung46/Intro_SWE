@@ -12,7 +12,6 @@ type Props = {
   onPress: () => void;
   /** Card "Join Tournament" CTA — opens join form without requiring detail first. */
   onJoin: () => void;
-  onToggleFavorite: () => void;
   /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
   distanceLabel?: string | null;
 };
@@ -38,7 +37,6 @@ export default function TournamentCard({
   tournament,
   onPress,
   onJoin,
-  onToggleFavorite,
   distanceLabel,
 }: Props) {
   const cityText = tournament.cityName ?? tournament.venueName;
@@ -57,17 +55,6 @@ export default function TournamentCard({
         {/* Same clipped remote+default layering as GroupCard / MatchCard — prevents Unsplash overflow on web. */}
         <MatchCoverImage sport={tournament.sport} coverUrl={tournament.coverUrl} />
         <View style={styles.coverScrim} />
-        <TouchableOpacity
-          testID={`tournament-favorite-${tournament.tournamentId}`}
-          style={styles.favoriteButton}
-          onPress={onToggleFavorite}
-        >
-          <Ionicons
-            name={tournament.isFavorited ? 'heart' : 'heart-outline'}
-            size={16}
-            color={tournament.isFavorited ? colors.error : colors.white}
-          />
-        </TouchableOpacity>
         <View style={styles.coverText}>
           <View style={styles.badge}>
             <Ionicons name="trophy" size={11} color={colors.white} />
@@ -132,18 +119,6 @@ const styles = StyleSheet.create({
   },
   cover: { height: 170, justifyContent: 'flex-end', overflow: 'hidden', position: 'relative' },
   coverScrim: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim, zIndex: 1 },
-  favoriteButton: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    zIndex: 2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.glassIconButtonBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   coverText: { zIndex: 1, padding: spacing.md, gap: spacing.sm },
   badge: {
     flexDirection: 'row',

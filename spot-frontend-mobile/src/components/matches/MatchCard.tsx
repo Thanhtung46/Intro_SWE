@@ -15,7 +15,6 @@ type Props = {
   onPress: () => void;
   /** Prefer for the Join Match CTA — opens join flow (detail + sheet). Falls back to onPress. */
   onJoin?: () => void;
-  onToggleFavorite: () => void;
   onDirections: () => void;
   /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
   distanceLabel?: string | null;
@@ -32,7 +31,7 @@ type Props = {
  * src/utils/directions.ts. `onDirections` is a callback prop (not owned
  * here) so every screen can wire the same `openDirections(match)` helper.
  */
-export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, onDirections, distanceLabel }: Props) {
+export default function MatchCard({ match, onPress, onJoin, onDirections, distanceLabel }: Props) {
   const isFull = match.status === 'FULL' || match.spotsLeft < 1;
   // Prefer runtime yourShare (SPLIT_EVENLY = ceil(total/maxPlayers); GENDER_RANGE by viewer gender).
   // Fall back to listed prices when yourShare is null (e.g. GENDER_RANGE + viewer gender unknown).
@@ -53,20 +52,6 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
       <View style={styles.cardCover}>
         <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} />
         <View style={styles.cardCoverTopRow} pointerEvents="box-none">
-          <TouchableOpacity
-            testID={`match-favorite-${match.matchId}`}
-            style={styles.cardIconButton}
-            onPress={(e: GestureResponderEvent) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
-          >
-            <Ionicons
-              name={match.isFavorited ? 'heart' : 'heart-outline'}
-              size={16}
-              color={match.isFavorited ? colors.error : colors.white}
-            />
-          </TouchableOpacity>
           <TouchableOpacity
             testID={`match-directions-${match.matchId}`}
             style={styles.cardIconButton}

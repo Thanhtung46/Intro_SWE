@@ -45,8 +45,9 @@ const UPCOMING_MATCH_IMAGE_BY_SPORT: Record<Sport, number> = {
   badminton: require('../../../assets/home/upcoming-match-badminton.png'),
 };
 
-// GET /venues has no per-venue photo/price at list level (data-model.md
-// PublicVenue) — this is a static placeholder image/price, not real data.
+// GET /venues has no per-venue price at list level (data-model.md
+// PublicVenue) — the photo now comes from venue.coverImageUrl when the
+// owner has uploaded one; this is only the fallback when they haven't.
 const VENUE_PLACEHOLDER_IMAGE_BY_SPORT: Record<Sport, number> = {
   football: require('../../../assets/home/venue-skyline-arena.png'),
   badminton: require('../../../assets/home/venue-badminton-elite.png'),
@@ -72,23 +73,28 @@ function mapVenueToCard(venue: PublicVenue, placeholderImage: number): Venue {
   return {
     id: String(venue.venueId),
     name: venue.name,
-    image: placeholderImage,
+    image: venue.coverImageUrl ? { uri: venue.coverImageUrl } : placeholderImage,
+    fallbackImage: placeholderImage,
     distanceLabel:
-      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+      venue.distanceKm != null ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
     priceLabel: NOT_AVAILABLE_LABEL,
     rating: venue.avgRating,
     tag: venue.amenities ?? '',
   };
 }
 
-// GET /recommendations has no per-venue photo/price either (data-model.md
-// Suggestion mapping table) — same placeholder convention as mapVenueToCard.
-function mapRecommendationToCard(item: RecommendationItem, placeholderImage: number): Venue {
+// GET /recommendations proxies a separate AI microservice and has no
+// per-venue photo (data-model.md Suggestion mapping table) — coverImageUrl
+// is cross-referenced from the same-sport GET /venues list fetched above
+// (recommended venues are drawn from that same pool), falling back to the
+// placeholder only when a match isn't found there either.
+function mapRecommendationToCard(item: RecommendationItem, placeholderImage: number, coverImageUrl?: string): Venue {
   return {
     id: String(item.venueId),
     name: item.venueName,
-    image: placeholderImage,
-    distanceLabel: item.distanceKm !== undefined ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    image: coverImageUrl ? { uri: coverImageUrl } : placeholderImage,
+    fallbackImage: placeholderImage,
+    distanceLabel: item.distanceKm != null ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
     priceLabel: NOT_AVAILABLE_LABEL,
     rating: 0,
     tag: 'Suggested for you',
@@ -116,7 +122,8 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
-  const [suggestions, setSuggestions] = useState<Venue[]>([]);
+  const [rawSuggestions, setRawSuggestions] = useState<RecommendationItem[]>([]);
+  const [venueCoverById, setVenueCoverById] = useState<Record<number, string>>({});
   const userLocation = useUserLocation();
 
   useEffect(() => {
@@ -124,7 +131,14 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
     const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
     listVenues(sport, opts).then((result) => {
       if (result.success) {
-        setVenues((result.venues ?? []).map((v) => mapVenueToCard(v, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport])));
+        const list = result.venues ?? [];
+        setVenues(list.map((v) => mapVenueToCard(v, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport])));
+        setVenueCoverById(
+          Object.fromEntries(
+            list.filter((v): v is PublicVenue & { coverImageUrl: string } => !!v.coverImageUrl)
+              .map((v) => [v.venueId, v.coverImageUrl]),
+          ),
+        );
         setVenuesError(null);
       } else {
         setVenues([]);
@@ -138,15 +152,17 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
     // A failed/unavailable fetch just leaves this section empty — never a
     // visible error, per FR-004 (spec 004-ai-features-frontend-integration).
     getRecommendations(sport).then((result) => {
-      setSuggestions(
-        result.success
-          ? (result.items ?? []).map((item) =>
-              mapRecommendationToCard(item, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport]),
-            )
-          : [],
-      );
+      setRawSuggestions(result.success ? (result.items ?? []) : []);
     });
   }, [sport]);
+
+  const suggestions = useMemo(
+    () =>
+      rawSuggestions.map((item) =>
+        mapRecommendationToCard(item, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport], venueCoverById[item.venueId]),
+      ),
+    [rawSuggestions, venueCoverById, sport],
+  );
 
   useEffect(() => {
     getMySchedule({ type: 'booking', limit: 1 }).then((result) => {

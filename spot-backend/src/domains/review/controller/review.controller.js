@@ -31,6 +31,21 @@ export async function reply(req, res, next) {
   }
 }
 
+export async function listVenueReviews(req, res, next) {
+  try {
+    const venueId = Number(req.params.venueId);
+    if (!Number.isInteger(venueId) || venueId < 1) {
+      return res.status(400).json({ message: 'Invalid venueId' });
+    }
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const offset = Number(req.query.offset) || 0;
+    const result = await reviewService.listVenueReviews(venueId, { limit, offset });
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function venueRating(req, res, next) {
   try {
     const venueId = Number(req.params.venueId);

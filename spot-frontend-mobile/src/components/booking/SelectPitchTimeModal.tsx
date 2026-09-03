@@ -5,13 +5,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { ThemeColors } from '@/constants/theme';
 import { comingSoon } from '@/utils/comingSoon';
-import { showAlert } from '@/utils/showAlert';
 import { useLanguage } from '@/context/LanguageContext';
 import { getFieldAvailability } from '@/services/venueService';
-import { createBookingsBulk } from '@/services/bookingService';
 import DatePickerModal from './DatePickerModal';
+import PaymentConfirmModal, { PaymentLineItem } from './PaymentConfirmModal';
 
-export type Pitch = { fieldId: number; name: string; format: string };
+export type Pitch = { fieldId: number; name: string; format: string; pricePerHour: number };
 
 type Props = {
   visible: boolean;
@@ -23,6 +22,10 @@ type Props = {
   onClose: () => void;
   /** Called after at least one slot in the multi-select was booked successfully. */
   onConfirm: () => void;
+  /** "Hire a Referee" toggle from VenueDetailScreen's Extra Services — applied
+   * to every booking created in this session (fee added per line item). */
+  hireReferee?: boolean;
+  refereeFeeVnd?: number;
   themeColors?: ThemeColors;
 };
 
@@ -66,6 +69,8 @@ export default function SelectPitchTimeModal({
   closeHour,
   onClose,
   onConfirm,
+  hireReferee,
+  refereeFeeVnd,
   themeColors,
 }: Props) {
   const { t } = useLanguage();
@@ -77,7 +82,8 @@ export default function SelectPitchTimeModal({
   // several pitches at once, all for the currently selected date.
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [bookedCells, setBookedCells] = useState<Set<string>>(new Set());
-  const [submitting, setSubmitting] = useState(false);
+  const [paymentVisible, setPaymentVisible] = useState(false);
+  const [paymentItems, setPaymentItems] = useState<PaymentLineItem[]>([]);
 
   useEffect(() => {
     if (!visible || pitches.length === 0) return;
@@ -105,9 +111,25 @@ export default function SelectPitchTimeModal({
     setSelectedCells(new Set());
   }, [selectedDate]);
 
+  // Slots earlier than "now" on today's date would always be rejected by the
+  // backend (`bookingDate/startTime must not be in the past`) — block them
+  // in the grid instead of letting the user hit that error after picking
+  // Confirm Payment.
+  const pastTimeIndexes = useMemo(() => {
+    const isToday = toLocalDateString(selectedDate) === toLocalDateString(new Date());
+    if (!isToday) return new Set<number>();
+    const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    const indexes = new Set<number>();
+    timeSlots.forEach((slot, index) => {
+      const [h, m] = slot.split(':').map(Number);
+      if (h * 60 + m <= nowMinutes) indexes.add(index);
+    });
+    return indexes;
+  }, [selectedDate, timeSlots]);
+
   const toggleCell = (pitchIndex: number, timeIndex: number) => {
     const key = `${pitchIndex}-${timeIndex}`;
-    if (bookedCells.has(key)) return;
+    if (bookedCells.has(key) || pastTimeIndexes.has(timeIndex)) return;
     setSelectedCells((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -119,46 +141,56 @@ export default function SelectPitchTimeModal({
     });
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (selectedCells.size === 0) return;
     const bookingDate = toLocalDateString(selectedDate);
-    const bookings = Array.from(selectedCells).map((key) => {
+
+    // Group selected cells by pitch, then merge consecutive 30-min slots into
+    // a single booking per contiguous run — so e.g. 21:00-21:30 + 21:30-22:00
+    // + 22:00-22:30 on the same pitch becomes ONE 21:00-22:30 booking (one
+    // ticket in Schedule) instead of three separate ones.
+    const timeIndexesByPitch = new Map<number, number[]>();
+    for (const key of selectedCells) {
       const [pitchIndexStr, timeIndexStr] = key.split('-');
       const pitchIndex = Number(pitchIndexStr);
       const timeIndex = Number(timeIndexStr);
-      return {
-        fieldId: pitches[pitchIndex].fieldId,
-        bookingDate,
-        startTime: timeSlots[timeIndex],
-        endTime: timeSlots[timeIndex + 1] ?? `${String(closeHour).padStart(2, '0')}:00`,
+      const list = timeIndexesByPitch.get(pitchIndex);
+      if (list) list.push(timeIndex);
+      else timeIndexesByPitch.set(pitchIndex, [timeIndex]);
+    }
+
+    const items: PaymentLineItem[] = [];
+    for (const [pitchIndex, timeIndexes] of timeIndexesByPitch) {
+      const pitch = pitches[pitchIndex];
+      const sorted = [...timeIndexes].sort((a, b) => a - b);
+      let rangeStart = sorted[0];
+      let rangeEnd = sorted[0];
+      const pushRange = () => {
+        items.push({
+          fieldId: pitch.fieldId,
+          bookingDate,
+          startTime: timeSlots[rangeStart],
+          endTime: timeSlots[rangeEnd + 1] ?? `${String(closeHour).padStart(2, '0')}:00`,
+          pitchName: pitch.name,
+          pricePerHour: pitch.pricePerHour,
+          hireReferee: hireReferee || undefined,
+          refereeFeeVnd: hireReferee ? refereeFeeVnd : undefined,
+        });
       };
-    });
-
-    setSubmitting(true);
-    const result = await createBookingsBulk({ bookings });
-    setSubmitting(false);
-
-    if (!result.success) {
-      showAlert(t('selectPitchTime.bookingFailedTitle'), result.message || t('common.genericError'));
-      return;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] === rangeEnd + 1) {
+          rangeEnd = sorted[i];
+          continue;
+        }
+        pushRange();
+        rangeStart = sorted[i];
+        rangeEnd = sorted[i];
+      }
+      pushRange();
     }
 
-    const { totalCreated, totalRequested, failed } = result;
-    if (!totalCreated) {
-      showAlert(t('selectPitchTime.bookingFailedTitle'), failed?.[0]?.message || t('selectPitchTime.noneBookedFailure'));
-      return;
-    }
-
-    setSelectedCells(new Set());
-    if (totalCreated === totalRequested) {
-      showAlert(t('selectPitchTime.bookedTitle'), `${totalCreated} slot${totalCreated === 1 ? '' : 's'} booked successfully.`);
-    } else {
-      showAlert(
-        t('selectPitchTime.partiallyBookedTitle'),
-        `${totalCreated}/${totalRequested} slots booked. ${failed?.length ?? 0} failed (already taken).`,
-      );
-    }
-    onConfirm();
+    setPaymentItems(items);
+    setPaymentVisible(true);
   };
 
   return (
@@ -269,6 +301,7 @@ export default function SelectPitchTimeModal({
                   {timeSlots.map((_, timeIndex) => {
                     const key = `${pitchIndex}-${timeIndex}`;
                     const booked = bookedCells.has(key);
+                    const past = pastTimeIndexes.has(timeIndex);
                     const selected = selectedCells.has(key);
                     return (
                       <TouchableOpacity
@@ -276,7 +309,7 @@ export default function SelectPitchTimeModal({
                         style={[
                           styles.gridCell,
                           themeColors && { backgroundColor: themeColors.surface, borderColor: themeColors.gridCellBorder },
-                          booked && [
+                          (booked || past) && [
                             styles.gridCellBooked,
                             themeColors && { backgroundColor: themeColors.inputBorder },
                           ],
@@ -286,9 +319,9 @@ export default function SelectPitchTimeModal({
                           ],
                         ]}
                         onPress={() => toggleCell(pitchIndex, timeIndex)}
-                        disabled={booked}
+                        disabled={booked || past}
                         accessibilityRole="button"
-                        accessibilityLabel={`${pitch.name} ${timeSlots[timeIndex]}${booked ? ', booked' : ''}`}
+                        accessibilityLabel={`${pitch.name} ${timeSlots[timeIndex]}${booked ? ', booked' : past ? ', past' : ''}`}
                       >
                         {booked && (
                           <Text style={[styles.cellLabelBooked, themeColors && { color: themeColors.mutedCellText }]}>
@@ -325,16 +358,14 @@ export default function SelectPitchTimeModal({
             style={[
               styles.confirmButton,
               themeColors && { backgroundColor: themeColors.quickActionPrimaryIcon },
-              (selectedCells.size === 0 || submitting) && styles.confirmButtonDisabled,
+              selectedCells.size === 0 && styles.confirmButtonDisabled,
             ]}
             onPress={handleConfirm}
-            disabled={selectedCells.size === 0 || submitting}
+            disabled={selectedCells.size === 0}
             accessibilityRole="button"
           >
             <Text style={[styles.confirmButtonText, themeColors && { color: themeColors.white }]}>
-              {submitting
-                ? t('selectPitchTime.confirming')
-                : `${t('selectPitchTime.confirmBooking')}${selectedCells.size > 1 ? ` (${selectedCells.size})` : ''}`}
+              {`${t('selectPitchTime.confirmBooking')}${selectedCells.size > 1 ? ` (${selectedCells.size})` : ''}`}
             </Text>
             <Ionicons name="calendar" size={18} color={themeColors?.white ?? colors.white} />
           </TouchableOpacity>
@@ -348,6 +379,19 @@ export default function SelectPitchTimeModal({
           </TouchableOpacity>
         </View>
       </View>
+
+      <PaymentConfirmModal
+        visible={paymentVisible}
+        items={paymentItems}
+        dateLabel={formatDateLabel(selectedDate)}
+        onBack={() => setPaymentVisible(false)}
+        onPaid={() => {
+          setPaymentVisible(false);
+          setSelectedCells(new Set());
+          onConfirm();
+        }}
+        themeColors={themeColors}
+      />
     </Modal>
   );
 }

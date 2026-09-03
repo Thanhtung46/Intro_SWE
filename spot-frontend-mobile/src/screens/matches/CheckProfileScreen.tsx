@@ -10,7 +10,7 @@ import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { getErrorMessage, getHostProfile, getHostReviews, listMatches, setFavorite } from '@/services/matchService';
+import { getErrorMessage, getHostProfile, getHostReviews, listMatches } from '@/services/matchService';
 import { openVenueDirections } from '@/utils/directions';
 import type { HostProfile, HostReview, Match, Sport } from '@/types/match';
 
@@ -79,16 +79,6 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
-
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch {
-      setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-    }
-  };
 
   if (status === 'loading') {
     return (
@@ -204,7 +194,6 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
                     match={match}
                     onPress={() => onOpenMatch(match.matchId)}
                     onJoin={() => (onJoinMatch ?? onOpenMatch)(match.matchId)}
-                    onToggleFavorite={() => handleToggleFavorite(match)}
                     onDirections={() => openVenueDirections(router, match)}
                   />
                 ))}

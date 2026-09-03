@@ -1,10 +1,12 @@
 import { parseListVenuesQuery } from '../dto/list-venues.dto.js';
+import { normalizeSportType } from '../../../shared/constants/venue.js';
 import * as venueService from '../service/venue.service.js';
 
 export async function list(req, res, next) {
   try {
     const dto = parseListVenuesQuery(req.query);
     const venues = await venueService.listVenues(dto.sport, {
+      location: dto.location,
       lat: dto.lat,
       long: dto.long,
       radiusKm: dto.radiusKm,
@@ -28,7 +30,8 @@ export async function detail(req, res, next) {
     if (!Number.isInteger(venueId) || venueId < 1) {
       return res.status(400).json({ message: 'Invalid venueId' });
     }
-    const result = await venueService.getVenueDetail(venueId);
+    const sportType = normalizeSportType(req.query.sport);
+    const result = await venueService.getVenueDetail(venueId, sportType);
     return res.status(200).json(result);
   } catch (err) {
     return next(err);

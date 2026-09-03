@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   AppState,
   FlatList,
@@ -22,7 +21,7 @@ import MatchCard from '@/components/matches/MatchCard';
 import SlidingSegmentControl from '@/components/navigation/SlidingSegmentControl';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
+import { getErrorMessage, listMatches } from '@/services/matchService';
 import { listGroups } from '@/services/groupService';
 import { listTournaments } from '@/services/tournamentService';
 import { openVenueDirections } from '@/utils/directions';
@@ -309,19 +308,6 @@ export default function MatchesHomepageScreen(props: Props) {
     return 'pricetag-outline';
   };
 
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch (err) {
-      // revert on failure
-      setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
-
-
   const handleSubTabPress = (tab: SubTab) => {
     setSubTab(tab);
   };
@@ -562,7 +548,6 @@ export default function MatchesHomepageScreen(props: Props) {
                 distanceLabel={distanceLabel}
                 onPress={() => props.onOpenMatch(match.matchId)}
                 onJoin={() => (props.onJoinMatch ?? props.onOpenMatch)(match.matchId)}
-                onToggleFavorite={() => handleToggleFavorite(match)}
                 onDirections={() => openVenueDirections(router, match)}
               />
             );

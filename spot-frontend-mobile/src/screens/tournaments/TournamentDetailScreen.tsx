@@ -32,7 +32,6 @@ import {
   getTournamentPlayers,
   getTournamentStandings,
   listTournamentMatches,
-  setTournamentFavorite,
   withdrawTournamentJoin,
 } from '@/services/tournamentService';
 import type {
@@ -216,17 +215,6 @@ export default function TournamentDetailScreen({
     if (tab === 'standings' && !standingsLoaded) fetchStandings();
   }, [tab, matchesLoaded, standingsLoaded, fetchMatches, fetchStandings]);
 
-  const handleToggleFavorite = async () => {
-    if (!tournament) return;
-    const next = !tournament.isFavorited;
-    setTournament({ ...tournament, isFavorited: next });
-    try {
-      await setTournamentFavorite(tournamentId, next);
-    } catch (err) {
-      setTournament((prev) => (prev ? { ...prev, isFavorited: !next } : prev));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   const handleConfirmWithdraw = async () => {
     setWithdrawDialogVisible(false);
@@ -652,17 +640,6 @@ export default function TournamentDetailScreen({
         <View style={styles.heroTopBar}>
           <TouchableOpacity testID="tournament-detail-back" style={styles.heroIconButton} onPress={onBack}>
             <Ionicons name="arrow-back" size={18} color={colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="tournament-detail-favorite"
-            style={styles.heroIconButton}
-            onPress={handleToggleFavorite}
-          >
-            <Ionicons
-              name={tournament.isFavorited ? 'heart' : 'heart-outline'}
-              size={18}
-              color={tournament.isFavorited ? colors.error : colors.white}
-            />
           </TouchableOpacity>
         </View>
       </SafeAreaView>

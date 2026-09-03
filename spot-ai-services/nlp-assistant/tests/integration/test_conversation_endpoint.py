@@ -55,6 +55,9 @@ class FakeBackend:
             raise self._join_exception
         return {}
 
+    async def get_geo_vn(self):
+        return {"provinces": []}
+
     async def __aenter__(self):
         return self
 

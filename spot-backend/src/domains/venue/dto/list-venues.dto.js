@@ -7,6 +7,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const listVenuesQuerySchema = z
   .object({
     sport: z.string().min(1),
+    location: z.string().trim().min(1).max(200).optional(),
     lat: z.coerce.number().min(-90).max(90).optional(),
     long: z.coerce.number().min(-180).max(180).optional(),
     radiusKm: z.coerce.number().positive().optional(),
@@ -35,6 +36,14 @@ export const listVenuesQuerySchema = z
         code: z.ZodIssueCode.custom,
         message: 'lat and long must be given together',
         path: hasLat ? ['long'] : ['lat'],
+      });
+    }
+
+    if (val.location && hasLat && hasLong) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Use location or distance, not both',
+        path: ['location'],
       });
     }
 
@@ -76,6 +85,7 @@ export const listVenuesQuerySchema = z
   })
   .transform((val) => ({
     sport: val.sport,
+    location: val.location,
     lat: val.lat,
     long: val.long,
     radiusKm: val.lat !== undefined ? (val.radiusKm ?? 20) : undefined,

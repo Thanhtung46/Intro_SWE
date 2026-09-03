@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import TournamentCard from '@/components/tournaments/TournamentCard';
@@ -8,7 +8,7 @@ import TournamentFilterSheet from '@/components/tournaments/TournamentFilterShee
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage } from '@/services/apiErrors';
-import { listTournaments, setTournamentFavorite } from '@/services/tournamentService';
+import { listTournaments } from '@/services/tournamentService';
 import type { Sport } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
 import type { TournamentFilters } from '@/types/tournamentFilters';
@@ -85,22 +85,6 @@ export default function TournamentsBrowseScreen({
     fetchTournaments();
   }, [fetchTournaments]);
 
-  const handleToggleFavorite = async (tournament: Tournament) => {
-    const nextFavorited = !tournament.isFavorited;
-    setTournaments((prev) =>
-      prev.map((t) => (t.tournamentId === tournament.tournamentId ? { ...t, isFavorited: nextFavorited } : t))
-    );
-    try {
-      await setTournamentFavorite(tournament.tournamentId, nextFavorited);
-    } catch (err) {
-      setTournaments((prev) =>
-        prev.map((t) =>
-          t.tournamentId === tournament.tournamentId ? { ...t, isFavorited: tournament.isFavorited } : t
-        )
-      );
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   return (
     <>
@@ -138,7 +122,6 @@ export default function TournamentsBrowseScreen({
                 distanceLabel={distanceLabel}
                 onPress={() => onOpenTournament(tournament.tournamentId)}
                 onJoin={() => onJoinTournament(tournament.tournamentId)}
-                onToggleFavorite={() => handleToggleFavorite(tournament)}
               />
             );
           })

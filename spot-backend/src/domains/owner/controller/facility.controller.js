@@ -1,6 +1,7 @@
 import * as facilityService from '../service/facility.service.js';
-import config from '../../../shared/config/env.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
+import { uploadBufferToStorage } from '../../../shared/utils/supabaseStorage.js';
+import { safeImageExt } from '../../../shared/middleware/facilityImageUpload.js';
 import {
   parseCreateVenueDto,
   parsePatchVenueDto,
@@ -130,7 +131,12 @@ export async function uploadImages(req, res, next) {
     if (!files.length) {
       throw new AppError('At least one photo is required (field name: images)', 400);
     }
-    const urls = files.map((file) => `${config.publicBaseUrl}/uploads/facilities/${file.filename}`);
+    const urls = await Promise.all(
+      files.map((file) => {
+        const objectPath = `facilities/${req.user.userId}-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeImageExt(file.originalname)}`;
+        return uploadBufferToStorage(objectPath, file.buffer, file.mimetype);
+      }),
+    );
     return res.status(200).json({ urls });
   } catch (err) {
     return next(err);

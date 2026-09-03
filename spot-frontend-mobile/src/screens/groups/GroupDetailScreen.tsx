@@ -36,7 +36,6 @@ import {
   listGroupGallery,
   listGroupMembers,
   listMyGroupJoinRequests,
-  setGroupFavorite,
 } from '@/services/groupService';
 import { getErrorMessage } from '@/services/apiErrors';
 import { formatDisplayDate, toIsoDate } from '@/utils/dateTime';
@@ -173,17 +172,6 @@ export default function GroupDetailScreen({
     }
   };
 
-  const handleToggleFavorite = async () => {
-    if (!group) return;
-    const nextFavorited = !group.isFavorited;
-    setGroup({ ...group, isFavorited: nextFavorited });
-    try {
-      await setGroupFavorite(groupId, nextFavorited);
-    } catch (err) {
-      setGroup((prev) => (prev ? { ...prev, isFavorited: !nextFavorited } : prev));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   const handleShareInvite = async () => {
     if (!group) return;
@@ -612,9 +600,6 @@ export default function GroupDetailScreen({
         <View style={styles.heroTopBar}>
           <TouchableOpacity testID="group-detail-back" style={styles.heroIconButton} onPress={onBack}>
             <Ionicons name="arrow-back" size={18} color={colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity testID="group-detail-favorite" style={styles.heroIconButton} onPress={handleToggleFavorite}>
-            <Ionicons name={group.isFavorited ? 'heart' : 'heart-outline'} size={18} color={group.isFavorited ? colors.error : colors.white} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>

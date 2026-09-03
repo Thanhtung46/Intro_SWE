@@ -10,7 +10,7 @@ import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/Ma
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { cancelJoinRequest, cancelMatch, getErrorMessage, getMatchDetail, setFavorite } from '@/services/matchService';
+import { cancelJoinRequest, cancelMatch, getErrorMessage, getMatchDetail } from '@/services/matchService';
 import type { Guest, MatchDetail, Participant, Sport } from '@/types/match';
 import { formatMatchWhenParts, formatVnd } from '@/utils/format';
 
@@ -152,18 +152,6 @@ export default function MatchDetailScreen({
       Alert.alert('Something went wrong', getErrorMessage(err));
     } finally {
       setIsCancellingMatch(false);
-    }
-  };
-
-  const handleToggleFavorite = async () => {
-    if (!detail) return;
-    const nextFavorited = !detail.match.isFavorited;
-    setDetail({ ...detail, match: { ...detail.match, isFavorited: nextFavorited } });
-    try {
-      await setFavorite(detail.match.matchId, nextFavorited);
-    } catch (err) {
-      setDetail((prev) => (prev ? { ...prev, match: { ...prev.match, isFavorited: !nextFavorited } } : prev));
-      Alert.alert('Something went wrong', getErrorMessage(err));
     }
   };
 
@@ -368,9 +356,6 @@ export default function MatchDetailScreen({
         <View style={styles.heroTopBar}>
           <TouchableOpacity testID="match-detail-back" style={styles.heroIconButton} onPress={onBack}>
             <Ionicons name="arrow-back" size={18} color={colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity testID="match-detail-favorite" style={styles.heroIconButton} onPress={handleToggleFavorite}>
-            <Ionicons name={match.isFavorited ? 'heart' : 'heart-outline'} size={18} color={match.isFavorited ? colors.error : colors.white} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
