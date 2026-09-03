@@ -8,11 +8,15 @@ import { spacing } from '@/constants/spacing';
 import { useLanguage } from '@/context/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
 import { getErrorMessage } from '@/services/apiErrors';
-import { getRefereeCertifications } from '@/services/refereeService';
+import { getMyVerificationRequests } from '@/services/refereeService';
 import type { RefereeCertification } from '@/types/referee';
 
 type Props = {
   onLogout: () => void;
+  /** Route to the document-upload screen. Shown only when nothing has been
+   *  submitted yet (a referee who quit the upload step never gets back here
+   *  otherwise). */
+  onSubmitDocuments: () => void;
 };
 
 const SUPPORT_EMAIL = 'support@spot.example.com';
@@ -26,7 +30,7 @@ const KIND_LABEL_KEY: Record<string, TranslationKey> = {
 
 /** "Application Under Review" (Pencil "Document Verification" frame).
  *  Step tracker derived from the submitted documents' review status. */
-export default function RefereePendingScreen({ onLogout }: Props) {
+export default function RefereePendingScreen({ onLogout, onSubmitDocuments }: Props) {
   const { t } = useLanguage();
   const docKindLabel = (kind?: string | null) => {
     const key = kind ? KIND_LABEL_KEY[kind] : undefined;
@@ -36,13 +40,14 @@ export default function RefereePendingScreen({ onLogout }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getRefereeCertifications()
+    getMyVerificationRequests()
       .then(setCerts)
       .catch((e) => setError(getErrorMessage(e)));
   }, []);
 
   const allApproved = certs != null && certs.length > 0 && certs.every((c) => c.status === 'APPROVED');
   const anyReviewed = certs != null && certs.some((c) => c.status !== 'PENDING');
+  const nothingSubmitted = certs != null && certs.length === 0;
 
   const steps = [
     { label: t('referee.pending.stepProfile'), state: 'done' as const },
@@ -101,6 +106,7 @@ export default function RefereePendingScreen({ onLogout }: Props) {
         <Text style={styles.docsHeading}>{t('referee.pending.submittedDocs')}</Text>
         {error ? <Text style={styles.docError}>{error}</Text> : null}
         {certs == null && !error ? <ActivityIndicator color={colors.primary} /> : null}
+        {nothingSubmitted ? <Text style={styles.noDocs}>{t('referee.pending.noDocsYet')}</Text> : null}
         {(certs ?? []).map((cert) => (
           <View key={cert.verificationReqId} style={styles.docRow}>
             <Ionicons
@@ -125,6 +131,12 @@ export default function RefereePendingScreen({ onLogout }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {nothingSubmitted ? (
+          <TouchableOpacity style={styles.submitBtn} onPress={onSubmitDocuments}>
+            <Ionicons name="cloud-upload-outline" size={16} color={colors.white} />
+            <Text style={styles.supportText}>{t('referee.pending.submitDocuments')}</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.supportBtn}
           onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => undefined)}
@@ -194,6 +206,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   docError: { alignSelf: 'flex-start', color: colors.error, fontSize: 13 },
+  noDocs: { alignSelf: 'flex-start', color: colors.bodyText, fontSize: 13 },
   docRow: {
     width: '100%',
     flexDirection: 'row',
@@ -206,7 +219,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   docName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.headingText },
-  footer: { padding: spacing.md },
+  footer: { padding: spacing.md, gap: spacing.sm },
+  submitBtn: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   supportBtn: {
     flexDirection: 'row',
     gap: spacing.sm,

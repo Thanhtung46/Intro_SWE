@@ -52,11 +52,6 @@ const LICENSE_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 export default function RefereeRegisterScreen({ onBack, onSubmitted }: Props) {
   const { t } = useLanguage();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [pasteUrls, setPasteUrls] = useState<Record<FieldKey, string>>({
-    idFront: '',
-    idBack: '',
-    vffLicense: '',
-  });
 
   const {
     handleSubmit,
@@ -65,7 +60,14 @@ export default function RefereeRegisterScreen({ onBack, onSubmitted }: Props) {
     formState: { isSubmitting, errors },
   } = useForm<RefereeRegisterFormInput, unknown, RefereeRegisterFormValues>({
     resolver: zodResolver(refereeRegisterSchema),
-    defaultValues: { idFront: null, idBack: null, vffLicense: null },
+    defaultValues: {
+      idFront: null,
+      idFrontUrl: '',
+      idBack: null,
+      idBackUrl: '',
+      vffLicense: null,
+      vffLicenseUrl: '',
+    },
   });
 
   const pick = async (field: FieldKey, accepted: string[]) => {
@@ -80,8 +82,8 @@ export default function RefereeRegisterScreen({ onBack, onSubmitted }: Props) {
       const fields: FieldKey[] = ['idFront', 'idBack', 'vffLicense'];
       const documents: VerificationDocumentInput[] = [];
       for (const field of fields) {
-        const pasted = pasteUrls[field].trim();
-        const documentUrl = pasted || (await uploadRefereeDocument(values[field]));
+        const pasted = values[`${field}Url` as const].trim();
+        const documentUrl = pasted || (await uploadRefereeDocument(values[field]!));
         documents.push({ documentKind: KIND_BY_FIELD[field], documentUrl });
       }
       await submitRefereeVerificationBatch(documents);
@@ -92,11 +94,13 @@ export default function RefereeRegisterScreen({ onBack, onSubmitted }: Props) {
   });
 
   const renderPicker = (field: FieldKey, label: string, accepted: string[]) => {
+    const urlKey = `${field}Url` as const;
     const asset = watch(field);
+    const fieldError = (errors[field]?.message ?? errors[urlKey]?.message) as string | undefined;
     return (
       <View style={styles.pickerBlock}>
         <TouchableOpacity
-          style={[styles.picker, errors[field] && styles.pickerError]}
+          style={[styles.picker, fieldError && styles.pickerError]}
           onPress={() => pick(field, accepted)}
           activeOpacity={0.7}
         >
@@ -107,14 +111,14 @@ export default function RefereeRegisterScreen({ onBack, onSubmitted }: Props) {
         </TouchableOpacity>
         <TextInput
           style={styles.pasteInput}
-          value={pasteUrls[field]}
-          onChangeText={(v) => setPasteUrls((prev) => ({ ...prev, [field]: v }))}
+          value={watch(urlKey)}
+          onChangeText={(v) => setValue(urlKey, v, { shouldValidate: true })}
           placeholder={t('referee.register.urlHint')}
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {errors[field]?.message ? <Text style={styles.errorText}>{errors[field]?.message as string}</Text> : null}
+        {fieldError ? <Text style={styles.errorText}>{fieldError}</Text> : null}
       </View>
     );
   };

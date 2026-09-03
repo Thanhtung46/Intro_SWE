@@ -292,6 +292,7 @@ export interface LoginResult {
   attemptsRemaining?: number;
   accessToken?: string;
   refreshToken?: string;
+  nextStep?: string;
   user?: LoginUser;
 }
 
@@ -307,6 +308,7 @@ interface LoginSuccessBody {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
+  nextStep?: string;
   user: LoginUser;
 }
 
@@ -317,6 +319,7 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       success: true,
       accessToken: res.data.accessToken,
       refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
       user: res.data.user,
     };
   } catch (err) {
@@ -338,6 +341,16 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       return {
         success: false,
         message: 'Please finish setting up your account before logging in.',
+      };
+    }
+
+    // Pending Owner/Referee: covers both "documents not submitted yet" and
+    // "submitted, waiting for an admin" — keep the wording neutral for both.
+    if (status === 403 && data?.details?.nextStep === 'SUBMIT_VERIFICATION') {
+      return {
+        success: false,
+        message:
+          'Your account is awaiting verification. Reopen the app to finish submitting your documents, or contact support.',
       };
     }
 

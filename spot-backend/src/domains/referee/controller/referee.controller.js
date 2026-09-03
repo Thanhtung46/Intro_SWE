@@ -31,6 +31,15 @@ export async function getCertifications(req, res, next) {
   }
 }
 
+export async function acknowledgeActivation(req, res, next) {
+  try {
+    const result = await refereeService.acknowledgeActivation(req.user.userId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function getBoard(req, res, next) {
   try {
     const query = parseBoardQueryDto(req.query);
