@@ -21,9 +21,9 @@ export const ROUTES = {
   AUTH_CHOOSE_ROLE: '/auth/choose-role',
   OWNER_REGISTER: '/owner/register',
   OWNER_WELCOME: '/owner/welcome',
-  // Referee flow (SPOT-93). Onboarding: choose-role → OTP → REFEREE_REGISTER
-  // (3-doc upload) → REFEREE_PENDING → admin approves → login →
-  // REFEREE_ACTIVATED → REFEREE_INVITATIONS. The 5 tab destinations mirror
+  // Referee flow (SPOT-93). Onboarding: register → OTP → choose-role →
+  // REFEREE_REGISTER (3-doc upload) → REFEREE_PENDING → admin approves →
+  // login → REFEREE_ACTIVATED → REFEREE_INVITATIONS. The 5 tab destinations mirror
   // the player AppShell tabs but live under app/referee/* with their own
   // RefereeShell bottom bar.
   REFEREE_REGISTER: '/referee/register',

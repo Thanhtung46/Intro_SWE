@@ -230,9 +230,10 @@ Từ chối: `1234567890`, `0123456789`, `+84901234567`.
 ```
 POST /auth/register
      → nextStep: SELECT_ROLE
-POST /auth/role          { email, role: "PLAYER" }
-     → nextStep: VERIFY_OTP  (nếu chưa verify)
 POST /auth/otp/verify    { email, otp }
+     → email verified (không token)
+POST /auth/role          { email, role: "PLAYER" }
+     → nextStep: LOGIN  (email đã verify)
 POST /auth/login         { email, password }
      → accessToken + refreshToken + user
 GET  /auth/me            Header: Authorization: Bearer <accessToken>
@@ -240,10 +241,17 @@ PATCH /auth/me           { skills: { badminton?, football? }, avatarUrl? }
 POST /auth/refresh       { refreshToken }  (khi access hết hạn)
 ```
 
+> Thứ tự chuẩn là **Register → OTP → Role**. `POST /auth/role` vẫn chấp nhận
+> khi gọi **trước** `POST /auth/otp/verify` (backward-compat) → khi đó
+> `nextStep: VERIFY_OTP`.
+
 ### B. Đăng ký OWNER / REFEREE
 
-Giống trên tới `POST /auth/role` với `OWNER` hoặc `REFEREE` → `status: PENDING`.  
-Sau verify OTP, **login sẽ trả 403** cho đến khi admin duyệt (API duyệt chưa có).
+Giống trên tới `POST /auth/role` với `OWNER` hoặc `REFEREE` → `status: PENDING`.
+Vì email đã verify ở bước OTP, `POST /auth/role` trả luôn `accessToken` +
+`refreshToken` + `nextStep: SUBMIT_VERIFICATION` để nộp giấy tờ
+(`POST /users/me/verification-requests/batch`). **Login sẽ trả 403** cho đến
+khi admin duyệt.
 
 ### C. Quên mật khẩu
 
@@ -438,7 +446,8 @@ curl -s -X POST http://localhost:3000/auth/register \
 
 ### 6.2 `POST /auth/role`
 
-Register Step 2 — chọn role một lần.
+Register Step 3 (sau OTP) — chọn role một lần. Vẫn gọi được trước OTP
+(backward-compat) → khi đó chưa cấp token, `nextStep: VERIFY_OTP`.
 
 **Body**
 
@@ -471,10 +480,29 @@ Register Step 2 — chọn role một lần.
 
 Nếu `OWNER` / `REFEREE`: `message` ≈ *"Role selected. Account is pending approval."*, `user.status` = `PENDING`.
 
+**Nếu email đã verify (flow chuẩn Register → OTP → Role) + role `OWNER` / `REFEREE`:**
+response kèm session token để nộp giấy tờ ngay:
+
+```json
+{
+  "message": "Role selected. Account is pending approval.",
+  "nextStep": "SUBMIT_VERIFICATION",
+  "user": { "...": "..." },
+  "accessToken": "<jwt>",
+  "refreshToken": "<jwt>",
+  "tokenType": "Bearer",
+  "expiresIn": 900
+}
+```
+
+FE lưu token rồi vào màn upload (`POST /users/me/verification-requests/batch`).
+`PLAYER` đã verify → chỉ `nextStep: LOGIN`, không token.
+
 `nextStep`:
 
-- `VERIFY_OTP` — chưa verify email
-- `LOGIN` — đã verify (hiếm khi xảy ra ở flow chuẩn)
+- `SUBMIT_VERIFICATION` — email đã verify + `OWNER`/`REFEREE` (kèm token)
+- `LOGIN` — email đã verify + `PLAYER`
+- `VERIFY_OTP` — chưa verify email (role chọn trước OTP)
 
 **Errors**
 

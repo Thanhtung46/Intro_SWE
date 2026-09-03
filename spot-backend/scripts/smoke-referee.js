@@ -99,6 +99,12 @@ if (!otp) {
   process.exit(1);
 }
 
+// Flow: Register → OTP → Role. OTP verify happens before the role is chosen,
+// so it returns no token; the pending-referee token now comes from /auth/role.
+const verified = await post('/auth/otp/verify', { email: refereeEmail, otp });
+log('verify referee', verified);
+assertOk('verify', verified, 200);
+
 const roleRes = await post('/auth/role', {
   email: refereeEmail,
   role: 'REFEREE',
@@ -106,13 +112,12 @@ const roleRes = await post('/auth/role', {
 log('role REFEREE', roleRes);
 assertOk('role', roleRes, 200);
 
-const verified = await post('/auth/otp/verify', { email: refereeEmail, otp });
-log('verify referee', verified);
-assertOk('verify', verified, 200);
-
-const pendingToken = verified.json.accessToken;
+const pendingToken = roleRes.json.accessToken;
 if (!pendingToken) {
-  throw new Error('Expected accessToken after REFEREE OTP verify (SUBMIT_VERIFICATION)');
+  throw new Error('Expected accessToken from POST /auth/role (email already verified → SUBMIT_VERIFICATION)');
+}
+if (roleRes.json.nextStep !== 'SUBMIT_VERIFICATION') {
+  throw new Error(`Expected nextStep SUBMIT_VERIFICATION from /auth/role, got ${roleRes.json.nextStep}`);
 }
 
 const batch = await post(

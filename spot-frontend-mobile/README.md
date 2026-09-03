@@ -16,8 +16,9 @@ pin ở `19.2.8`, tương thích với `react-test-renderer`/
 tái hiện.
 
 **Không còn chạy thuần Expo Go như trước.** Project có `expo-dev-client`
-(AI voice / native modules) — mỗi máy phải cài app **SPOT** một lần. Xem
-mục [Cài lần đầu trên máy mới](#cài-lần-đầu-trên-máy-mới-android) bên dưới.
+(AI voice / native modules) — mỗi máy/emulator phải cài app **SPOT** một lần.
+Cách nhanh: [tải APK đã build sẵn](#cách-nhanh-nhất-tải-apk-dev-client-đã-build-sẵn)
+(không cần Android SDK). Muốn tự build: [Cài lần đầu trên máy mới](#cài-lần-đầu-trên-máy-mới-android).
 
 Xem `CLAUDE.md` trong thư mục này để biết chi tiết đầy đủ (kiến trúc, known
 gotchas, trạng thái từng màn hình).
@@ -148,17 +149,33 @@ npx expo start --clear
 
 ---
 
-## Cách khác: nhận sẵn file APK
+## Cách nhanh nhất: tải APK Dev Client đã build sẵn
 
-Nếu không build được local, nhờ người đã build gửi `.apk` hoặc dùng EAS
-(mục dưới):
+Không cần Android SDK / NDK / build gì. **1 người build → cả team dùng chung
+1 file.** APK là universal (đủ 4 ABI: arm64-v8a, armeabi-v7a, x86, x86_64) nên
+chạy trên mọi emulator/máy Android.
 
-```bash
-adb install ten-file.apk
-# hoặc kéo-thả .apk vào cửa sổ emulator
-npm start
-# mở app SPOT
+**Tải:** https://drive.google.com/file/d/1ZIjrHZ9PsXNJa0MNgAJgdJXge0Fw9pko/view
+(`app-debug.apk`, ~261 MB — link nội bộ, đăng nhập tài khoản đã được add vào
+Share; ai vào team sau thì nhờ chủ file add thêm)
+
+```powershell
+# emulator/máy Android đang chạy + adb thấy device
+adb install -r app-debug.apk
+
+cd spot-frontend-mobile
+npm install
+# .env (Windows): thêm EXPO_PUBLIC_API_HOST=10.0.2.2 để app trong emulator gọi được backend
+npm start          # bấm a — mở app SPOT (KHÔNG dùng Expo Go, KHÔNG login Expo)
 ```
+
+**Khi nào cần tải APK mới:** chỉ khi có thay đổi **native module**
+(thêm/bớt package có code native) hoặc sửa `app.json` (plugins / permissions).
+Code JS/TS thường → Metro hot-reload, dùng APK cũ được.
+
+**Tự build lại APK** (khi cần bản mới): `npm run android` trên máy có
+Android SDK + path ngắn; hoặc EAS; hoặc build trên Linux/WSL rồi copy `.apk`
+ra (`android/app/build/outputs/apk/debug/app-debug.apk`) — xem 2 mục dưới.
 
 ---
 
