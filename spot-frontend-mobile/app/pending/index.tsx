@@ -13,7 +13,9 @@ export default function PendingRoute() {
   const resolvedRole = role === 'referee' ? 'referee' : 'owner';
 
   const handleDone = () => {
-    router.replace(ROUTES.HOME);
+    // Owner/Referee are PENDING here — no player session to land on Home,
+    // so send them back to the login screen.
+    router.replace(ROUTES.AUTH_LOGIN);
   };
 
   return <PendingApprovalScreen role={resolvedRole} onDone={handleDone} />;

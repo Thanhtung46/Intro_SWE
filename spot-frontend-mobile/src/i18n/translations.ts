@@ -156,7 +156,7 @@ const en = {
     ownerBody: "We've received your venue details. An admin will review and approve your account — you'll be notified once it's ready.",
     refereeTitle: 'Application Submitted for Review',
     refereeBody: "We've received your referee application. An admin will review your credentials — you'll be notified once it's approved.",
-    backHome: 'Back to Home',
+    backToLogin: 'Back to Login',
   },
   home: {
     searchPlaceholder: 'Tell me what you need...',
@@ -688,7 +688,7 @@ const vi: DeepStringDict<typeof en> = {
     ownerBody: 'Chúng tôi đã nhận thông tin sân của bạn. Quản trị viên sẽ xem xét và phê duyệt tài khoản — bạn sẽ được thông báo khi hoàn tất.',
     refereeTitle: 'Đã gửi hồ sơ để xét duyệt',
     refereeBody: 'Chúng tôi đã nhận hồ sơ trọng tài của bạn. Quản trị viên sẽ xem xét thông tin — bạn sẽ được thông báo khi được duyệt.',
-    backHome: 'Về trang chủ',
+    backToLogin: 'Về trang đăng nhập',
   },
   home: {
     searchPlaceholder: 'Cho tôi biết bạn cần gì...',
