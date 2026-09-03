@@ -672,7 +672,7 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 | :--- | :--- | :--- |
 | `401` | Invalid email or password | `attemptsRemaining` (khi password sai, chưa lock) |
 | `403` | Account is locked. Please contact support. | |
-| `403` | Account is pending approval and cannot log in yet. | |
+| `403` | Account is pending approval and cannot log in yet. | `nextStep: "SUBMIT_VERIFICATION"` |
 | `403` | Account temporarily locked. Try again later. | `lockoutUntil` |
 | `403` | Email is not verified. Please verify OTP first. | |
 | `403` | Please select your role to continue. | `nextStep: "SELECT_ROLE"` |
@@ -2223,8 +2223,12 @@ Sau `POST /auth/otp/verify`, user `PENDING` + `OWNER`/`REFEREE` nhận thêm `ac
 | :--- | :--- | :--- | :--- |
 | `POST` | `/users/me/verification-documents` | multipart `document` (PDF/JPG/PNG, max 5MB) | `{ documentUrl }` |
 | `POST` | `/users/me/verification-requests` | `{ documentUrl, requestType: OWNER_LICENSE \| REFEREE_CREDENTIAL }` | `201` `{ request }` |
+| `POST` | `/users/me/verification-requests/batch` | `{ documents: [{ documentKind: ID_FRONT\|ID_BACK\|VFF_LICENSE, documentUrl }] }` | `201` `{ requests: [] }` |
+| `GET` | `/users/me/verification-requests` | — | `200` `{ requests: [{ verificationReqId, requestType, documentKind, documentUrl, status, adminNotes, reviewedAt, createdAt }] }` — **auth only** (đọc được khi còn `PENDING`); `ORDER BY createdAt DESC`; `401` |
 
 Reject → user vẫn `PENDING`; gửi lại document → reset request `REJECTED` → `PENDING`.
+
+**`POST /auth/login` khi `PENDING`:** vẫn `403 "Account is pending approval and cannot log in yet."` nhưng body kèm `details.nextStep: "SUBMIT_VERIFICATION"` (cho cả 2 case: chưa nộp giấy tờ / đã nộp, đang chờ duyệt) — client dùng để hướng dẫn thay vì hiện dead end. Không phát token ở bước này.
 
 ### Dashboard (Figma `224:3615` / TC_ADMIN_01)
 

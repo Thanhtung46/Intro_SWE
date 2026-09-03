@@ -341,6 +341,16 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       };
     }
 
+    // Pending Owner/Referee: covers both "documents not submitted yet" and
+    // "submitted, waiting for an admin" — keep the wording neutral for both.
+    if (status === 403 && data?.details?.nextStep === 'SUBMIT_VERIFICATION') {
+      return {
+        success: false,
+        message:
+          'Your account is awaiting verification. Reopen the app to finish submitting your documents, or contact support.',
+      };
+    }
+
     if (status === 401) {
       return {
         success: false,

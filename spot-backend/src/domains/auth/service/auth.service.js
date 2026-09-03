@@ -413,9 +413,13 @@ export async function login(input) {
     }
 
     if (user.status === USER_STATUSES.PENDING) {
+      // Still 403 (no session token here — see /auth/role for that), but tell
+      // the client this is a verification gap so it can guide the user back to
+      // the document-upload step instead of showing a dead end.
       throw new AppError(
         'Account is pending approval and cannot log in yet.',
         403,
+        { nextStep: 'SUBMIT_VERIFICATION' },
       );
     }
 

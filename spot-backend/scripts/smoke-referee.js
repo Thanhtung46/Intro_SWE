@@ -134,6 +134,31 @@ const batch = await post(
 log('batch verification', batch);
 assertOk('batch', batch, 201);
 
+// A pending applicant can read their own submitted docs (the /referee/* cert
+// route is ACTIVE-only).
+const myReqs = await get('/users/me/verification-requests', pendingToken);
+log('my verification requests', myReqs);
+assertOk('my verification requests', myReqs, 200);
+if ((myReqs.json.requests ?? []).length !== 3) {
+  throw new Error(`Expected 3 verification requests, got ${(myReqs.json.requests ?? []).length}`);
+}
+if (!myReqs.json.requests.every((r) => r.status === 'PENDING')) {
+  throw new Error('Expected all verification requests to be PENDING before approval');
+}
+
+// Login while pending is still 403, but now carries a nextStep hint so the
+// client can guide the user instead of showing a dead end.
+const pendingLogin = await post('/auth/login', { email: refereeEmail, password });
+log('pending referee login', pendingLogin);
+if (pendingLogin.status !== 403) {
+  throw new Error(`Expected 403 for pending referee login, got ${pendingLogin.status}`);
+}
+if (pendingLogin.json.details?.nextStep !== 'SUBMIT_VERIFICATION') {
+  throw new Error(
+    `Expected details.nextStep SUBMIT_VERIFICATION on pending login 403, got ${JSON.stringify(pendingLogin.json.details)}`,
+  );
+}
+
 const adminLogin = await post('/auth/login', {
   email: adminEmail,
   password: adminPassword,

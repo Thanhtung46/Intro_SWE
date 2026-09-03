@@ -273,6 +273,21 @@ export async function uploadVerificationDocument(userId, file) {
   };
 }
 
+/**
+ * A user's own verification requests — readable while still PENDING (the
+ * `/referee/*` cert endpoint is ACTIVE-only, so a pending applicant can't
+ * use it to see submission status).
+ */
+export async function listMyVerificationRequests(userId) {
+  const client = await pool.connect();
+  try {
+    const rows = await verificationRepository.listByUserId(client, userId);
+    return { requests: rows.map(toVerificationRequestRow) };
+  } finally {
+    client.release();
+  }
+}
+
 export async function listApprovals(query) {
   const client = await pool.connect();
   try {
