@@ -120,6 +120,32 @@ if (roleRes.json.nextStep !== 'SUBMIT_VERIFICATION') {
   throw new Error(`Expected nextStep SUBMIT_VERIFICATION from /auth/role, got ${roleRes.json.nextStep}`);
 }
 
+// A PENDING referee who hasn't submitted any documents can log in from a
+// fresh device and gets a resume token + SUBMIT_VERIFICATION (H2).
+const resumeLogin = await post('/auth/login', { email: refereeEmail, password });
+log('pending referee resume login (no docs yet)', resumeLogin);
+assertOk('resume login', resumeLogin, 200);
+if (!resumeLogin.json.accessToken) {
+  throw new Error('Expected accessToken from resume login (pending referee, no docs)');
+}
+if (resumeLogin.json.nextStep !== 'SUBMIT_VERIFICATION') {
+  throw new Error(
+    `Expected nextStep SUBMIT_VERIFICATION from resume login, got ${resumeLogin.json.nextStep}`,
+  );
+}
+
+// That resume token cannot create a booking — non-ACTIVE users are gated out.
+const refereeBooking = await post(
+  '/bookings',
+  { fieldId: 1, bookingDate: '2099-01-01', startTime: '19:00', endTime: '20:00' },
+  resumeLogin.json.accessToken,
+);
+log('pending referee booking (expect 403)', refereeBooking);
+if (refereeBooking.status !== 403) {
+  throw new Error(`Expected 403 for pending referee POST /bookings, got ${refereeBooking.status}`);
+}
+
+// Submit documents using the resume token (proves the login token works).
 const batch = await post(
   '/users/me/verification-requests/batch',
   {
@@ -129,7 +155,7 @@ const batch = await post(
       { documentKind: 'VFF_LICENSE', documentUrl: 'https://example.com/vff.pdf' },
     ],
   },
-  pendingToken,
+  resumeLogin.json.accessToken,
 );
 log('batch verification', batch);
 assertOk('batch', batch, 201);

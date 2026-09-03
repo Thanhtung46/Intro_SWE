@@ -292,6 +292,7 @@ export interface LoginResult {
   attemptsRemaining?: number;
   accessToken?: string;
   refreshToken?: string;
+  nextStep?: string;
   user?: LoginUser;
 }
 
@@ -307,6 +308,7 @@ interface LoginSuccessBody {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
+  nextStep?: string;
   user: LoginUser;
 }
 
@@ -317,6 +319,7 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       success: true,
       accessToken: res.data.accessToken,
       refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
       user: res.data.user,
     };
   } catch (err) {

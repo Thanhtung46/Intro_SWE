@@ -282,7 +282,18 @@ export async function listMyVerificationRequests(userId) {
   const client = await pool.connect();
   try {
     const rows = await verificationRepository.listByUserId(client, userId);
-    return { requests: rows.map(toVerificationRequestRow) };
+    // rows are ORDER BY created_at DESC — keep only the latest row per document
+    // kind so a rejected-then-resubmitted referee doesn't see duplicates.
+    // (Owner requests have document_kind NULL and only one doc today, so all
+    // NULL rows collapse to one — acceptable until owner onboarding is wired.)
+    const seen = new Set();
+    const latest = rows.filter((r) => {
+      const kind = r.document_kind ?? '_null';
+      if (seen.has(kind)) return false;
+      seen.add(kind);
+      return true;
+    });
+    return { requests: latest.map(toVerificationRequestRow) };
   } finally {
     client.release();
   }

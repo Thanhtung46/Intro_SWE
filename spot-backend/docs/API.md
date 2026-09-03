@@ -629,8 +629,22 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 1. Email + password đúng  
 2. Email đã verify  
 3. Đã chọn role (`role_selected_at`)  
-4. `status` không phải `LOCKED` / `PENDING`  
+4. `status` không phải `LOCKED`; nếu `PENDING` xem **PENDING REFEREE** dưới  
 5. Không trong `lockout_until`
+
+**PENDING REFEREE — resume token**
+
+Một `REFEREE` `PENDING` **chưa có bộ hồ sơ nào đang chờ duyệt** (chưa nộp,
+hoặc mọi giấy tờ đã bị REJECTED) → login (đúng password) trả **`200`** kèm
+`accessToken` / `refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` để quay
+lại màn nộp giấy tờ từ thiết bị bất kỳ (giống `POST /auth/role` +
+`POST /auth/otp/verify`).
+
+`REFEREE` đã nộp & đang chờ admin duyệt, **và mọi `OWNER` `PENDING`** →
+vẫn `403` + `details.nextStep: "SUBMIT_VERIFICATION"`.
+
+Kiểm tra password **trước** khi phân biệt PENDING → sai password luôn trả
+`401` chung, không lộ trạng thái account.
 
 **Body**
 
@@ -672,7 +686,7 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 | :--- | :--- | :--- |
 | `401` | Invalid email or password | `attemptsRemaining` (khi password sai, chưa lock) |
 | `403` | Account is locked. Please contact support. | |
-| `403` | Account is pending approval and cannot log in yet. | `nextStep: "SUBMIT_VERIFICATION"` |
+| `403` | Account is pending approval and cannot log in yet. | `nextStep: "SUBMIT_VERIFICATION"` — OWNER pending, hoặc REFEREE đã nộp/đang chờ duyệt (REFEREE chưa nộp → `200` + token, xem trên) |
 | `403` | Account temporarily locked. Try again later. | `lockoutUntil` |
 | `403` | Email is not verified. Please verify OTP first. | |
 | `403` | Please select your role to continue. | `nextStep: "SELECT_ROLE"` |
@@ -2228,7 +2242,11 @@ Sau `POST /auth/otp/verify`, user `PENDING` + `OWNER`/`REFEREE` nhận thêm `ac
 
 Reject → user vẫn `PENDING`; gửi lại document → reset request `REJECTED` → `PENDING`.
 
-**`POST /auth/login` khi `PENDING`:** vẫn `403 "Account is pending approval and cannot log in yet."` nhưng body kèm `details.nextStep: "SUBMIT_VERIFICATION"` (cho cả 2 case: chưa nộp giấy tờ / đã nộp, đang chờ duyệt) — client dùng để hướng dẫn thay vì hiện dead end. Không phát token ở bước này.
+**`POST /auth/login` khi `PENDING`:**
+
+- **REFEREE chưa có hồ sơ chờ duyệt** (chưa nộp / mọi doc REJECTED) → `200` + `accessToken`/`refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` (quay lại màn nộp giấy tờ từ thiết bị bất kỳ).
+- **REFEREE đã nộp & đang chờ duyệt**, và **mọi OWNER `PENDING`** → `403 "Account is pending approval and cannot log in yet."` + `details.nextStep: "SUBMIT_VERIFICATION"`, không token.
+- Password verify chạy **trước** nhánh PENDING → sai password luôn `401` chung (không lộ trạng thái account).
 
 ### Dashboard (Figma `224:3615` / TC_ADMIN_01)
 
@@ -2509,6 +2527,10 @@ curl -s "http://localhost:3000/venues/12/images" \
 ---
 
 ### `POST /bookings`
+
+Yêu cầu Bearer access + `status = ACTIVE` (PLAYER luôn ACTIVE; user
+`PENDING`/`LOCKED` → `403 "Account is not active"`). Áp dụng cho
+`POST /bookings`, `POST /bookings/bulk`, và `POST /bookings/:id/dev/mark-paid`.
 
 **Body**
 

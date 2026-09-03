@@ -8,9 +8,16 @@ export default function LoginRoute() {
   const router = useRouter();
   return (
     <LoginScreen
-      onLoggedIn={async (role) => {
-        // A referee reaches login only after an admin approval (spot-backend
-        // blocks PENDING login). Show the "Account Activated!" celebration
+      onLoggedIn={async (role, nextStep) => {
+        // A PENDING referee who never finished uploading documents can log in
+        // to resume onboarding (spot-backend issues a token + this nextStep).
+        // Only referees reach here with it — OWNER pending stays a 403.
+        if (nextStep === 'SUBMIT_VERIFICATION') {
+          router.replace(ROUTES.REFEREE_REGISTER);
+          return;
+        }
+        // A referee otherwise reaches login only after an admin approval.
+        // Show the "Account Activated!" celebration
         // exactly once per referee — the flag lives on the server
         // (GET /referee/me → activationAcknowledged), so it stays "seen"
         // across devices. LoginScreen has already stored the token here.
