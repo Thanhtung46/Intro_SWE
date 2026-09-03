@@ -44,6 +44,19 @@ export async function getRefereeMe(): Promise<RefereeProfile> {
   }
 }
 
+/**
+ * POST /referee/me/activation-ack — mark the one-time "Account Activated"
+ * celebration as seen (server-side, cross-device). Idempotent. Call
+ * fire-and-forget from the activated screen's CTA.
+ */
+export async function acknowledgeRefereeActivation(): Promise<void> {
+  try {
+    await apiClient.post('/referee/me/activation-ack');
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't sync your activation status.");
+  }
+}
+
 /** GET /referee/me/certifications — uploaded documents + their review status. */
 export async function getRefereeCertifications(): Promise<RefereeCertification[]> {
   try {

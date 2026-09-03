@@ -2656,6 +2656,7 @@ Profile trọng tài + chứng chỉ admin đã gán.
     "totalMatchesOfficiated": 12,
     "avgRating": 4.5,
     "ratingCount": 8,
+    "activationAcknowledged": false,
     "createdAt": "2026-08-01T10:00:00.000Z",
     "updatedAt": "2026-08-20T08:00:00.000Z"
   }
@@ -2668,6 +2669,29 @@ Profile trọng tài + chứng chỉ admin đã gán.
 
 - Dùng `certifiedSportTypes` render **sport tabs** trên Job Board — chỉ hiện môn được cert.
 - `avgRating` / `ratingCount` = aggregate từ player reviews (`POST /reviews/referee`).
+- `activationAcknowledged` `false` ở lần login đầu → FE hiện màn **"Account Activated!"**.
+  Sau khi FE gọi `POST /referee/me/activation-ack` (§19.1b) thì `true` **vĩnh viễn,
+  cross-device** — thay cho cờ AsyncStorage device-local cũ.
+
+---
+
+### 19.1b `POST /referee/me/activation-ack`
+
+Đánh dấu đã xem màn "Account Activated" một lần (server-side). **Idempotent** —
+gọi lại nhiều lần vẫn `200`, không đổi timestamp lần đầu. Body rỗng.
+
+**Headers:** `Authorization: Bearer <accessToken>`
+
+**Success `200`**
+
+```json
+{ "activationAcknowledged": true }
+```
+
+**Errors:** `401` · `403` (không phải REFEREE / không ACTIVE) · `404` Referee profile not found
+
+**FE notes** — gọi **fire-and-forget** khi bấm "Go to Job Board" (đừng await; POST lỗi
+mạng không được kẹt user — lần mở app sau `GET /referee/me` vẫn `false` → hiện lại → thử lại).
 
 ---
 

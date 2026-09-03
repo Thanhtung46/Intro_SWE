@@ -25,6 +25,8 @@ export interface RefereeProfile {
   totalMatchesOfficiated: number;
   avgRating: number;
   ratingCount: number;
+  /** Server-side one-time flag: false on the first login → show "Account Activated". */
+  activationAcknowledged: boolean;
   createdAt: string;
   updatedAt: string;
 }

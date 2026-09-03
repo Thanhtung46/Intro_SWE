@@ -166,6 +166,21 @@ log('referee me', refMe);
 assertOk('referee me', refMe, 200);
 const refereeUserId = refMe.json.profile?.userId;
 
+// --- Activation acknowledgement (one-time "Account Activated", server-side) ---
+if (refMe.json.profile?.activationAcknowledged !== false) {
+  throw new Error('Freshly approved referee should have activationAcknowledged=false');
+}
+const ack1 = await post('/referee/me/activation-ack', {}, refToken);
+log('activation ack', ack1);
+assertOk('activation ack', ack1, 200);
+const refMe2 = await get('/referee/me', refToken);
+assertOk('referee me after ack', refMe2, 200);
+if (refMe2.json.profile?.activationAcknowledged !== true) {
+  throw new Error('activationAcknowledged must be true after POST /referee/me/activation-ack');
+}
+const ack2 = await post('/referee/me/activation-ack', {}, refToken);
+assertOk('activation ack (idempotent)', ack2, 200);
+
 // --- Player + venue seed + booking ---
 const playerReg = await post('/auth/register', {
   fullName: 'Player Smoke',
