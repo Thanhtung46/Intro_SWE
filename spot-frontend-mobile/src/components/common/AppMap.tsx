@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 import { GEOAPIFY_TILE_URL_TEMPLATE } from '@/config/env';
+import { colors } from '@/constants/colors';
 
 export type AppMapMarker = {
   id: string;
@@ -10,6 +11,8 @@ export type AppMapMarker = {
   longitude: number;
   tintColor: string;
   emoji: string;
+  /** When > 1, shown as a badge — emoji stays visible for sport. */
+  count?: number;
 };
 
 export type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
@@ -18,6 +21,8 @@ type Props = {
   markers: AppMapMarker[];
   onSelectMarker?: (id: string) => void;
   initialRegion: Region;
+  /** Optional polyline (e.g. a motorcycle route) drawn in `colors.primary`; the map fits its bounds. */
+  routeLine?: { latitude: number; longitude: number }[];
 };
 
 function regionToZoom(latitudeDelta: number): number {
@@ -25,9 +30,15 @@ function regionToZoom(latitudeDelta: number): number {
   return Math.max(2, Math.min(18, Math.round(Math.log2(360 / latitudeDelta))));
 }
 
-function buildHtml(markers: AppMapMarker[], region: Region): string {
+function buildHtml(markers: AppMapMarker[], region: Region, routeLine?: Props['routeLine']): string {
   const zoom = regionToZoom(region.latitudeDelta);
   const markersJson = JSON.stringify(markers);
+  const routePoints = (routeLine ?? []).map((p) => [p.latitude, p.longitude]);
+  const routeScript =
+    routePoints.length > 1
+      ? `var route = L.polyline(${JSON.stringify(routePoints)}, { color: '${colors.primary}', weight: 5, opacity: 0.85 }).addTo(map);
+    map.fitBounds(route.getBounds(), { padding: [40, 40] });`
+      : '';
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -35,8 +46,10 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; background: #F8F9FF; }
-    .spot-pin { width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
-      border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 16px; }
+    .spot-pin { position: relative; width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 16px; font-weight: 700; color: #fff; }
+    .spot-pin-badge { position: absolute; top: -5px; right: -7px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+      background: #111827; border: 1.5px solid #fff; font-size: 10px; line-height: 13px; text-align: center; font-weight: 700; color: #fff; }
   </style>
 </head>
 <body>
@@ -50,9 +63,12 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
 
     var markers = ${markersJson};
     markers.forEach(function (m) {
+      var badge = (m.count && m.count > 1)
+        ? '<span class="spot-pin-badge">' + m.count + '</span>'
+        : '';
       var icon = L.divIcon({
         className: '',
-        html: '<div class="spot-pin" style="background:' + m.tintColor + '">' + m.emoji + '</div>',
+        html: '<div class="spot-pin" style="background:' + m.tintColor + '">' + m.emoji + badge + '</div>',
         iconSize: [32, 32],
         iconAnchor: [16, 16],
       });
@@ -61,6 +77,8 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
         if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(m.id);
       });
     });
+
+    ${routeScript}
   </script>
 </body>
 </html>`;
@@ -88,8 +106,11 @@ function buildHtml(markers: AppMapMarker[], region: Region): string {
  * this one component instead of each hand-rolling pins — see SPOT-76 "map"
  * follow-up discussion.
  */
-export default function AppMap({ markers, onSelectMarker, initialRegion }: Props) {
-  const html = useMemo(() => buildHtml(markers, initialRegion), [markers, initialRegion]);
+export default function AppMap({ markers, onSelectMarker, initialRegion, routeLine }: Props) {
+  const html = useMemo(
+    () => buildHtml(markers, initialRegion, routeLine),
+    [markers, initialRegion, routeLine]
+  );
 
   const handleMessage = (event: WebViewMessageEvent) => {
     onSelectMarker?.(event.nativeEvent.data);

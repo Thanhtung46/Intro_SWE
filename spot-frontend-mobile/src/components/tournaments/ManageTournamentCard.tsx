@@ -30,7 +30,7 @@ export default function ManageTournamentCard({ tournament, variant, onManage, on
       <View style={styles.topRow}>
         <View style={styles.thumb}>
           {tournament.coverUrl ? (
-            <Image source={{ uri: tournament.coverUrl }} style={styles.thumbImage} />
+            <Image source={{ uri: tournament.coverUrl }} style={styles.thumbImage} resizeMode="cover" />
           ) : (
             <Ionicons name="trophy" size={22} color={colors.primaryDark} />
           )}

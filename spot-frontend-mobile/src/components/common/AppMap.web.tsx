@@ -11,6 +11,7 @@ export type AppMapMarker = {
   longitude: number;
   tintColor: string;
   emoji: string;
+  count?: number;
 };
 
 export type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
@@ -24,6 +25,7 @@ type Props = {
   markers: AppMapMarker[];
   onSelectMarker?: (id: string) => void;
   initialRegion: Region;
+  routeLine?: { latitude: number; longitude: number }[];
 };
 
 export default function AppMap(_props: Props) {

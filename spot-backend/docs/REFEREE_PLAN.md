@@ -3,7 +3,7 @@
 > **Status:** Locked product spec — **BE implemented (Aug 2026)** — migrations `015`–`022`, `/referee/*`, board filter/favourite, Plan A pending API  
 > **Scope:** Mobile FE (`spot-frontend-mobile`) + Backend (`spot-backend`)  
 > **Figma file:** `ZTpFWfkdcEpHH4xJaKaBxT/Spot` — nodes `224:*`  
-> **FE contract (chi tiết từng endpoint):** [`API.md`](./API.md) §19
+> **FE contract (chi tiết từng endpoint):** [`api/15-referee-onboarding.md`](./api/15-referee-onboarding.md)
 
 ---
 
@@ -256,7 +256,7 @@ Invitations → tab Pending
 
 ### 6.3 FE mobile — cần làm
 
-Xem **§0 BE vs FE** và [`API.md`](./API.md) §19 (contract đầy đủ).
+Xem **§0 BE vs FE** và [`api/15-referee-onboarding.md`](./api/15-referee-onboarding.md) (contract đầy đủ).
 
 1. Shell `app/referee/(tabs)/` — tách khỏi player tabs  
 2. Onboarding pending + activated screens  
@@ -510,7 +510,7 @@ hoặc `["FOOTBALL", "BADMINTON"]` — admin chọn theo chứng chỉ.
 8. ✅ `021_venue_admin_units` + board province/city filter
 9. ✅ `022_referee_venue_favorites` + favourite API + `q=` search
 
-**Next:** FE wire per §0 and [`API.md`](./API.md) §19.
+**Next:** FE wire per §0 and [`api/15-referee-onboarding.md`](./api/15-referee-onboarding.md).
 
 ---
 

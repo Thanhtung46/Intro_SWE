@@ -19,6 +19,7 @@
           "backgroundColor": "#ffffff"
         }
       ],
+      "expo-speech-recognition",
       "@react-native-community/datetimepicker",
       [
         "expo-location",
@@ -37,10 +38,27 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.spotapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "170661dd-c4da-4898-b200-b3755b02d1b3"
+      }
+    },
+    "ios": {
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      },
+      "bundleIdentifier": "com.anonymous.spotapp"
     }
   }
 }

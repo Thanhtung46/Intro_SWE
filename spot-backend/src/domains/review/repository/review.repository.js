@@ -107,6 +107,32 @@ export async function insertReply(client, { reviewId, ownerId, replyText }) {
   return rows[0];
 }
 
+/** Player-facing review list for a venue's detail screen (Reviews tab). */
+export async function listReviewsForVenue(client, venueId, { limit, offset }) {
+  const { rows } = await client.query(
+    `SELECT
+       r.review_id, r.booking_id, r.venue_id, r.player_id, r.rating,
+       r.review_text, r.created_at,
+       p.full_name AS player_name,
+       p.avatar_url AS player_avatar_url,
+       rr.reply_id, rr.reply_text, rr.created_at AS reply_created_at
+     FROM schema_review.reviews r
+     LEFT JOIN schema_auth.user_profiles p ON p.user_id = r.player_id
+     LEFT JOIN schema_review.review_replies rr ON rr.review_id = r.review_id
+     WHERE r.venue_id = $1
+     ORDER BY r.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [venueId, limit, offset],
+  );
+
+  const { rows: countRows } = await client.query(
+    `SELECT COUNT(*)::int AS total FROM schema_review.reviews WHERE venue_id = $1`,
+    [venueId],
+  );
+
+  return { rows, total: countRows[0]?.total ?? 0 };
+}
+
 export async function getVenueRating(client, venueId) {
   const { rows } = await client.query(
     `SELECT venue_id, avg_rating, rating_count

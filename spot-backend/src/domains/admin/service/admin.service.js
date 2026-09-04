@@ -1,7 +1,8 @@
 import pool from '../../../shared/database/pool.js';
 import redis from '../../../shared/database/redis.js';
-import config from '../../../shared/config/env.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
+import { safeVerificationExt } from '../../../shared/middleware/verificationUpload.js';
+import { uploadBufferToStorage } from '../../../shared/utils/supabaseStorage.js';
 import {
   VERIFICATION_REQUEST_TYPES,
   VERIFICATION_STATUSES,
@@ -265,12 +266,39 @@ export async function uploadVerificationDocument(userId, file) {
     throw new AppError('Document file is required (field name: document)', 400);
   }
 
-  const documentUrl = `${config.publicBaseUrl}/uploads/verification/${file.filename}`;
+  const objectPath = `verification/${userId}-${Date.now()}${safeVerificationExt(file.originalname)}`;
+  const documentUrl = await uploadBufferToStorage(objectPath, file.buffer, file.mimetype);
 
   return {
     message: 'Document uploaded',
     documentUrl,
   };
+}
+
+/**
+ * A user's own verification requests — readable while still PENDING (the
+ * `/referee/*` cert endpoint is ACTIVE-only, so a pending applicant can't
+ * use it to see submission status).
+ */
+export async function listMyVerificationRequests(userId) {
+  const client = await pool.connect();
+  try {
+    const rows = await verificationRepository.listByUserId(client, userId);
+    // rows are ORDER BY created_at DESC — keep only the latest row per document
+    // kind so a rejected-then-resubmitted referee doesn't see duplicates.
+    // (Owner requests have document_kind NULL and only one doc today, so all
+    // NULL rows collapse to one — acceptable until owner onboarding is wired.)
+    const seen = new Set();
+    const latest = rows.filter((r) => {
+      const kind = r.document_kind ?? '_null';
+      if (seen.has(kind)) return false;
+      seen.add(kind);
+      return true;
+    });
+    return { requests: latest.map(toVerificationRequestRow) };
+  } finally {
+    client.release();
+  }
 }
 
 export async function listApprovals(query) {

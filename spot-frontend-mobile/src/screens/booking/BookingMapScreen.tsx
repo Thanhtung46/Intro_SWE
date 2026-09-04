@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,47 +9,112 @@ import { venueDetailRoute } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
+import AppMap, { type AppMapMarker, type Region } from '@/components/common/AppMap';
 import MapVenuePopup, { MapVenuePreview } from '@/components/booking/MapVenuePopup';
 import BottomNav from '@/components/navigation/BottomNav';
+import { listVenues, PublicVenue } from '@/services/venueService';
+import useUserLocation from '@/hooks/useUserLocation';
 
-type Sport = 'all' | 'football' | 'badminton';
+// GET /venues has no per-venue photo at list level (data-model.md PublicVenue)
+// — same static placeholder convention as BookingScreen/HomeScreen.
+const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/booking/venue-skyline-arena-action.jpg');
+const NOT_AVAILABLE_LABEL = '—';
 
-const SKYLINE_ARENA: MapVenuePreview = {
-  id: 'skyline-arena',
-  name: 'Skyline Arena',
-  image: require('../../../assets/booking/venue-skyline-arena-action.jpg'),
-  distanceLabel: '2.4 km away',
+type Sport = 'football' | 'badminton';
+type Status = 'loading' | 'ready' | 'error';
+
+// Ho Chi Minh City center — fallback when no returned venue has coords yet.
+const DEFAULT_REGION: Region = { latitude: 10.7769, longitude: 106.7009, latitudeDelta: 0.1, longitudeDelta: 0.1 };
+
+const SPORT_PIN: Record<Sport, { tintColor: string; emoji: string }> = {
+  football: { tintColor: '#3B82F6', emoji: '⚽' },
+  badminton: { tintColor: '#22C55E', emoji: '🏸' },
 };
 
-// Pin positions as a % of the map area, lifted from the Figma layout.
-const FOOTBALL_PIN = { top: '43%', left: '43%' } as const;
-const BADMINTON_PIN = { top: '33%', left: '57%' } as const;
+function toPreview(venue: PublicVenue): MapVenuePreview {
+  return {
+    id: String(venue.venueId),
+    name: venue.name,
+    image: venue.coverImageUrl ? { uri: venue.coverImageUrl } : VENUE_PLACEHOLDER_IMAGE,
+    fallbackImage: VENUE_PLACEHOLDER_IMAGE,
+    distanceLabel:
+      venue.distanceKm != null ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+  };
+}
 
 type Props = {
   onSwitchToList: () => void;
 };
 
-/** Booking Field venue map — Figma node 79:1286 ("Book field - Map"). No top app bar in this design. */
+/**
+ * Booking Field venue map — Figma node 79:1286 ("Book field - Map"). Real
+ * map now — see src/components/common/AppMap.tsx for the WebView + Leaflet +
+ * Geoapify wiring (no Google Maps API key needed), same component
+ * JoinMatchMapScreen (Matches) uses. Venues without lat/lng can't get a pin,
+ * so they're filtered out of the map. No top app bar in this design.
+ */
 export default function BookingMapScreen({ onSwitchToList }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
   const { colors: c } = useTheme();
   const styles = useMemo(() => getStyles(c), [c]);
-  const [sport, setSport] = useState<Sport>('all');
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(SKYLINE_ARENA.id);
+  const [sport, setSport] = useState<Sport>('football');
+  const [venues, setVenues] = useState<PublicVenue[]>([]);
+  const [status, setStatus] = useState<Status>('loading');
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const userLocation = useUserLocation();
 
-  const showFootball = sport === 'all' || sport === 'football';
-  const showBadminton = sport === 'all' || sport === 'badminton';
-  const selectedVenue = selectedVenueId === SKYLINE_ARENA.id ? SKYLINE_ARENA : null;
+  const fetchVenues = useCallback(async () => {
+    setStatus('loading');
+    const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
+    const result = await listVenues(sport, opts);
+    if (result.success) {
+      setVenues(result.venues ?? []);
+      setStatus('ready');
+    } else {
+      setVenues([]);
+      setStatus('error');
+    }
+  }, [sport, userLocation]);
+
+  useEffect(() => {
+    setSelectedVenueId(null);
+    fetchVenues();
+  }, [fetchVenues]);
+
+  const mappableVenues = useMemo(
+    () => venues.filter((v): v is PublicVenue & { latitude: number; longitude: number } => v.latitude != null && v.longitude != null),
+    [venues]
+  );
+
+  const markers: AppMapMarker[] = useMemo(
+    () =>
+      mappableVenues.map((v) => ({
+        id: String(v.venueId),
+        latitude: v.latitude,
+        longitude: v.longitude,
+        ...SPORT_PIN[sport],
+      })),
+    [mappableVenues, sport]
+  );
+
+  const initialRegion = useMemo(() => {
+    const first = mappableVenues[0];
+    if (first) return { ...DEFAULT_REGION, latitude: first.latitude, longitude: first.longitude };
+    if (userLocation) return { ...DEFAULT_REGION, latitude: userLocation.latitude, longitude: userLocation.longitude };
+    return DEFAULT_REGION;
+  }, [mappableVenues, userLocation]);
+
+  const selectedVenue = venues.find((v) => String(v.venueId) === selectedVenueId) ?? null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.mapArea}>
-        <Image
-          source={require('../../../assets/booking/map-background.jpg')}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
+        {status === 'loading' ? (
+          <ActivityIndicator style={styles.spinner} color={c.primary} />
+        ) : (
+          <AppMap markers={markers} onSelectMarker={setSelectedVenueId} initialRegion={initialRegion} />
+        )}
 
         {/* Search + view-toggle overlay (Figma node 79:1332) */}
         <View style={styles.searchOverlay}>
@@ -73,90 +138,40 @@ export default function BookingMapScreen({ onSwitchToList }: Props) {
 
           <View style={styles.chipRow}>
             <TouchableOpacity
-              style={[styles.chip, styles.chipActive]}
-              onPress={() => setSport('all')}
+              style={[styles.chip, sport === 'football' && styles.chipActive]}
+              onPress={() => setSport('football')}
               accessibilityRole="button"
             >
-              <Ionicons name="grid-outline" size={14} color={c.white} />
-              <Text style={styles.chipTextActive}>{t('common.sportAll')}</Text>
+              <MaterialCommunityIcons name="soccer" size={14} color={sport === 'football' ? c.white : c.venueCardMutedText} />
+              <Text style={[styles.chipText, sport === 'football' && styles.chipTextActive]}>{t('common.sportFootball')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.chip} onPress={() => setSport('football')} accessibilityRole="button">
-              <View style={[styles.chipDot, { backgroundColor: '#3B82F6' }]} />
-              <Text style={styles.chipText}>{t('common.sportFootball')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.chip} onPress={() => setSport('badminton')} accessibilityRole="button">
-              <View style={[styles.chipDot, { backgroundColor: '#22C55E' }]} />
-              <Text style={styles.chipText}>{t('common.sportBadminton')}</Text>
+            <TouchableOpacity
+              style={[styles.chip, sport === 'badminton' && styles.chipActive]}
+              onPress={() => setSport('badminton')}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="badminton" size={14} color={sport === 'badminton' ? c.white : c.venueCardMutedText} />
+              <Text style={[styles.chipText, sport === 'badminton' && styles.chipTextActive]}>{t('common.sportBadminton')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Venue pins (Figma nodes 79:1306 / 79:1311) */}
-        {showFootball && (
-          <TouchableOpacity
-            style={[styles.pin, FOOTBALL_PIN, { backgroundColor: c.primary }]}
-            onPress={() => setSelectedVenueId(SKYLINE_ARENA.id)}
-            accessibilityRole="button"
-            accessibilityLabel={SKYLINE_ARENA.name}
-          >
-            <MaterialCommunityIcons name="soccer" size={18} color={c.white} />
-          </TouchableOpacity>
+        {status === 'error' && (
+          <View style={styles.noticeWrap}>
+            <Text style={styles.noticeText}>{t('common.genericError')}</Text>
+          </View>
         )}
-        {showBadminton && (
-          <TouchableOpacity
-            style={[styles.pin, BADMINTON_PIN, { backgroundColor: '#22C55E' }]}
-            onPress={() => comingSoon('Badminton venues')}
-            accessibilityRole="button"
-            accessibilityLabel="Badminton venue"
-          >
-            <MaterialCommunityIcons name="badminton" size={18} color={c.white} />
-          </TouchableOpacity>
+        {status === 'ready' && venues.length > 0 && mappableVenues.length === 0 && (
+          <View style={styles.noticeWrap}>
+            <Text style={styles.noticeText}>{t('home.venuesEmpty')}</Text>
+          </View>
         )}
 
         {selectedVenue && (
           <View style={styles.popupAnchor}>
-            <MapVenuePopup venue={selectedVenue} onBookPress={() => router.push(venueDetailRoute(selectedVenue.id))} />
+            <MapVenuePopup venue={toPreview(selectedVenue)} onBookPress={() => router.push(venueDetailRoute(String(selectedVenue.venueId)))} />
           </View>
         )}
-
-        {/* Map controls (Figma node 79:1289) */}
-        <View style={styles.mapControls}>
-          <View style={styles.zoomCluster}>
-            <TouchableOpacity
-              style={styles.zoomButton}
-              onPress={() => comingSoon(t('booking.zoomInLabel'))}
-              accessibilityRole="button"
-              accessibilityLabel={t('booking.zoomInLabel')}
-            >
-              <Ionicons name="add" size={20} color={c.primary} />
-            </TouchableOpacity>
-            <View style={styles.zoomDivider} />
-            <TouchableOpacity
-              style={styles.zoomButton}
-              onPress={() => comingSoon(t('booking.zoomOutLabel'))}
-              accessibilityRole="button"
-              accessibilityLabel={t('booking.zoomOutLabel')}
-            >
-              <Ionicons name="remove" size={20} color={c.primary} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={() => comingSoon(t('booking.myLocationLabel'))}
-            accessibilityRole="button"
-            accessibilityLabel={t('booking.myLocationLabel')}
-          >
-            <Ionicons name="locate-outline" size={20} color={c.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: c.primary }]}
-            onPress={onSwitchToList}
-            accessibilityRole="button"
-            accessibilityLabel={t('booking.switchToListLabel')}
-          >
-            <Ionicons name="eye-outline" size={20} color={c.white} />
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* Bottom navigation */}
@@ -174,6 +189,9 @@ function getStyles(c: ThemeColors) {
     mapArea: {
       flex: 1,
       overflow: 'hidden',
+    },
+    spinner: {
+      flex: 1,
     },
     searchOverlay: {
       position: 'absolute',
@@ -240,11 +258,6 @@ function getStyles(c: ThemeColors) {
       borderColor: 'transparent',
       backgroundColor: c.primary,
     },
-    chipDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-    },
     chipText: {
       fontSize: 14,
       color: c.venueCardMutedText,
@@ -254,69 +267,28 @@ function getStyles(c: ThemeColors) {
       fontWeight: '700',
       color: c.white,
     },
-    pin: {
+    noticeWrap: {
       position: 'absolute',
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: c.white,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.15,
-      shadowRadius: 10,
-      elevation: 4,
+      left: 16,
+      right: 16,
+      bottom: 16,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      backgroundColor: c.mapGlassBg,
+      borderWidth: 1,
+      borderColor: c.chromeBorder,
+    },
+    noticeText: {
+      fontSize: 13,
+      color: c.venueCardMutedText,
+      textAlign: 'center',
     },
     popupAnchor: {
       position: 'absolute',
-      left: '48%',
-      top: '46%',
-    },
-    mapControls: {
-      position: 'absolute',
-      right: 16,
+      left: '50%',
       bottom: 16,
-      gap: 12,
-      alignItems: 'flex-end',
-    },
-    zoomCluster: {
-      borderRadius: 16,
-      overflow: 'hidden',
-      backgroundColor: c.glassButtonBg,
-      borderWidth: 1,
-      borderColor: c.chromeBorder,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 6,
-    },
-    zoomButton: {
-      width: 48,
-      height: 48,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    zoomDivider: {
-      height: 1,
-      backgroundColor: c.neutralDivider,
-    },
-    controlButton: {
-      width: 48,
-      height: 48,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 16,
-      backgroundColor: c.glassButtonBg,
-      borderWidth: 1,
-      borderColor: c.chromeBorder,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 6,
+      marginLeft: -128,
     },
   });
 }

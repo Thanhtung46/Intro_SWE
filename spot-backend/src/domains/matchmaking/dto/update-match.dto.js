@@ -4,6 +4,8 @@ import {
   FEE_TYPE_CODES,
   JOIN_MODE_CODES,
   MATCH_FORMATS,
+  MATCH_MAX_PLAYERS,
+  minPlayersForFormat,
 } from '../../../shared/constants/matchmaking.js';
 import { optionalHttpUrl } from '../../../shared/validation/httpUrl.js';
 import { isVnCityInProvince, isVnProvince } from '../../../shared/constants/vn-admin.js';
@@ -33,7 +35,7 @@ export const updateMatchSchema = z
     endsAt: z.coerce.date().optional(),
     isMultiDay: z.boolean().optional(),
     isRecurring: z.boolean().optional(),
-    maxPlayers: z.number().int().min(2).max(40).optional(),
+    maxPlayers: z.number().int().min(2).max(MATCH_MAX_PLAYERS).optional(),
     allLevels: z.boolean().optional(),
     skillMin: z.string().optional(),
     skillMax: z.string().optional(),

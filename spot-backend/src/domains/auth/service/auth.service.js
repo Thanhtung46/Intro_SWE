@@ -30,6 +30,7 @@ import logger from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
 import * as userRepository from '../repository/user.repository.js';
 import * as otpRepository from '../repository/otp.repository.js';
+import * as verificationRepository from '../../admin/repository/verification-request.repository.js';
 import * as userSportSkillRepository from '../repository/user-sport-skill.repository.js';
 import { toPublicUser, toPublicHostProfile } from '../entity/user.entity.js';
 import { SPORTS } from '../../../shared/constants/sports.js';
@@ -398,6 +399,42 @@ export async function resendOtp(input) {
   }
 }
 
+/**
+ * Verify a login password. Returns on success; on a wrong password it records
+ * the failed attempt and throws (lockout after LOGIN_MAX_ATTEMPTS, otherwise
+ * 401 with attemptsRemaining) — extracted verbatim from login() so the PENDING
+ * branch can run after the password is checked.
+ */
+async function verifyLoginPassword(client, user, password) {
+  const passwordOk = await verifyPassword(user.password_hash, password);
+  if (passwordOk) {
+    return;
+  }
+
+  const nextAttempts = Number(user.login_attempts || 0) + 1;
+  let lockoutUntil = null;
+  if (nextAttempts >= LOGIN_MAX_ATTEMPTS) {
+    lockoutUntil = new Date(Date.now() + LOGIN_LOCKOUT_MINUTES * 60 * 1000);
+  }
+
+  await userRepository.recordFailedLogin(client, user.user_id, {
+    attempts: nextAttempts >= LOGIN_MAX_ATTEMPTS ? 0 : nextAttempts,
+    lockoutUntil,
+  });
+
+  if (lockoutUntil) {
+    throw new AppError(
+      `Too many failed attempts. Account locked for ${LOGIN_LOCKOUT_MINUTES} minutes.`,
+      403,
+      { lockoutUntil },
+    );
+  }
+
+  throw new AppError('Invalid email or password', 401, {
+    attemptsRemaining: LOGIN_MAX_ATTEMPTS - nextAttempts,
+  });
+}
+
 export async function login(input) {
   const email = input.email.toLowerCase();
   const client = await pool.connect();
@@ -410,13 +447,6 @@ export async function login(input) {
 
     if (user.status === USER_STATUSES.LOCKED) {
       throw new AppError('Account is locked. Please contact support.', 403);
-    }
-
-    if (user.status === USER_STATUSES.PENDING) {
-      throw new AppError(
-        'Account is pending approval and cannot log in yet.',
-        403,
-      );
     }
 
     if (user.lockout_until && new Date(user.lockout_until) > new Date()) {
@@ -435,35 +465,45 @@ export async function login(input) {
       });
     }
 
-    const passwordOk = await verifyPassword(user.password_hash, input.password);
-    if (!passwordOk) {
-      const nextAttempts = Number(user.login_attempts || 0) + 1;
-      let lockoutUntil = null;
-      if (nextAttempts >= LOGIN_MAX_ATTEMPTS) {
-        lockoutUntil = new Date(
-          Date.now() + LOGIN_LOCKOUT_MINUTES * 60 * 1000,
-        );
-      }
+    // Password is checked before the PENDING branch: a correct password is
+    // required to learn whether an account is pending (closes an
+    // account-enumeration hole) and to receive a resume token.
+    await verifyLoginPassword(client, user, input.password);
 
-      await userRepository.recordFailedLogin(client, user.user_id, {
-        attempts: nextAttempts >= LOGIN_MAX_ATTEMPTS ? 0 : nextAttempts,
-        lockoutUntil,
-      });
-
-      if (lockoutUntil) {
-        throw new AppError(
-          `Too many failed attempts. Account locked for ${LOGIN_LOCKOUT_MINUTES} minutes.`,
-          403,
-          { lockoutUntil },
-        );
-      }
-
-      throw new AppError('Invalid email or password', 401, {
-        attemptsRemaining: LOGIN_MAX_ATTEMPTS - nextAttempts,
-      });
-    }
-
+    // Correct password → clear the failed-attempt counter regardless of the
+    // outcome below (PENDING resume token / PENDING 403 / ACTIVE login).
     await userRepository.resetLoginState(client, user.user_id);
+
+    if (user.status === USER_STATUSES.PENDING) {
+      if (user.role === USER_ROLES.REFEREE) {
+        const pending = await verificationRepository.listPendingByUserId(
+          client,
+          user.user_id,
+        );
+        if (pending.length === 0) {
+          // Referee never submitted (or every document was rejected) → issue a
+          // session token so onboarding can resume from any device.
+          return {
+            message:
+              'Verification pending — submit your documents to continue.',
+            accessToken: signAccessToken(user),
+            refreshToken: signRefreshToken(user),
+            tokenType: 'Bearer',
+            expiresIn: getAccessTokenTtlSeconds(),
+            nextStep: 'SUBMIT_VERIFICATION',
+            user: await publicUserWithSkills(client, user),
+          };
+        }
+      }
+
+      // OWNER pending (any state), or a referee whose documents are awaiting
+      // admin review → still 403 (message mapped to a neutral copy by H1).
+      throw new AppError(
+        'Account is pending approval and cannot log in yet.',
+        403,
+        { nextStep: 'SUBMIT_VERIFICATION' },
+      );
+    }
 
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
@@ -645,7 +685,7 @@ export async function selectRole(input) {
       status,
     });
 
-    return {
+    const response = {
       message:
         status === USER_STATUSES.PENDING
           ? 'Role selected. Account is pending approval.'
@@ -653,6 +693,25 @@ export async function selectRole(input) {
       nextStep: user.email_verified_at ? 'LOGIN' : 'VERIFY_OTP',
       user: await publicUserWithSkills(client, updated),
     };
+
+    // Register → OTP → Role: email is already verified by now, so issue the
+    // pending Owner/Referee session token + SUBMIT_VERIFICATION here (same as
+    // POST /auth/otp/verify does when the role is chosen first). Without this
+    // a pending Owner/Referee has no token to submit verification documents.
+    if (
+      user.email_verified_at &&
+      status === USER_STATUSES.PENDING &&
+      (role === USER_ROLES.OWNER || role === USER_ROLES.REFEREE)
+    ) {
+      const refreshed = await userRepository.findById(client, updated.user_id);
+      response.accessToken = signAccessToken(refreshed);
+      response.refreshToken = signRefreshToken(refreshed);
+      response.tokenType = 'Bearer';
+      response.expiresIn = getAccessTokenTtlSeconds();
+      response.nextStep = 'SUBMIT_VERIFICATION';
+    }
+
+    return response;
   } finally {
     client.release();
   }

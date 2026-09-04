@@ -16,8 +16,14 @@ export function toPublicVenue(row) {
     closingHours: formatTime(row.closing_hours),
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
+    coverImageUrl: row.cover_image_url ?? null,
+    priceFromPerHour: row.min_price_per_hour != null ? Number(row.min_price_per_hour) : null,
+    footballVariants: row.football_variants ?? [],
     avgRating: Number(row.avg_rating),
     ratingCount: Number(row.rating_count),
+    ownerName: row.owner_name ?? null,
+    ownerAvatarUrl: row.owner_avatar_url ?? null,
+    ownerPhone: row.owner_phone ?? null,
   };
 
   // Only present when the repository computed a distance (lat/long query) —
@@ -29,12 +35,13 @@ export function toPublicVenue(row) {
   return venue;
 }
 
-export function toPublicVenueImage(row) {
+export function toPublicVenueImage(row, venueId) {
   if (!row) return null;
 
   return {
     imageId: row.image_id,
-    venueId: row.venue_id,
+    venueId,
+    source: row.source,
     imageUrl: row.image_url,
     displayOrder: row.display_order,
   };
@@ -48,6 +55,7 @@ export function toPublicField(row) {
     venueId: row.venue_id,
     name: row.name,
     sportType: row.sport_type,
+    footballVariant: row.football_variant ?? null,
     pricePerHour: Number(row.price_per_hour),
     capacity: row.capacity,
     status: row.status,

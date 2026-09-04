@@ -1,83 +1,65 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
-import { useLanguage } from '@/context/LanguageContext';
-import { useTheme } from '@/context/ThemeContext';
-import { ThemeColors } from '@/constants/theme';
-import BottomNavItem from '@/components/navigation/BottomNavItem';
+import SlidingBottomNav, { type SlidingTab, type SlidingTabKey } from '@/components/navigation/SlidingBottomNav';
 
-export type BottomNavKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
+export type BottomNavKey = SlidingTabKey;
 
 type Props = {
   /** Which tab is currently selected — omit if none of the 5 tabs apply. */
   active?: BottomNavKey;
 };
 
-const noop = () => {};
+const TABS: SlidingTab[] = [
+  { key: 'home', label: 'Home', icon: 'home' },
+  { key: 'booking', label: 'Booking', icon: 'ticket-outline' },
+  { key: 'matches', label: 'Matches', icon: 'trophy-outline' },
+  { key: 'schedule', label: 'Schedule', icon: 'calendar-outline' },
+  { key: 'settings', label: 'Settings', icon: 'settings-outline' },
+];
+
+const PATH: Record<SlidingTabKey, string> = {
+  home: ROUTES.HOME,
+  booking: ROUTES.BOOKING,
+  matches: ROUTES.MATCHES,
+  schedule: ROUTES.SCHEDULE,
+  settings: ROUTES.SETTINGS,
+};
 
 /**
  * Shared bottom navigation bar — was copy-pasted across HomeScreen,
  * BookingScreen, and BookingMapScreen; now a single owner of the 5-item
  * array and its wiring.
  */
-export default function BottomNav({ active }: Props) {
+export default function BottomNav({ active = 'home' }: Props) {
   const router = useRouter();
-  const { t } = useLanguage();
-  const { colors: themeColors } = useTheme();
-  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
 
   return (
     <View style={styles.bottomNav}>
-      <BottomNavItem
-        icon="home"
-        label={t('nav.home')}
-        active={active === 'home'}
-        onPress={active === 'home' ? noop : () => (router.canGoBack() ? router.back() : router.replace(ROUTES.HOME))}
-      />
-      <BottomNavItem
-        icon="ticket-outline"
-        label={t('nav.booking')}
-        active={active === 'booking'}
-        onPress={active === 'booking' ? noop : () => router.push(ROUTES.BOOKING)}
-      />
-      <BottomNavItem
-        icon="trophy-outline"
-        label={t('nav.matches')}
-        active={active === 'matches'}
-        onPress={active === 'matches' ? noop : () => comingSoon(t('nav.matches'))}
-        onPress={active === 'matches' ? noop : () => router.push(ROUTES.MATCHES)}
-      />
-      <BottomNavItem
-        icon="calendar-outline"
-        label={t('nav.schedule')}
-        active={active === 'schedule'}
-        onPress={active === 'schedule' ? noop : () => router.push(ROUTES.SCHEDULE)}
-      />
-      <BottomNavItem
-        icon="settings-outline"
-        label={t('nav.settings')}
-        active={active === 'settings'}
-        onPress={active === 'settings' ? noop : () => router.push(ROUTES.SETTINGS)}
+      <SlidingBottomNav
+        tabs={TABS}
+        active={active}
+        onPress={(key) => {
+          if (key === active) return;
+          router.replace(PATH[key]);
+        }}
       />
     </View>
   );
 }
 
-function getStyles(c: ThemeColors) {
-  return StyleSheet.create({
-    bottomNav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingTop: 8,
-      paddingBottom: 8,
-      borderTopWidth: 1,
-      borderTopColor: c.chromeBorder,
-      backgroundColor: c.glassBarBg,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  bottomNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+});

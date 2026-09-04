@@ -43,7 +43,15 @@ export async function venueSuggestions(req, res, next) {
 
 export async function list(req, res, next) {
   try {
-    const query = parseListMatchesQuery(req.query);
+    const raw = { ...req.query };
+    // Some clients send format[] / skill[] keys — fold into format / skill.
+    if (raw.format == null && raw['format[]'] != null) {
+      raw.format = raw['format[]'];
+    }
+    if (raw.skill == null && raw['skill[]'] != null) {
+      raw.skill = raw['skill[]'];
+    }
+    const query = parseListMatchesQuery(raw);
     const result = await matchService.listMatches(req.user.userId, query);
     return res.status(200).json(result);
   } catch (err) {

@@ -14,7 +14,7 @@ Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in th
 
 **Sources:** PA1 FR-3 / U033–U037, PA2 Match entity, Figma Matches screens, [Vmito](https://vmito.com/vi), [ALO Booking](https://datlich.alobo.vn/).
 
-When a phase is done: update [`API.md`](./API.md) and [`CLAUDE.md`](../CLAUDE.md). Phases 1–5 + post-phase **P0–P3** (Aug 2026) are **done** — see §7.1.
+When a phase is done: update [`API.md`](./API.md) and [`CLAUDE.md`](../CLAUDE.md). Phases 1–5 + post-phase **P0–P3** (Aug 2026) are **done** — see [`api/04-matchmaking.md`](./api/04-matchmaking.md).
 
 ---
 
@@ -39,7 +39,7 @@ Not in this plan: Groups, Tournaments, real payment gateway, venue booking lock,
 | Guest fields | `name`, `skill`, **`gender` required** (needed for Min–Max price). |
 | Full match | Hide Join. **No waitlist.** Reject join if `1 + guests.length > spotsLeft`. |
 | Zalo | **Do not** implement “Contact via Zalo”. |
-| Entry fee (MVP) | **Min–Max** (`GENDER_RANGE`: female = `priceMin`, male = `priceMax`) **or** **Chia đều** (`SPLIT_EVENLY`: `priceMin` = total, split by `filledCount`). Same `price_min`/`price_max` columns. No `FREE`. |
+| Entry fee (MVP) | **Min–Max** (`GENDER_RANGE`: female = `priceMin`, male = `priceMax`) **or** **Chia đều** (`SPLIT_EVENLY`: `priceMin` = total, split by `maxPlayers`). Same `price_min`/`price_max` columns. No `FREE`. |
 | Split equally (“Chia đều”) | **In MVP** as `SPLIT_EVENLY`. |
 | Flat fixed price (everyone same) | **Dropped** for MVP (only Min–Max or split evenly). |
 | Payment | **Stub always Success.** Record the amount; do not call MoMo/VNPay. |
@@ -158,7 +158,7 @@ Core fields:
 
 Related: `match_courts`, `match_join_requests`, `match_guests`.
 
-**Your share:** `GENDER_RANGE`: female → `price_min`, male → `price_max` (guest uses guest gender). `SPLIT_EVENLY` → `ceil(price_min / filled_count)`.
+**Your share:** `GENDER_RANGE`: female → `price_min`, male → `price_max` (guest uses guest gender). `SPLIT_EVENLY` → `ceil(price_min / max_players)`.
 
 ---
 
@@ -226,7 +226,7 @@ Stop after each phase so Nguyễn can test.
 - Slot math; over-capacity → 400  
 - Payment stub `SUCCESS` + recorded share  
 
-**Verify:** join with 2 guests (`filledCount` += 1 + guests.length); female/male prices; SPLIT_EVENLY share drops as heads increase; auto vs approve; full match rejects.
+**Verify:** join with 2 guests (`filledCount` += 1 + guests.length); female/male prices; SPLIT_EVENLY share = `ceil(total/maxPlayers)` per head (stable as squad fills); auto vs approve; full match rejects.
 
 ### Phase 4 — Manage (host) — **reviewed**
 

@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
     borderRadius: 12,
@@ -44,10 +44,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: colors.error,
+    lineHeight: 18,
   },
   retry: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.error,
+    marginTop: 1,
   },
 });

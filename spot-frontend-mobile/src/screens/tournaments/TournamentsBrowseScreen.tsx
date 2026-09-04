@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import TournamentCard from '@/components/tournaments/TournamentCard';
@@ -8,10 +8,11 @@ import TournamentFilterSheet from '@/components/tournaments/TournamentFilterShee
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage } from '@/services/apiErrors';
-import { listTournaments, setTournamentFavorite } from '@/services/tournamentService';
+import { listTournaments } from '@/services/tournamentService';
 import type { Sport } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
 import type { TournamentFilters } from '@/types/tournamentFilters';
+import { formatDistanceKm, haversineKm } from '@/utils/location';
 
 type Status = 'loading' | 'ready' | 'error';
 
@@ -20,9 +21,12 @@ type Props = {
   appliedLocation: string;
   filters: TournamentFilters;
   filterVisible: boolean;
+  viewerCoords?: { latitude: number; longitude: number } | null;
   onCloseFilter: () => void;
   onApplyFilters: (filters: TournamentFilters) => void;
   onOpenTournament: (tournamentId: number) => void;
+  /** Card "Join Tournament" — opens captain registration form. */
+  onJoinTournament: (tournamentId: number) => void;
 };
 
 /**
@@ -37,9 +41,11 @@ export default function TournamentsBrowseScreen({
   appliedLocation,
   filters,
   filterVisible,
+  viewerCoords = null,
   onCloseFilter,
   onApplyFilters,
   onOpenTournament,
+  onJoinTournament,
 }: Props) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -79,22 +85,6 @@ export default function TournamentsBrowseScreen({
     fetchTournaments();
   }, [fetchTournaments]);
 
-  const handleToggleFavorite = async (tournament: Tournament) => {
-    const nextFavorited = !tournament.isFavorited;
-    setTournaments((prev) =>
-      prev.map((t) => (t.tournamentId === tournament.tournamentId ? { ...t, isFavorited: nextFavorited } : t))
-    );
-    try {
-      await setTournamentFavorite(tournament.tournamentId, nextFavorited);
-    } catch (err) {
-      setTournaments((prev) =>
-        prev.map((t) =>
-          t.tournamentId === tournament.tournamentId ? { ...t, isFavorited: tournament.isFavorited } : t
-        )
-      );
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   return (
     <>
@@ -113,14 +103,28 @@ export default function TournamentsBrowseScreen({
             <Text style={styles.emptyStateText}>No tournaments found. Try a different sport or search.</Text>
           </View>
         ) : (
-          tournaments.map((tournament) => (
-            <TournamentCard
-              key={tournament.tournamentId}
-              tournament={tournament}
-              onPress={() => onOpenTournament(tournament.tournamentId)}
-              onToggleFavorite={() => handleToggleFavorite(tournament)}
-            />
-          ))
+          tournaments.map((tournament) => {
+            const distanceLabel =
+              viewerCoords && tournament.latitude != null && tournament.longitude != null
+                ? formatDistanceKm(
+                    haversineKm(
+                      viewerCoords.latitude,
+                      viewerCoords.longitude,
+                      tournament.latitude,
+                      tournament.longitude
+                    )
+                  )
+                : null;
+            return (
+              <TournamentCard
+                key={tournament.tournamentId}
+                tournament={tournament}
+                distanceLabel={distanceLabel}
+                onPress={() => onOpenTournament(tournament.tournamentId)}
+                onJoin={() => onJoinTournament(tournament.tournamentId)}
+              />
+            );
+          })
         )}
       </ScrollView>
 

@@ -10,7 +10,7 @@ export type TournamentFilters = {
   favorited?: boolean;
   latitude?: number;
   longitude?: number;
-  radiusKm?: number; // 1-20
+  radiusKm?: number; // 0-50
 };
 
 export const EMPTY_TOURNAMENT_FILTERS: TournamentFilters = {};

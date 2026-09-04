@@ -12,10 +12,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // making Redis unreachable in Docker (ECONNREFUSED ::1:6379) while still
 // soft-failing silently (OTP/rating caching). Preserve Redis vars that were
 // already set (i.e. by Docker) before .env can override them.
-const preDotenvRedis = {
+// Same clobbering problem also hit the AI-service URLs: Docker Compose sets
+// these to their in-network service names (http://nlp:5003, etc.) via
+// `environment:`, but spot-backend/.env pins the localhost-oriented values
+// needed for running node directly (no Docker) — override:true below was
+// silently reverting Docker's values back to localhost, making the
+// assistant/recommendation proxies unreachable in Docker
+// (ECONNREFUSED ::1:5003) despite both containers being healthy.
+const preDotenvOverrides = {
   REDIS_HOST: process.env.REDIS_HOST,
   REDIS_PORT: process.env.REDIS_PORT,
   REDIS_DB: process.env.REDIS_DB,
+  NLP_SERVICE_URL: process.env.NLP_SERVICE_URL,
+  RECOMMENDATION_SERVICE_URL: process.env.RECOMMENDATION_SERVICE_URL,
+  NOSHOW_SERVICE_URL: process.env.NOSHOW_SERVICE_URL,
 };
 
 // Always load spot-backend/.env (not cwd), and let it win over shell env vars
@@ -24,7 +34,7 @@ dotenv.config({
   override: true,
 });
 
-for (const [key, value] of Object.entries(preDotenvRedis)) {
+for (const [key, value] of Object.entries(preDotenvOverrides)) {
   if (value !== undefined) {
     process.env[key] = value;
   }
@@ -75,11 +85,31 @@ const config = {
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
   },
 
-  /** Public origin for uploaded avatar URLs (no trailing slash). */
+  /** Public origin for locally-served uploads (avatars, verification docs — no trailing slash). */
   publicBaseUrl: (
     process.env.PUBLIC_BASE_URL ||
     `http://localhost:${process.env.PORT || 3000}`
   ).replace(/\/$/, ''),
+
+  /** Supabase Storage — used for facility/venue photos so uploads survive
+   * server restarts/redeploys (local disk under uploads/ does not). */
+  supabase: {
+    url: (process.env.SUPABASE_URL || '').trim(),
+    serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+    storageBucket: process.env.SUPABASE_STORAGE_BUCKET || 'spot-uploads',
+  },
+
+  assistant: {
+    nlpServiceUrl: process.env.NLP_SERVICE_URL || 'http://localhost:5003',
+    internalServiceKey: process.env.INTERNAL_SERVICE_KEY || '',
+  },
+
+  recommendation: {
+    serviceUrl: process.env.RECOMMENDATION_SERVICE_URL || 'http://localhost:5001',
+    // Same shared secret as `assistant` above — both AI-service proxies
+    // trust the one INTERNAL_SERVICE_KEY value (see spot-backend/.env.example).
+    internalServiceKey: process.env.INTERNAL_SERVICE_KEY || '',
+  },
 
   otp: {
     ttlSeconds: Number(process.env.OTP_TTL_SECONDS) || 300,

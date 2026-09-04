@@ -118,7 +118,9 @@ export async function createNotification({
       data,
     });
 
-    const isReminder = type === NOTIFICATION_TYPES.BOOKING_REMINDER;
+    const isReminder =
+      type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
+      type === NOTIFICATION_TYPES.OWNER_BOOKING_REMINDER;
     const allowEmail =
       sendEmail &&
       (        type === NOTIFICATION_TYPES.BOOKING_CREATED ||
@@ -132,7 +134,10 @@ export async function createNotification({
         type === NOTIFICATION_TYPES.GROUP_ADMIN_TRANSFERRED ||
         type === NOTIFICATION_TYPES.SYSTEM ||
         type === NOTIFICATION_TYPES.REFEREE_INVITATION ||
-        type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST) &&
+        type === NOTIFICATION_TYPES.REFEREE_RATING_REQUEST ||
+        type === NOTIFICATION_TYPES.OWNER_BOOKING_CREATED ||
+        type === NOTIFICATION_TYPES.OWNER_BOOKING_CANCELLED ||
+        type === NOTIFICATION_TYPES.OWNER_BOOKING_REMINDER) &&
       (!isReminder || (await shouldSendReminderEmail(user)));
 
     if (allowEmail && user.email) {
@@ -223,6 +228,7 @@ export async function scheduleBookingReminders({
   userId,
   bookingId = null,
   startAt,
+  audience = 'PLAYER',
 }) {
   const start = new Date(startAt);
   if (Number.isNaN(start.getTime())) {
@@ -250,6 +256,7 @@ export async function scheduleBookingReminders({
           bookingId,
           offsetHours,
           fireAt,
+          audience,
         });
         await zaddReminder(job.reminder_id, fireAt);
         created.push({
@@ -308,19 +315,28 @@ async function processOneReminder(job) {
   }
 
   const hours = locked.offset_hours;
-  const title =
-    hours === 24
+  const isOwner = locked.audience === 'OWNER';
+  const title = isOwner
+    ? hours === 24
+      ? 'Upcoming match — 24 hours'
+      : 'Upcoming match — 2 hours'
+    : hours === 24
       ? 'Booking reminder — 24 hours'
       : 'Booking reminder — 2 hours';
-  const body =
-    hours === 24
+  const body = isOwner
+    ? hours === 24
+      ? 'A booking at your venue starts in 24 hours.'
+      : 'A booking at your venue starts in 2 hours — the court will be in use soon.'
+    : hours === 24
       ? 'Your booking starts in 24 hours. Please arrive on time.'
       : 'Your booking starts in 2 hours. Please head to the venue soon.';
 
   try {
     const notification = await createNotification({
       userId: locked.user_id,
-      type: NOTIFICATION_TYPES.BOOKING_REMINDER,
+      type: isOwner
+        ? NOTIFICATION_TYPES.OWNER_BOOKING_REMINDER
+        : NOTIFICATION_TYPES.BOOKING_REMINDER,
       title,
       body,
       data: {

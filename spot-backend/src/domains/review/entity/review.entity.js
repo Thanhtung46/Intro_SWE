@@ -23,6 +23,28 @@ export function toPublicReply(row) {
   };
 }
 
+export function toPublicReviewListItem(row) {
+  if (!row) return null;
+  return {
+    reviewId: row.review_id,
+    bookingId: row.booking_id,
+    venueId: row.venue_id,
+    playerId: row.player_id,
+    playerName: row.player_name ?? null,
+    playerAvatarUrl: row.player_avatar_url ?? null,
+    rating: row.rating,
+    reviewText: row.review_text ?? null,
+    createdAt: row.created_at,
+    reply: row.reply_id
+      ? {
+          replyId: row.reply_id,
+          replyText: row.reply_text,
+          createdAt: row.reply_created_at,
+        }
+      : null,
+  };
+}
+
 export function toPublicVenueRating(row) {
   if (!row) return null;
   return {

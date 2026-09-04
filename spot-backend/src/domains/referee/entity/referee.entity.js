@@ -8,6 +8,7 @@ export function toPublicRefereeProfile(row, userRow) {
     totalMatchesOfficiated: row.total_matches_officiated,
     avgRating: Number(row.avg_rating),
     ratingCount: row.rating_count,
+    activationAcknowledged: row.activation_ack_at != null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

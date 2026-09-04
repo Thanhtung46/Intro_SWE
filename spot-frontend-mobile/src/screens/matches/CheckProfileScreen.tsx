@@ -10,7 +10,7 @@ import MatchCard from '@/components/matches/MatchCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { getErrorMessage, getHostProfile, getHostReviews, listMatches, setFavorite } from '@/services/matchService';
+import { getErrorMessage, getHostProfile, getHostReviews, listMatches } from '@/services/matchService';
 import { openVenueDirections } from '@/utils/directions';
 import type { HostProfile, HostReview, Match, Sport } from '@/types/match';
 
@@ -20,6 +20,7 @@ type Props = {
   hostUserId: number;
   onBack: () => void;
   onOpenMatch: (matchId: number) => void;
+  onJoinMatch?: (matchId: number) => void;
 };
 
 const SKILL_SPORTS: { sport: Sport; key: string }[] = [
@@ -47,7 +48,7 @@ const HOSTED_MATCHES_PREVIEW_COUNT = 1;
  * "Host phone" — only on match detail when caller is host/accepted
  * participant), so there's nothing to show here even though Figma mocks one.
  */
-export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch }: Props) {
+export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, onJoinMatch }: Props) {
   const router = useRouter();
   const [profile, setProfile] = useState<HostProfile | null>(null);
   const [hostedMatches, setHostedMatches] = useState<Match[]>([]);
@@ -78,16 +79,6 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch }: 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
-
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch {
-      setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-    }
-  };
 
   if (status === 'loading') {
     return (
@@ -202,7 +193,7 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch }: 
                     key={match.matchId}
                     match={match}
                     onPress={() => onOpenMatch(match.matchId)}
-                    onToggleFavorite={() => handleToggleFavorite(match)}
+                    onJoin={() => (onJoinMatch ?? onOpenMatch)(match.matchId)}
                     onDirections={() => openVenueDirections(router, match)}
                   />
                 ))}

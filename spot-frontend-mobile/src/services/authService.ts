@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 // import MockAdapter from 'axios-mock-adapter';
 import { API_URL } from '../config/env';
-import type { CurrentUserProfile, RegisterOwnerPayload, RegisterRefereePayload, RegisterResponse, Role } from '@/types/auth';
+import type { CurrentUserProfile, RegisterOwnerPayload, RegisterResponse, Role } from '@/types/auth';
 import { getToken } from '@/utils/authStorage';
 
 export interface RegisterPayload {
@@ -90,6 +90,20 @@ export interface VerifyOtpResult {
   message?: string;
   attemptsRemaining?: number;
   rateLimited?: boolean;
+  // For a PENDING Owner/Referee, spot-backend augments the OTP-verify
+  // response with a session token + `nextStep: 'SUBMIT_VERIFICATION'` so
+  // the account can submit its verification documents before login works.
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
+}
+
+interface VerifyOtpBody {
+  message?: string;
+  email?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
 }
 
 export async function verifyOtp(
@@ -98,8 +112,13 @@ export async function verifyOtp(
   purpose: string = DEFAULT_OTP_PURPOSE
 ): Promise<VerifyOtpResult> {
   try {
-    await client.post(`${API_URL}/auth/otp/verify`, { email, otp, purpose });
-    return { success: true };
+    const res = await client.post<VerifyOtpBody>(`${API_URL}/auth/otp/verify`, { email, otp, purpose });
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
+    };
   } catch (err) {
     const error = err as AxiosError<OtpErrorBody>;
 
@@ -273,6 +292,7 @@ export interface LoginResult {
   attemptsRemaining?: number;
   accessToken?: string;
   refreshToken?: string;
+  nextStep?: string;
   user?: LoginUser;
 }
 
@@ -288,6 +308,7 @@ interface LoginSuccessBody {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
+  nextStep?: string;
   user: LoginUser;
 }
 
@@ -298,6 +319,7 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       success: true,
       accessToken: res.data.accessToken,
       refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
       user: res.data.user,
     };
   } catch (err) {
@@ -319,6 +341,16 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
       return {
         success: false,
         message: 'Please finish setting up your account before logging in.',
+      };
+    }
+
+    // Pending Owner/Referee: covers both "documents not submitted yet" and
+    // "submitted, waiting for an admin" — keep the wording neutral for both.
+    if (status === 403 && data?.details?.nextStep === 'SUBMIT_VERIFICATION') {
+      return {
+        success: false,
+        message:
+          'Your account is awaiting verification. Reopen the app to finish submitting your documents, or contact support.',
       };
     }
 
@@ -402,6 +434,20 @@ export function getErrorMessage(error: unknown): string {
 export interface SelectRoleResult {
   success: boolean;
   message?: string;
+  // For a PENDING Owner/Referee whose email is already verified (the
+  // register → OTP → role flow), spot-backend returns a session token +
+  // `nextStep: 'SUBMIT_VERIFICATION'` so the account can upload its
+  // verification documents before login works.
+  accessToken?: string;
+  refreshToken?: string;
+  nextStep?: string;
+}
+
+interface SelectRoleBody {
+  message?: string;
+  nextStep?: string;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 const ROLE_TO_BACKEND: Record<Role, string> = {
@@ -412,8 +458,16 @@ const ROLE_TO_BACKEND: Record<Role, string> = {
 
 export async function selectRole(email: string, role: Role): Promise<SelectRoleResult> {
   try {
-    await client.post(`${API_URL}/auth/role`, { email, role: ROLE_TO_BACKEND[role] });
-    return { success: true };
+    const res = await client.post<SelectRoleBody>(`${API_URL}/auth/role`, {
+      email,
+      role: ROLE_TO_BACKEND[role],
+    });
+    return {
+      success: true,
+      accessToken: res.data.accessToken,
+      refreshToken: res.data.refreshToken,
+      nextStep: res.data.nextStep,
+    };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
 
@@ -433,13 +487,9 @@ export async function registerOwner(payload: RegisterOwnerPayload): Promise<Regi
   return { status: 'pending' };
 }
 
-export async function registerReferee(payload: RegisterRefereePayload): Promise<RegisterResponse> {
-  await delay(MOCK_DELAY_MS);
-  if (payload.fullName.trim().toLowerCase() === FORCE_ERROR_VALUE) {
-    throw new Error("Couldn't submit registration. Check your network and try again.");
-  }
-  return { status: 'pending' };
-}
+// registerReferee() mock removed (SPOT-93) — the referee signup now submits
+// 3 verification documents via refereeService.submitRefereeVerificationBatch
+// against the real POST /users/me/verification-requests/batch.
 
 /**
  * REAL — GET /auth/me. Named in the original SPOT-76 API analysis as the

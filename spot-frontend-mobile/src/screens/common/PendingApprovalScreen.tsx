@@ -52,9 +52,9 @@ export default function PendingApprovalScreen({ role, onDone }: Props) {
           onPress={onDone}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={t('pendingApproval.backHome')}
+          accessibilityLabel={t('pendingApproval.backToLogin')}
         >
-          <Text style={styles.buttonText}>{t('pendingApproval.backHome')}</Text>
+          <Text style={styles.buttonText}>{t('pendingApproval.backToLogin')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

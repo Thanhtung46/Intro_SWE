@@ -18,6 +18,11 @@ export function toPublicScheduleItem(row) {
     sportType: row.sport_type,
   };
 
+  item.totalAmountVnd =
+    row.item_type === 'BOOKING' && row.total_amount != null
+      ? Number(row.total_amount)
+      : null;
+
   if (row.item_type === 'MATCH') {
     item.role = row.match_role ?? null;
   }

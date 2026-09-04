@@ -1,14 +1,6 @@
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
-import { fileURLToPath } from 'url';
 import { AppError } from '../middleware/errorHandler.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const AVATAR_UPLOAD_DIR = path.resolve(
-  __dirname,
-  '../../../uploads/avatars',
-);
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',
@@ -17,22 +9,12 @@ const ALLOWED_MIME = new Set([
   'image/gif',
 ]);
 
-fs.mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, AVATAR_UPLOAD_DIR);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)
-      ? ext === '.jpeg'
-        ? '.jpg'
-        : ext
-      : '.jpg';
-    cb(null, `${req.user.userId}-${Date.now()}${safeExt}`);
-  },
-});
+/** Safe extension for a Supabase Storage object key — never trust the raw upload filename. */
+export function safeAvatarExt(originalname) {
+  const ext = path.extname(originalname || '').toLowerCase();
+  if (!['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) return '.jpg';
+  return ext === '.jpeg' ? '.jpg' : ext;
+}
 
 function fileFilter(_req, file, cb) {
   if (!ALLOWED_MIME.has(file.mimetype)) {
@@ -43,8 +25,10 @@ function fileFilter(_req, file, cb) {
   return cb(null, true);
 }
 
+// Buffer in memory, not local disk — the service streams it to Supabase
+// Storage (see supabaseStorage.js) so avatars survive server restarts.
 export const avatarUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter,
 }).single('avatar');

@@ -30,6 +30,7 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `022_referee_venue_favorites.sql` | Job Board venue hearts (`referee_venue_favorites`) | 016, 004 |
 | `023_venue_search_indexes.sql` | GIN trgm on `venues.name` / `address` for `GET /referee/board?q=` | 004, 006 |
 | `024_notification_types_unified.sql` | Restore full `notifications.type` enum (018/020 had dropped match/group/tournament types) | 020, 013 |
+| `025_schema_owner_ops.sql` | peak/off-peak field pricing, maintenance notes, owner revenue/review indexes | 004, 005, 007 |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

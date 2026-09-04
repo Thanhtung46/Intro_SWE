@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MATCH_MAX_PLAYERS, minPlayersForFormat } from '@/constants/matchFormats';
 
 // Mirrors spot-backend/src/domains/matchmaking/dto/create-match.dto.js
 // (courtSchema + top-level required fields) — keep in sync if that file
@@ -31,7 +32,7 @@ export const hostMatchSchema = z
       .number()
       .int('Max players must be a whole number')
       .min(2, 'At least 2 players')
-      .max(40, 'At most 40 players'),
+      .max(MATCH_MAX_PLAYERS, `At most ${MATCH_MAX_PLAYERS} players`),
     joinMode: z.enum(['AUTO', 'APPROVAL']).default('AUTO'),
     feeType: z.enum(['GENDER_RANGE', 'SPLIT_EVENLY']),
     priceMin: z.coerce.number().int('Must be a whole number').min(0).optional(),
@@ -43,6 +44,24 @@ export const hostMatchSchema = z
   .superRefine((data, ctx) => {
     if (!data.allLevels && data.skillCodes.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['skillCodes'], message: 'Pick a skill level or choose All Levels' });
+    }
+
+    const courtNames = data.courts.map((court) => court.name.trim().toLowerCase());
+    if (new Set(courtNames).size !== courtNames.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['courts'],
+        message: 'Court names must be unique',
+      });
+    }
+
+    const minPlayers = minPlayersForFormat(data.format);
+    if (Number.isFinite(data.maxPlayers) && data.maxPlayers < minPlayers) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['maxPlayers'],
+        message: `At least ${minPlayers} players for this format (including host)`,
+      });
     }
 
     if (data.feeType === 'SPLIT_EVENLY' && data.priceMin == null) {

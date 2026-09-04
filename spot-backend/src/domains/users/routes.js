@@ -37,6 +37,11 @@ router.post(
   authenticate,
   usersController.submitVerificationBatch,
 );
+router.get(
+  '/me/verification-requests',
+  authenticate,
+  usersController.listMyVerificationRequests,
+);
 router.post(
   '/me/verification-requests/cert-update',
   authenticate,

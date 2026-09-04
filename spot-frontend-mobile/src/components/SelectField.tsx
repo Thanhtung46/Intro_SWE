@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { FlatList, Modal, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { colors } from '@/constants/colors';
-import { ThemeColors } from '@/constants/theme';
+import type { ThemeColors } from '@/constants/theme';
 
 export interface SelectOption {
   label: string;
@@ -18,64 +18,41 @@ interface SelectFieldProps {
   onChange: (value: string) => void;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
-  themeColors?: ThemeColors;
   /** Read-only, greyed-out display — used when the value came from a trusted source (e.g. an existing DB venue) instead of manual pick. */
   disabled?: boolean;
+  /** Reserved for the theme migration (matches FormField/PasswordField/OtpInput).
+   * Not read yet — this component's styles still use the static `colors` palette
+   * until it's migrated to `useTheme()`. Accepted so call sites can pass it
+   * uniformly. */
+  themeColors?: ThemeColors;
 }
 
-export function SelectField({
-  label,
-  required,
-  placeholder,
-  value,
-  options,
-  onChange,
-  error,
-  containerStyle,
-  themeColors,
-  disabled,
-}: SelectFieldProps) {
+export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle, disabled }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
   return (
     <View style={[styles.container, containerStyle]}>
-      <Text style={[styles.label, themeColors && { color: themeColors.textSecondaryAlt }]}>
+      <Text style={styles.label}>
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
       <TouchableOpacity
-        style={[
-          styles.input,
-          themeColors && { backgroundColor: themeColors.inputBg, borderColor: themeColors.divider },
-          error ? [styles.inputError, themeColors && { borderColor: themeColors.error }] : null,
-          disabled ? styles.inputDisabled : null,
-        ]}
+        style={[styles.input, error ? styles.inputError : null, disabled ? styles.inputDisabled : null]}
         onPress={() => !disabled && setOpen(true)}
         activeOpacity={disabled ? 1 : 0.7}
         disabled={disabled}
       >
-        <Text
-          style={[
-            selected ? styles.valueText : styles.placeholderText,
-            themeColors && { color: selected ? themeColors.textPrimary : themeColors.textMuted },
-          ]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
+        <Text style={selected ? styles.valueText : styles.placeholderText} numberOfLines={1} ellipsizeMode="tail">
           {selected ? selected.label : placeholder}
         </Text>
-        {!disabled && (
-          <Ionicons name="chevron-down" size={18} color={themeColors ? themeColors.textMuted : colors.placeholder} />
-        )}
+        {!disabled && <Ionicons name="chevron-down" size={18} color={colors.placeholder} />}
       </TouchableOpacity>
-      {error ? (
-        <Text style={[styles.errorText, themeColors && { color: themeColors.error }]}>{error}</Text>
-      ) : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={[styles.sheet, themeColors && { backgroundColor: themeColors.surface }]}>
+          <View style={styles.sheet}>
             <FlatList
               data={options}
               keyExtractor={(item) => item.value}
@@ -87,9 +64,7 @@ export function SelectField({
                     setOpen(false);
                   }}
                 >
-                  <Text style={[styles.optionText, themeColors && { color: themeColors.textPrimary }]}>
-                    {item.label}
-                  </Text>
+                  <Text style={styles.optionText}>{item.label}</Text>
                 </TouchableOpacity>
               )}
             />
