@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -266,13 +265,20 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
           </View>
         </View>
 
-        {/* Suggested for you — personalized recommendations (spec 004); omitted
-            entirely when unavailable, never a visible error (FR-004). */}
-        {suggestions.length > 0 ? (
-          <View style={styles.venuesSection}>
-            <View style={styles.venuesHeader}>
-              <Text style={styles.venuesHeading}>Suggested for you</Text>
-            </View>
+        {/* Suggested for you — personalized recommendations (spec 004); the
+            only venue-list section on Home now (the plain "Recommended
+            Venues" grid was removed — same GET /venues pool, redundant with
+            this one). "Explore All" still links to the full Booking list. */}
+        <View style={styles.venuesSection}>
+          <View style={styles.venuesHeader}>
+            <Text style={styles.venuesHeading}>Suggested for you</Text>
+            <TouchableOpacity onPress={() => router.push(ROUTES.BOOKING)}>
+              <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
+            </TouchableOpacity>
+          </View>
+          {suggestions.length === 0 ? (
+            <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
+          ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -284,33 +290,6 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
                   venue={venue}
                   onPress={() => router.push(venueDetailRoute(venue.id))}
                 />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* Recommended venues */}
-        <View style={styles.venuesSection}>
-          <View style={styles.venuesHeader}>
-            <Text style={styles.venuesHeading}>{t('home.venuesHeading')}</Text>
-            <TouchableOpacity onPress={() => router.push(ROUTES.BOOKING)}>
-              <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
-            </TouchableOpacity>
-          </View>
-          {venuesLoading ? (
-            <ActivityIndicator style={styles.venuesLoading} color={themeColors.primary} />
-          ) : venuesError ? (
-            <Text style={styles.venuesEmptyText}>{venuesError}</Text>
-          ) : venuesExcludingSuggested.length === 0 ? (
-            venues.length === 0 ? <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text> : null
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.venuesList}
-            >
-              {venuesExcludingSuggested.map((venue) => (
-                <VenueCard key={venue.id} venue={venue} onPress={() => router.push(venueDetailRoute(venue.id))} />
               ))}
             </ScrollView>
           )}
@@ -509,9 +488,6 @@ function getStyles(c: ThemeColors) {
     marginHorizontal: 20,
     fontSize: 14,
     color: c.textSecondaryAlt,
-  },
-  venuesLoading: {
-    marginTop: 8,
   },
   });
 }
