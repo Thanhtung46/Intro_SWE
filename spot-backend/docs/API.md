@@ -629,8 +629,22 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 1. Email + password đúng  
 2. Email đã verify  
 3. Đã chọn role (`role_selected_at`)  
-4. `status` không phải `LOCKED` / `PENDING`  
+4. `status` không phải `LOCKED`; nếu `PENDING` xem **PENDING REFEREE** dưới  
 5. Không trong `lockout_until`
+
+**PENDING REFEREE — resume token**
+
+Một `REFEREE` `PENDING` **chưa có bộ hồ sơ nào đang chờ duyệt** (chưa nộp,
+hoặc mọi giấy tờ đã bị REJECTED) → login (đúng password) trả **`200`** kèm
+`accessToken` / `refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` để quay
+lại màn nộp giấy tờ từ thiết bị bất kỳ (giống `POST /auth/role` +
+`POST /auth/otp/verify`).
+
+`REFEREE` đã nộp & đang chờ admin duyệt, **và mọi `OWNER` `PENDING`** →
+vẫn `403` + `details.nextStep: "SUBMIT_VERIFICATION"`.
+
+Kiểm tra password **trước** khi phân biệt PENDING → sai password luôn trả
+`401` chung, không lộ trạng thái account.
 
 **Body**
 
@@ -672,7 +686,7 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 | :--- | :--- | :--- |
 | `401` | Invalid email or password | `attemptsRemaining` (khi password sai, chưa lock) |
 | `403` | Account is locked. Please contact support. | |
-| `403` | Account is pending approval and cannot log in yet. | |
+| `403` | Account is pending approval and cannot log in yet. | `nextStep: "SUBMIT_VERIFICATION"` — OWNER pending, hoặc REFEREE đã nộp/đang chờ duyệt (REFEREE chưa nộp → `200` + token, xem trên) |
 | `403` | Account temporarily locked. Try again later. | `lockoutUntil` |
 | `403` | Email is not verified. Please verify OTP first. | |
 | `403` | Please select your role to continue. | `nextStep: "SELECT_ROLE"` |
@@ -2223,8 +2237,16 @@ Sau `POST /auth/otp/verify`, user `PENDING` + `OWNER`/`REFEREE` nhận thêm `ac
 | :--- | :--- | :--- | :--- |
 | `POST` | `/users/me/verification-documents` | multipart `document` (PDF/JPG/PNG, max 5MB) | `{ documentUrl }` |
 | `POST` | `/users/me/verification-requests` | `{ documentUrl, requestType: OWNER_LICENSE \| REFEREE_CREDENTIAL }` | `201` `{ request }` |
+| `POST` | `/users/me/verification-requests/batch` | `{ documents: [{ documentKind: ID_FRONT\|ID_BACK\|VFF_LICENSE, documentUrl }] }` | `201` `{ requests: [] }` |
+| `GET` | `/users/me/verification-requests` | — | `200` `{ requests: [{ verificationReqId, requestType, documentKind, documentUrl, status, adminNotes, reviewedAt, createdAt }] }` — **auth only** (đọc được khi còn `PENDING`); `ORDER BY createdAt DESC`; `401` |
 
 Reject → user vẫn `PENDING`; gửi lại document → reset request `REJECTED` → `PENDING`.
+
+**`POST /auth/login` khi `PENDING`:**
+
+- **REFEREE chưa có hồ sơ chờ duyệt** (chưa nộp / mọi doc REJECTED) → `200` + `accessToken`/`refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` (quay lại màn nộp giấy tờ từ thiết bị bất kỳ).
+- **REFEREE đã nộp & đang chờ duyệt**, và **mọi OWNER `PENDING`** → `403 "Account is pending approval and cannot log in yet."` + `details.nextStep: "SUBMIT_VERIFICATION"`, không token.
+- Password verify chạy **trước** nhánh PENDING → sai password luôn `401` chung (không lộ trạng thái account).
 
 ### Dashboard (Figma `224:3615` / TC_ADMIN_01)
 
@@ -2506,6 +2528,10 @@ curl -s "http://localhost:3000/venues/12/images" \
 
 ### `POST /bookings`
 
+Yêu cầu Bearer access + `status = ACTIVE` (PLAYER luôn ACTIVE; user
+`PENDING`/`LOCKED` → `403 "Account is not active"`). Áp dụng cho
+`POST /bookings`, `POST /bookings/bulk`, và `POST /bookings/:id/dev/mark-paid`.
+
 **Body**
 
 ```json
@@ -2656,6 +2682,7 @@ Profile trọng tài + chứng chỉ admin đã gán.
     "totalMatchesOfficiated": 12,
     "avgRating": 4.5,
     "ratingCount": 8,
+    "activationAcknowledged": false,
     "createdAt": "2026-08-01T10:00:00.000Z",
     "updatedAt": "2026-08-20T08:00:00.000Z"
   }
@@ -2668,6 +2695,29 @@ Profile trọng tài + chứng chỉ admin đã gán.
 
 - Dùng `certifiedSportTypes` render **sport tabs** trên Job Board — chỉ hiện môn được cert.
 - `avgRating` / `ratingCount` = aggregate từ player reviews (`POST /reviews/referee`).
+- `activationAcknowledged` `false` ở lần login đầu → FE hiện màn **"Account Activated!"**.
+  Sau khi FE gọi `POST /referee/me/activation-ack` (§19.1b) thì `true` **vĩnh viễn,
+  cross-device** — thay cho cờ AsyncStorage device-local cũ.
+
+---
+
+### 19.1b `POST /referee/me/activation-ack`
+
+Đánh dấu đã xem màn "Account Activated" một lần (server-side). **Idempotent** —
+gọi lại nhiều lần vẫn `200`, không đổi timestamp lần đầu. Body rỗng.
+
+**Headers:** `Authorization: Bearer <accessToken>`
+
+**Success `200`**
+
+```json
+{ "activationAcknowledged": true }
+```
+
+**Errors:** `401` · `403` (không phải REFEREE / không ACTIVE) · `404` Referee profile not found
+
+**FE notes** — gọi **fire-and-forget** khi bấm "Go to Job Board" (đừng await; POST lỗi
+mạng không được kẹt user — lần mở app sau `GET /referee/me` vẫn `false` → hiện lại → thử lại).
 
 ---
 

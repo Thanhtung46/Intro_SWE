@@ -5,8 +5,9 @@ import { useUser } from '@/context/UserContext';
 import RefereePendingScreen from '@/screens/referee/RefereePendingScreen';
 import { clearAllTokens } from '@/utils/authStorage';
 
-/** "/referee/pending" — "Application Under Review". Referee cannot log in
- *  until an admin approves, so the only action here is Log Out. */
+/** "/referee/pending" — "Application Under Review". A referee cannot log in
+ *  until an admin approves. If they never finished the document upload,
+ *  "Submit Documents" routes them back to it (the token is already stored). */
 export default function RefereePendingRoute() {
   const router = useRouter();
   const { clearUser } = useUser();
@@ -17,5 +18,10 @@ export default function RefereePendingRoute() {
     router.replace(ROUTES.AUTH_LOGIN);
   };
 
-  return <RefereePendingScreen onLogout={handleLogout} />;
+  return (
+    <RefereePendingScreen
+      onLogout={handleLogout}
+      onSubmitDocuments={() => router.replace(ROUTES.REFEREE_REGISTER)}
+    />
+  );
 }

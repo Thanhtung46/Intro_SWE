@@ -120,6 +120,32 @@ if (roleRes.json.nextStep !== 'SUBMIT_VERIFICATION') {
   throw new Error(`Expected nextStep SUBMIT_VERIFICATION from /auth/role, got ${roleRes.json.nextStep}`);
 }
 
+// A PENDING referee who hasn't submitted any documents can log in from a
+// fresh device and gets a resume token + SUBMIT_VERIFICATION (H2).
+const resumeLogin = await post('/auth/login', { email: refereeEmail, password });
+log('pending referee resume login (no docs yet)', resumeLogin);
+assertOk('resume login', resumeLogin, 200);
+if (!resumeLogin.json.accessToken) {
+  throw new Error('Expected accessToken from resume login (pending referee, no docs)');
+}
+if (resumeLogin.json.nextStep !== 'SUBMIT_VERIFICATION') {
+  throw new Error(
+    `Expected nextStep SUBMIT_VERIFICATION from resume login, got ${resumeLogin.json.nextStep}`,
+  );
+}
+
+// That resume token cannot create a booking — non-ACTIVE users are gated out.
+const refereeBooking = await post(
+  '/bookings',
+  { fieldId: 1, bookingDate: '2099-01-01', startTime: '19:00', endTime: '20:00' },
+  resumeLogin.json.accessToken,
+);
+log('pending referee booking (expect 403)', refereeBooking);
+if (refereeBooking.status !== 403) {
+  throw new Error(`Expected 403 for pending referee POST /bookings, got ${refereeBooking.status}`);
+}
+
+// Submit documents using the resume token (proves the login token works).
 const batch = await post(
   '/users/me/verification-requests/batch',
   {
@@ -129,10 +155,35 @@ const batch = await post(
       { documentKind: 'VFF_LICENSE', documentUrl: 'https://example.com/vff.pdf' },
     ],
   },
-  pendingToken,
+  resumeLogin.json.accessToken,
 );
 log('batch verification', batch);
 assertOk('batch', batch, 201);
+
+// A pending applicant can read their own submitted docs (the /referee/* cert
+// route is ACTIVE-only).
+const myReqs = await get('/users/me/verification-requests', pendingToken);
+log('my verification requests', myReqs);
+assertOk('my verification requests', myReqs, 200);
+if ((myReqs.json.requests ?? []).length !== 3) {
+  throw new Error(`Expected 3 verification requests, got ${(myReqs.json.requests ?? []).length}`);
+}
+if (!myReqs.json.requests.every((r) => r.status === 'PENDING')) {
+  throw new Error('Expected all verification requests to be PENDING before approval');
+}
+
+// Login while pending is still 403, but now carries a nextStep hint so the
+// client can guide the user instead of showing a dead end.
+const pendingLogin = await post('/auth/login', { email: refereeEmail, password });
+log('pending referee login', pendingLogin);
+if (pendingLogin.status !== 403) {
+  throw new Error(`Expected 403 for pending referee login, got ${pendingLogin.status}`);
+}
+if (pendingLogin.json.details?.nextStep !== 'SUBMIT_VERIFICATION') {
+  throw new Error(
+    `Expected details.nextStep SUBMIT_VERIFICATION on pending login 403, got ${JSON.stringify(pendingLogin.json.details)}`,
+  );
+}
 
 const adminLogin = await post('/auth/login', {
   email: adminEmail,
@@ -165,6 +216,21 @@ const refMe = await get('/referee/me', refToken);
 log('referee me', refMe);
 assertOk('referee me', refMe, 200);
 const refereeUserId = refMe.json.profile?.userId;
+
+// --- Activation acknowledgement (one-time "Account Activated", server-side) ---
+if (refMe.json.profile?.activationAcknowledged !== false) {
+  throw new Error('Freshly approved referee should have activationAcknowledged=false');
+}
+const ack1 = await post('/referee/me/activation-ack', {}, refToken);
+log('activation ack', ack1);
+assertOk('activation ack', ack1, 200);
+const refMe2 = await get('/referee/me', refToken);
+assertOk('referee me after ack', refMe2, 200);
+if (refMe2.json.profile?.activationAcknowledged !== true) {
+  throw new Error('activationAcknowledged must be true after POST /referee/me/activation-ack');
+}
+const ack2 = await post('/referee/me/activation-ack', {}, refToken);
+assertOk('activation ack (idempotent)', ack2, 200);
 
 // --- Player + venue seed + booking ---
 const playerReg = await post('/auth/register', {

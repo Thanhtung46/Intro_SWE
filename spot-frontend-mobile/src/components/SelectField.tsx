@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { FlatList, Modal, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
 
 export interface SelectOption {
   label: string;
@@ -19,6 +20,11 @@ interface SelectFieldProps {
   containerStyle?: StyleProp<ViewStyle>;
   /** Read-only, greyed-out display — used when the value came from a trusted source (e.g. an existing DB venue) instead of manual pick. */
   disabled?: boolean;
+  /** Reserved for the theme migration (matches FormField/PasswordField/OtpInput).
+   * Not read yet — this component's styles still use the static `colors` palette
+   * until it's migrated to `useTheme()`. Accepted so call sites can pass it
+   * uniformly. */
+  themeColors?: ThemeColors;
 }
 
 export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle, disabled }: SelectFieldProps) {

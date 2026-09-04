@@ -99,6 +99,17 @@ export async function getCertifications(userId) {
   }
 }
 
+export async function acknowledgeActivation(userId) {
+  const client = await pool.connect();
+  try {
+    const row = await profileRepository.markActivationAck(client, userId);
+    if (!row) throw new AppError('Referee profile not found', 404);
+    return { activationAcknowledged: true };
+  } finally {
+    client.release();
+  }
+}
+
 export async function getBoard(userId, query) {
   const client = await pool.connect();
   try {

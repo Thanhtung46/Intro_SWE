@@ -44,13 +44,39 @@ export async function getRefereeMe(): Promise<RefereeProfile> {
   }
 }
 
-/** GET /referee/me/certifications — uploaded documents + their review status. */
+/**
+ * POST /referee/me/activation-ack — mark the one-time "Account Activated"
+ * celebration as seen (server-side, cross-device). Idempotent. Call
+ * fire-and-forget from the activated screen's CTA.
+ */
+export async function acknowledgeRefereeActivation(): Promise<void> {
+  try {
+    await apiClient.post('/referee/me/activation-ack');
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't sync your activation status.");
+  }
+}
+
+/** GET /referee/me/certifications — uploaded documents + their review status.
+ *  ACTIVE-only (all /referee/* routes require an active account). */
 export async function getRefereeCertifications(): Promise<RefereeCertification[]> {
   try {
     const res = await apiClient.get('/referee/me/certifications');
     return res.data.certifications as RefereeCertification[];
   } catch (err) {
     throwFromAxiosError(err, "Couldn't load your certifications. Check your network and try again.");
+  }
+}
+
+/** GET /users/me/verification-requests — the caller's own submitted documents.
+ *  Works while PENDING (unlike getRefereeCertifications), so the "under review"
+ *  screen can show submission status before an admin approves. */
+export async function getMyVerificationRequests(): Promise<RefereeCertification[]> {
+  try {
+    const res = await apiClient.get('/users/me/verification-requests');
+    return res.data.requests as RefereeCertification[];
+  } catch (err) {
+    throwFromAxiosError(err, "Couldn't load your submitted documents. Check your network and try again.");
   }
 }
 

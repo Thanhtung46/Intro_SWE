@@ -13,6 +13,7 @@ router.use(requireActiveUser);
 
 router.get('/me', refereeController.getMe);
 router.get('/me/certifications', refereeController.getCertifications);
+router.post('/me/activation-ack', refereeController.acknowledgeActivation);
 
 router.get('/board', refereeController.getBoard);
 

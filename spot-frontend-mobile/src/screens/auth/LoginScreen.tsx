@@ -21,7 +21,11 @@ import { login } from '@/services/authService';
 import { comingSoon } from '@/utils/comingSoon';
 import { setRefreshToken, setToken } from '../../utils/authStorage';
 
-export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string) => void }) {
+export default function LoginScreen({
+  onLoggedIn,
+}: {
+  onLoggedIn: (role: string, nextStep?: string) => void;
+}) {
   const { setUser } = useUser();
   const { t } = useLanguage();
   const { colors: c } = useTheme();
@@ -63,7 +67,7 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (role: string)
         return;
       }
       setUser(response.user || null);
-      onLoggedIn(response.user?.role || '');
+      onLoggedIn(response.user?.role || '', response.nextStep);
       return;
     }
 

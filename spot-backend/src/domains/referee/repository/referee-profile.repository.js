@@ -16,9 +16,24 @@ export async function upsertProfile(client, userId, certifiedSportTypes) {
 export async function findByUserId(client, userId) {
   const { rows } = await client.query(
     `SELECT user_id, certified_sport_types, total_matches_officiated,
-            avg_rating, rating_count, created_at, updated_at
+            avg_rating, rating_count, activation_ack_at, created_at, updated_at
      FROM schema_referee.referee_profiles
      WHERE user_id = $1`,
+    [userId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Idempotently stamp the referee's one-time "Account Activated" acknowledgement.
+ * COALESCE keeps the first timestamp on repeat calls (fire-and-forget from FE).
+ */
+export async function markActivationAck(client, userId) {
+  const { rows } = await client.query(
+    `UPDATE schema_referee.referee_profiles
+     SET activation_ack_at = COALESCE(activation_ack_at, CURRENT_TIMESTAMP)
+     WHERE user_id = $1
+     RETURNING user_id, activation_ack_at`,
     [userId],
   );
   return rows[0] ?? null;
