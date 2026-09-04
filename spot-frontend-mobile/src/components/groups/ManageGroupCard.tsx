@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import type { Group } from '@/types/group';
 
@@ -18,6 +20,9 @@ type Props = {
  * Manage / View Group buttons keep their own actions.
  */
 export default function ManageGroupCard({ group, variant, onManage, onViewDetails }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const pendingCount = group.pendingRequestCount ?? 0;
   const logo = group.logoUrl;
 
@@ -34,7 +39,7 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
               {logo ? (
                 <Image source={{ uri: logo }} style={styles.iconTileImage} />
               ) : (
-                <Ionicons name="people" size={22} color={colors.primaryDark} />
+                <Ionicons name="people" size={22} color={colors.primary} />
               )}
             </View>
             <View style={styles.joinedText}>
@@ -42,14 +47,14 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
                 {group.name}
               </Text>
               <View style={styles.memberRow}>
-                <Ionicons name="person" size={12} color={colors.outline} />
-                <Text style={styles.memberText}>{group.memberCount} members</Text>
+                <Ionicons name="person" size={12} color={colors.textMuted} />
+                <Text style={styles.memberText}>{group.memberCount} {t('groups.members')}</Text>
               </View>
             </View>
           </View>
         </TouchableOpacity>
         <TouchableOpacity testID={`view-group-${group.groupId}`} style={styles.primaryButton} onPress={onViewDetails}>
-          <Text style={styles.primaryButtonText}>View Group</Text>
+          <Text style={styles.primaryButtonText}>{t('groups.actions.view')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -59,7 +64,7 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
     <View style={styles.managedCard}>
       {pendingCount > 0 && (
         <View style={styles.pendingBadge}>
-          <Text style={styles.pendingBadgeText}>{pendingCount} pending</Text>
+          <Text style={styles.pendingBadgeText}>{pendingCount} {t('groups.manage.pending')}</Text>
         </View>
       )}
       <TouchableOpacity
@@ -72,34 +77,34 @@ export default function ManageGroupCard({ group, variant, onManage, onViewDetail
           {logo ? (
             <Image source={{ uri: logo }} style={styles.logoLargeImage} />
           ) : (
-            <Ionicons name="shield" size={30} color={colors.primaryDark} />
+            <Ionicons name="shield" size={30} color={colors.primary} />
           )}
         </View>
         <Text style={styles.managedName} numberOfLines={1} ellipsizeMode="tail">
           {group.name}
         </Text>
         <View style={styles.adminPill}>
-          <Text style={styles.adminPillText}>Admin</Text>
+          <Text style={styles.adminPillText}>{t('groups.admin')}</Text>
         </View>
         <View style={styles.memberRow}>
-          <Ionicons name="people" size={14} color={colors.bodyText} />
-          <Text style={styles.managedMemberText}>{group.memberCount} members</Text>
+          <Ionicons name="people" size={14} color={colors.textSecondary} />
+          <Text style={styles.managedMemberText}>{group.memberCount} {t('groups.members')}</Text>
         </View>
       </TouchableOpacity>
       <TouchableOpacity testID={`manage-group-${group.groupId}`} style={styles.primaryButton} onPress={onManage}>
         <Ionicons name="settings-outline" size={16} color={colors.white} />
-        <Text style={styles.primaryButtonText}>Manage</Text>
+        <Text style={styles.primaryButtonText}>{t('groups.actions.manageShort')}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   managedCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     alignItems: 'center',
     gap: spacing.sm,
@@ -111,32 +116,32 @@ const styles = StyleSheet.create({
   },
   pendingBadge: {
     alignSelf: 'flex-end',
-    backgroundColor: colors.orangeSoft,
+    backgroundColor: colors.warningSurface,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  pendingBadgeText: { fontSize: 11, fontWeight: '700', color: colors.orange },
+  pendingBadgeText: { fontSize: 11, fontWeight: '700', color: colors.warningText },
   logoLarge: {
     width: 96,
     height: 96,
     borderRadius: 20,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   logoLargeImage: { width: '100%', height: '100%' },
-  managedName: { fontSize: 20, fontWeight: '800', color: colors.headingText, textAlign: 'center' },
-  adminPill: { backgroundColor: colors.primarySoft, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: spacing.xxs },
-  adminPillText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
-  managedMemberText: { fontSize: 14, color: colors.bodyText },
+  managedName: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
+  adminPill: { backgroundColor: colors.tintedSurface, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: spacing.xxs },
+  adminPillText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  managedMemberText: { fontSize: 14, color: colors.textSecondary },
 
   joinedCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -145,24 +150,24 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 14,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   iconTileImage: { width: '100%', height: '100%' },
   joinedText: { flexShrink: 1, gap: 2 },
-  joinedName: { fontSize: 17, fontWeight: '800', color: colors.headingText },
+  joinedName: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
 
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  memberText: { fontSize: 13, color: colors.outline },
+  memberText: { fontSize: 13, color: colors.textMuted },
 
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.md,
     width: '100%',

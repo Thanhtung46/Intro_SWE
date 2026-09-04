@@ -6,10 +6,13 @@ import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, Touch
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import { spacing } from '@/constants/spacing';
-import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
 import { formatsForSport } from '@/constants/matchFormats';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { formatVnd } from '@/utils/format';
 import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
 import { promptLocationFailure, requestCurrentPosition } from '@/utils/location';
@@ -45,7 +48,7 @@ const SLIDER_INSET = spacing.md;
 // `timeFrom`/`timeTo` are HH:mm, exactly the value format of these inputs.
 const IS_WEB = Platform.OS === 'web';
 
-function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChange: (v: string) => void }) {
+function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChange: (v: string) => void; colors: ThemeColors }) {
   return (
     <input
       type={props.type}
@@ -54,12 +57,12 @@ function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChang
       style={{
         borderWidth: 1,
         borderStyle: 'solid',
-        borderColor: colors.cardBorder,
+        borderColor: props.colors.chromeBorder,
         borderRadius: 10,
         padding: spacing.sm,
         fontSize: 14,
-        color: colors.headingText,
-        backgroundColor: colors.white,
+        color: props.colors.textPrimary,
+        backgroundColor: props.colors.surface,
         width: '100%',
         boxSizing: 'border-box',
       }}
@@ -91,6 +94,9 @@ function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; onChang
  * but spot-backend only ever works in VND).
  */
 export default function FilterSheet({ visible, sport, initialFilters, onClose, onApply }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [date, setDate] = useState('');
   const [timeFrom, setTimeFrom] = useState('');
   const [timeTo, setTimeTo] = useState('');
@@ -241,18 +247,18 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
           <View style={styles.header}>
-            <Text style={styles.title}>Filters</Text>
+            <Text style={styles.title}>{t('matches.filter.title')}</Text>
             <TouchableOpacity testID="filter-close" style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={16} color={colors.headingText} />
+              <Ionicons name="close" size={16} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Date</Text>
+              <Text style={styles.sectionLabel}>{t('matches.filter.date')}</Text>
               {IS_WEB ? (
                 <View testID="filter-date-input">
-                  <WebDateTimeInput type="date" value={date} onChange={setDate} />
+                  <WebDateTimeInput type="date" value={date} onChange={setDate} colors={colors} />
                 </View>
               ) : (
                 <TouchableOpacity
@@ -261,9 +267,9 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                   onPress={() => setShowDatePicker(true)}
                 >
                   <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>
-                    {date ? formatDisplayDate(date) : 'Select a date'}
+                    {date ? formatDisplayDate(date) : t('matches.filter.selectDate')}
                   </Text>
-                  <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+                  <Ionicons name="calendar-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
               )}
               {showDatePicker && !IS_WEB && (
@@ -276,19 +282,19 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
               )}
               {Platform.OS === 'ios' && showDatePicker && (
                 <TouchableOpacity style={styles.doneButton} onPress={() => setShowDatePicker(false)}>
-                  <Text style={styles.doneButtonText}>Done</Text>
+                  <Text style={styles.doneButtonText}>{t('matches.filter.done')}</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Time Range</Text>
+              <Text style={styles.sectionLabel}>{t('matches.filter.timeRange')}</Text>
               <View style={styles.row}>
                 <View style={styles.rowItem}>
-                  <Text style={styles.fieldLabel}>From</Text>
+                  <Text style={styles.fieldLabel}>{t('matches.filter.from')}</Text>
                   {IS_WEB ? (
                     <View testID="filter-time-from-input">
-                      <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} />
+                      <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} colors={colors} />
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -297,15 +303,15 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       onPress={() => setShowTimeFromPicker(true)}
                     >
                       <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
-                      <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                      <Ionicons name="time-outline" size={18} color={colors.primary} />
                     </TouchableOpacity>
                   )}
                 </View>
                 <View style={styles.rowItem}>
-                  <Text style={styles.fieldLabel}>To</Text>
+                  <Text style={styles.fieldLabel}>{t('matches.filter.to')}</Text>
                   {IS_WEB ? (
                     <View testID="filter-time-to-input">
-                      <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} />
+                      <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} colors={colors} />
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -314,7 +320,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       onPress={() => setShowTimeToPicker(true)}
                     >
                       <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
-                      <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                      <Ionicons name="time-outline" size={18} color={colors.primary} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -345,7 +351,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                     setShowTimeToPicker(false);
                   }}
                 >
-                  <Text style={styles.doneButtonText}>Done</Text>
+                  <Text style={styles.doneButtonText}>{t('matches.filter.done')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -355,7 +361,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                 <View style={[styles.radioOuter, locationMode === 'location' && styles.radioOuterActive]}>
                   {locationMode === 'location' && <View style={styles.radioInner} />}
                 </View>
-                <Text style={styles.sectionLabel}>Location</Text>
+                <Text style={styles.sectionLabel}>{t('matches.filter.location')}</Text>
               </TouchableOpacity>
               <View
                 style={locationMode !== 'location' && styles.dimmed}
@@ -366,8 +372,9 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                 ) : (
                   <View style={styles.row}>
                     <SelectField
-                      label="Province/City"
-                      placeholder="Select province"
+                      themeColors={colors}
+                      label={t('matches.filter.provinceCity')}
+                      placeholder={t('matches.filter.selectProvince')}
                       value={provinceCode}
                       onChange={(value) => {
                         setProvinceCode(value);
@@ -377,8 +384,9 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       containerStyle={styles.rowItem}
                     />
                     <SelectField
-                      label="Ward/Commune"
-                      placeholder={provinceCode ? 'Select ward' : 'Pick province'}
+                      themeColors={colors}
+                      label={t('matches.filter.wardCommune')}
+                      placeholder={provinceCode ? t('matches.filter.selectWard') : t('matches.filter.pickProvince')}
                       value={cityCode}
                       onChange={setCityCode}
                       options={cityOptions}
@@ -391,12 +399,12 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                         style={styles.favoriteButton}
                         onPress={() => setFavoritedOnly((prev) => !prev)}
                         accessibilityRole="button"
-                        accessibilityLabel="Favorited matches only"
+                        accessibilityLabel={t('matches.filter.favoritesOnly')}
                       >
                         <Ionicons
                           name={favoritedOnly ? 'heart' : 'heart-outline'}
                           size={18}
-                          color={favoritedOnly ? colors.error : colors.primaryDark}
+                          color={favoritedOnly ? colors.roleErrorText : colors.primary}
                         />
                       </TouchableOpacity>
                     </View>
@@ -410,7 +418,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                 <View style={[styles.radioOuter, locationMode === 'distance' && styles.radioOuterActive]}>
                   {locationMode === 'distance' && <View style={styles.radioInner} />}
                 </View>
-                <Text style={styles.sectionLabel}>Distance</Text>
+                <Text style={styles.sectionLabel}>{t('matches.filter.distance')}</Text>
                 <Text style={[styles.distanceValue, locationMode !== 'distance' && styles.dimmed]}>{radiusKm} km</Text>
               </TouchableOpacity>
               <View
@@ -427,8 +435,8 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       sliderLength={Math.max(distanceSliderWidth - SLIDER_INSET * 2, 0)}
                       onValuesChange={([value]) => setRadiusKm(value)}
                       enabledOne={locationMode === 'distance'}
-                      selectedStyle={{ backgroundColor: colors.primaryDark }}
-                      unselectedStyle={{ backgroundColor: colors.cardBorder }}
+                      selectedStyle={{ backgroundColor: colors.primary }}
+                      unselectedStyle={{ backgroundColor: colors.chromeBorder }}
                       markerStyle={styles.sliderMarker}
                       touchDimensions={{ height: 40, width: 40, borderRadius: 20, slipDisplacement: 40 }}
                     />
@@ -438,12 +446,12 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                   <Text style={styles.helperText}>{RADIUS_MIN} km</Text>
                   <Text style={styles.helperText}>{RADIUS_MAX} km</Text>
                 </View>
-                <Text style={styles.helperText}>Uses your current device location.</Text>
+                <Text style={styles.helperText}>{t('matches.filter.deviceLocation')}</Text>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Format</Text>
+              <Text style={styles.sectionLabel}>{t('matches.filter.format')}</Text>
               <View style={styles.skillGrid}>
                 {formatsForSport(sport).map((opt) => {
                   const selected = selectedFormats.includes(opt.value);
@@ -465,11 +473,11 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Skill Level</Text>
+              <Text style={styles.sectionLabel}>{t('matches.filter.skillLevel')}</Text>
               <View style={styles.skillGrid}>
                 {skillsForSport(sport).map((skill) => {
                   const selected = selectedSkills.includes(skill.code);
-                  const tier = skillTierColor(sport, skill.code);
+                  const tier = groupSkillTier(colors, sport, skill.code);
                   return (
                     <TouchableOpacity
                       key={skill.code}
@@ -482,7 +490,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       onPress={() => toggleSkill(skill.code)}
                     >
                       {selected && <Ionicons name="checkmark" size={14} color={colors.white} style={styles.skillChipCheck} />}
-                      <Text style={styles.skillChipText}>{skill.label}</Text>
+                      <Text style={styles.skillChipText}>{groupSkillLabel(t, skill.code) ?? skill.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -491,7 +499,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
 
             <View style={styles.section}>
               <View style={styles.priceHeaderRow}>
-                <Text style={styles.sectionLabel}>Price Range</Text>
+                <Text style={styles.sectionLabel}>{t('matches.filter.priceRange')}</Text>
                 <Text style={styles.priceValue}>
                   {formatVnd(priceMin)} - {priceMax >= PRICE_MAX ? `${formatVnd(PRICE_MAX)}+` : formatVnd(priceMax)}
                 </Text>
@@ -508,8 +516,8 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
                       setPriceMin(lo);
                       setPriceMax(hi);
                     }}
-                    selectedStyle={{ backgroundColor: colors.primaryDark }}
-                    unselectedStyle={{ backgroundColor: colors.cardBorder }}
+                    selectedStyle={{ backgroundColor: colors.primary }}
+                    unselectedStyle={{ backgroundColor: colors.chromeBorder }}
                     markerStyle={styles.sliderMarker}
                     touchDimensions={{ height: 40, width: 40, borderRadius: 20, slipDisplacement: 40 }}
                   />
@@ -524,7 +532,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
 
           <View style={styles.footer}>
             <TouchableOpacity testID="filter-reset" style={styles.resetButton} onPress={handleReset}>
-              <Text style={styles.resetButtonText}>Reset</Text>
+              <Text style={styles.resetButtonText}>{t('matches.filter.reset')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="filter-apply"
@@ -535,7 +543,7 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
               {locating ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.applyButtonText}>Apply Filters</Text>
+                <Text style={styles.applyButtonText}>{t('matches.filter.apply')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -545,11 +553,11 @@ export default function FilterSheet({ visible, sport, initialFilters, onClose, o
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.sheetOverlay, justifyContent: 'flex-end' },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'flex-end' },
   sheet: {
     maxHeight: '85%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
@@ -559,21 +567,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.iconBackground,
+    borderBottomColor: colors.roleCardSelectedBg,
   },
-  title: { fontSize: 22, fontWeight: '700', color: colors.headingText },
+  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.lg },
   section: { gap: spacing.sm },
-  sectionLabel: { fontSize: 15, color: colors.headingText },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.bodyText },
+  sectionLabel: { fontSize: 15, color: colors.textPrimary },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondaryAlt },
   row: { flexDirection: 'row', gap: spacing.sm },
   rowItem: { flex: 1, gap: spacing.xxs },
   geoLoading: { alignSelf: 'flex-start', marginVertical: spacing.sm },
@@ -582,16 +590,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  pickerValue: { fontSize: 14, color: colors.headingText },
-  pickerPlaceholder: { fontSize: 14, color: colors.outline },
+  pickerValue: { fontSize: 14, color: colors.textPrimary },
+  pickerPlaceholder: { fontSize: 14, color: colors.outlineMuted },
   doneButton: { alignSelf: 'flex-end', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
-  doneButtonText: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
+  doneButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
   favoriteWrap: { gap: spacing.xxs },
   favoriteSpacerLabel: { fontSize: 14, marginBottom: 6, opacity: 0 },
   favoriteButton: {
@@ -599,7 +607,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -609,15 +617,15 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: colors.outline,
+    borderColor: colors.outlineMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOuterActive: { borderColor: colors.primaryDark },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primaryDark },
-  distanceValue: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  radioOuterActive: { borderColor: colors.primary },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  distanceValue: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: colors.primary },
   dimmed: { opacity: 0.4 },
-  helperText: { fontSize: 11, color: colors.outline },
+  helperText: { fontSize: 11, color: colors.outlineMuted },
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   skillChip: {
     flexDirection: 'row',
@@ -627,7 +635,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  skillChipSelected: { borderColor: colors.headingText, borderWidth: 2 },
+  skillChipSelected: { borderColor: colors.textPrimary, borderWidth: 2 },
   skillChipCheck: { marginRight: spacing.xxs },
   skillChipText: { fontSize: 13, fontWeight: '700', color: colors.white },
   formatChip: {
@@ -637,25 +645,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.iconBackground,
+    borderColor: colors.chromeBorder,
+    backgroundColor: colors.roleCardSelectedBg,
   },
   formatChipSelected: {
-    backgroundColor: colors.primaryDark,
-    borderColor: colors.primaryDark,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  formatChipText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  formatChipText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   formatChipTextSelected: { color: colors.white },
   priceHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceValue: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  priceValue: { fontSize: 13, fontWeight: '700', color: colors.primary },
   sliderWrap: { width: '100%', alignItems: 'center', paddingVertical: spacing.xs, paddingHorizontal: SLIDER_INSET },
   sliderMarker: {
     height: 22,
     width: 22,
     borderRadius: 11,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
   },
   priceRangeLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   footer: {
@@ -663,23 +671,23 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.roleCardSelectedBg,
   },
   resetButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.outline,
+    borderColor: colors.outlineMuted,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
-  resetButtonText: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  resetButtonText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   applyButton: {
     flex: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },

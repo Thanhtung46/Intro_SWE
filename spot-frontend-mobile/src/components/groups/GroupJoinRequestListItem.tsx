@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import type { MyGroupJoinRequest } from '@/types/group';
 
@@ -20,6 +22,9 @@ type Props = {
  * (groups have no schedule at the browse/request level, unlike a match).
  */
 export default function GroupJoinRequestListItem({ request, onPress, onCancel }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const isPending = request.status === 'PENDING';
 
   return (
@@ -29,7 +34,7 @@ export default function GroupJoinRequestListItem({ request, onPress, onCancel }:
           <Ionicons
             name={request.group.sport === 'FOOTBALL' ? 'football' : 'tennisball'}
             size={20}
-            color={colors.primaryDark}
+            color={colors.primary}
           />
         </View>
         <View style={styles.textCol}>
@@ -40,10 +45,10 @@ export default function GroupJoinRequestListItem({ request, onPress, onCancel }:
             <Ionicons
               name={isPending ? 'time-outline' : 'close-circle-outline'}
               size={12}
-              color={isPending ? colors.amber : colors.error}
+              color={isPending ? colors.warningText : colors.error}
             />
             <Text style={[styles.statusChipText, isPending ? styles.statusChipTextPending : styles.statusChipTextRejected]}>
-              {isPending ? 'Waiting for Admin Approval' : 'Rejected'}
+              {isPending ? t('groups.status.pending') : t('groups.status.rejected')}
             </Text>
           </View>
         </View>
@@ -53,7 +58,7 @@ export default function GroupJoinRequestListItem({ request, onPress, onCancel }:
         <>
           <View style={styles.divider} />
           <TouchableOpacity testID={`group-cancel-request-${request.requestId}`} style={styles.cancelButton} onPress={onCancel}>
-            <Text style={styles.cancelButtonText}>Cancel Request</Text>
+            <Text style={styles.cancelButtonText}>{t('groups.actions.cancelRequest')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -61,12 +66,12 @@ export default function GroupJoinRequestListItem({ request, onPress, onCancel }:
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.xs,
   },
@@ -75,12 +80,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   textCol: { flexShrink: 1, gap: spacing.xs },
-  title: { fontSize: 17, fontWeight: '800', color: colors.headingText },
+  title: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -90,20 +95,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  statusChipPending: { backgroundColor: colors.amberSoft },
-  statusChipRejected: { backgroundColor: colors.errorBackground },
+  statusChipPending: { backgroundColor: colors.warningSurface },
+  statusChipRejected: { backgroundColor: colors.dangerSurface },
   statusChipText: { fontSize: 12, fontWeight: '700' },
-  statusChipTextPending: { color: colors.amber },
+  statusChipTextPending: { color: colors.warningText },
   statusChipTextRejected: { color: colors.error },
 
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.xs },
 
   cancelButton: {
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     alignItems: 'center',
   },
-  cancelButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  cancelButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 });

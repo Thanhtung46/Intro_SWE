@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import FormField from '@/components/common/FormField';
 import SubmitButton from '@/components/common/SubmitButton';
 import RosterBuilder, { makeRosterRow, type RosterRow } from '@/components/tournaments/RosterBuilder';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { rosterSizeFor } from '@/constants/tournamentFormats';
 import { makeJoinTournamentSchema } from '@/schemas/joinTournamentSchema';
 import { getErrorMessage } from '@/services/apiErrors';
@@ -29,6 +31,9 @@ type Props = {
  * (fetched by the route) and drive the RosterBuilder rules.
  */
 export default function JoinTournamentScreen({ tournament, onBack, onJoined }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const { sport, format } = tournament;
   const isFootball = sport === 'FOOTBALL';
   const maxSize = rosterSizeFor(sport, format);
@@ -60,7 +65,7 @@ export default function JoinTournamentScreen({ tournament, onBack, onJoined }: P
       .catch(() => undefined);
   }, []);
 
-  const schema = useMemo(() => makeJoinTournamentSchema(sport, format), [sport, format]);
+  const schema = useMemo(() => makeJoinTournamentSchema(sport, format, t), [sport, format, t]);
 
   const handleSubmit = async () => {
     setSubmitError('');
@@ -117,12 +122,10 @@ export default function JoinTournamentScreen({ tournament, onBack, onJoined }: P
         <View style={styles.doneIcon}>
           <Ionicons name="checkmark" size={34} color={colors.white} />
         </View>
-        <Text style={styles.doneTitle}>Request sent</Text>
-        <Text style={styles.doneText}>
-          The organizer will review your team. You'll see the status under Manage Tournaments → Joined.
-        </Text>
+        <Text style={styles.doneTitle}>{t('tournaments.join.sentTitle')}</Text>
+        <Text style={styles.doneText}>{t('tournaments.join.sentMessage')}</Text>
         <TouchableOpacity testID="join-tournament-done" style={styles.doneButton} onPress={onJoined}>
-          <Text style={styles.doneButtonText}>Done</Text>
+          <Text style={styles.doneButtonText}>{t('tournaments.join.done')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -131,25 +134,26 @@ export default function JoinTournamentScreen({ tournament, onBack, onJoined }: P
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="join-tournament-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="join-tournament-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('tournaments.common.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Join Tournament</Text>
+        <Text style={styles.headerTitle}>{t('tournaments.join.title')}</Text>
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.heroCard}>
           <Text style={styles.heroTitle} numberOfLines={2}>
             {tournament.title}
           </Text>
           <View style={styles.heroMeta}>
             <View style={styles.badge}>
-              <Ionicons name="trophy" size={11} color={colors.primaryDark} />
+              <Ionicons name="trophy" size={11} color={colors.primary} />
               <Text style={styles.badgeText}>{tournament.formatBadge}</Text>
             </View>
             <Text style={styles.heroCaption}>
-              Registering as captain{captainName ? ` · ${captainName}` : ''}
+              {t('tournaments.join.registeringCaptain')}{captainName ? ` · ${captainName}` : ''}
             </Text>
           </View>
         </View>
@@ -157,17 +161,17 @@ export default function JoinTournamentScreen({ tournament, onBack, onJoined }: P
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your Team</Text>
+          <Text style={styles.cardTitle}>{t('tournaments.join.yourTeam')}</Text>
           <FormField
-            label="Team Name"
-            placeholder="e.g. Thunder FC"
+            label={t('tournaments.join.teamName')}
+            placeholder={t('tournaments.join.teamNamePlaceholder')}
             value={teamName}
             onChangeText={setTeamName}
             error={fieldErrors.teamName}
           />
           <FormField
-            label="Team Logo URL"
-            placeholder="https://..."
+            label={t('tournaments.join.logoUrl')}
+            placeholder={t('tournaments.join.logoUrlPlaceholder')}
             autoCapitalize="none"
             keyboardType="url"
             value={teamLogoUrl}
@@ -187,15 +191,17 @@ export default function JoinTournamentScreen({ tournament, onBack, onJoined }: P
           />
         </View>
 
-        <SubmitButton label="Send Join Request" loading={isSubmitting} onPress={handleSubmit} />
-        <Text style={styles.footnote}>The organizer reviews every join request.</Text>
+        <SubmitButton label={t('tournaments.join.submit')} loading={isSubmitting} onPress={handleSubmit} />
+        <Text style={styles.footnote}>{t('tournaments.join.reviewNotice')}</Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  keyboardAvoider: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -206,45 +212,45 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.headingText },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.md },
 
   heroCard: {
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.tintedSurface,
     borderRadius: 14,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  heroTitle: { fontSize: 15, fontWeight: '700', color: colors.headingText },
+  heroTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  badgeText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
-  heroCaption: { fontSize: 12, color: colors.bodyText },
+  badgeText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  heroCaption: { fontSize: 12, color: colors.textSecondary },
 
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.md,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.headingText },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
 
-  footnote: { fontSize: 12, color: colors.outline, textAlign: 'center' },
+  footnote: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
 
   doneWrap: {
     flex: 1,
@@ -252,18 +258,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
     gap: spacing.md,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.screenBackgroundAlt,
   },
   doneIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.success,
+    backgroundColor: colors.successText,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneTitle: { fontSize: 20, fontWeight: '800', color: colors.headingText },
-  doneText: { fontSize: 14, color: colors.bodyText, textAlign: 'center', lineHeight: 20 },
+  doneTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  doneText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   doneButton: {
     marginTop: spacing.sm,
     backgroundColor: colors.primary,

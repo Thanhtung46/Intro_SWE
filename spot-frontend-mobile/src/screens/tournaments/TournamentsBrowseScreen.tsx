@@ -5,8 +5,10 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import ErrorBanner from '@/components/common/ErrorBanner';
 import TournamentCard from '@/components/tournaments/TournamentCard';
 import TournamentFilterSheet from '@/components/tournaments/TournamentFilterSheet';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getErrorMessage } from '@/services/apiErrors';
 import { listTournaments } from '@/services/tournamentService';
 import type { Sport } from '@/types/match';
@@ -47,6 +49,9 @@ export default function TournamentsBrowseScreen({
   onOpenTournament,
   onJoinTournament,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -99,8 +104,8 @@ export default function TournamentsBrowseScreen({
           <ErrorBanner message={errorMessage} onRetry={() => fetchTournaments()} />
         ) : tournaments.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="trophy-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>No tournaments found. Try a different sport or search.</Text>
+            <Ionicons name="trophy-outline" size={28} color={colors.textMuted} />
+            <Text style={styles.emptyStateText}>{t('tournaments.browse.empty')}</Text>
           </View>
         ) : (
           tournaments.map((tournament) => {
@@ -138,10 +143,10 @@ export default function TournamentsBrowseScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 });

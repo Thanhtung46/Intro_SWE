@@ -18,12 +18,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import SubmitButton from '@/components/common/SubmitButton';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import PinDropModal from '@/components/matches/PinDropModal';
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { formatsForSport, minPlayersForFormat } from '@/constants/matchFormats';
-import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getMe } from '@/services/authService';
 import {
   getErrorMessage,
@@ -36,6 +39,7 @@ import {
 } from '@/services/matchService';
 import { hostMatchSchema } from '@/schemas/hostMatchSchema';
 import { formatDisplayDate, parseHm, parseIsoDate, toHm, toIsoDate } from '@/utils/dateTime';
+import type { TranslationKey } from '@/i18n/translations';
 import type { CreateMatchBulkPayload, CreateMatchPayload, MatchFormat, Sport, VenueSuggestion } from '@/types/match';
 import type { VnProvince } from '@/types/geo';
 
@@ -59,7 +63,15 @@ function skillCodesFromRange(sport: Sport, skillMin: string | null, skillMax: st
 
 type CourtField = { key: string; name: string };
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+type Translate = (key: TranslationKey) => string;
+
+function getWeekdayLabels(t: Translate): string[] {
+  return [
+    t('matches.host.weekday.sun'), t('matches.host.weekday.mon'), t('matches.host.weekday.tue'),
+    t('matches.host.weekday.wed'), t('matches.host.weekday.thu'), t('matches.host.weekday.fri'),
+    t('matches.host.weekday.sat'),
+  ];
+}
 const BULK_MAX_SCHEDULES = 100;
 
 /** Form top→bottom order — used to scroll to the first invalid field. */
@@ -83,25 +95,27 @@ const FIELD_ORDER = [
   'coverUrl',
 ] as const;
 
-const FIELD_LABELS: Record<string, string> = {
-  title: 'Match Title',
-  venueName: 'Venue name',
-  venueAddress: 'Address',
-  province: 'Province',
-  city: 'Ward/commune',
-  date: 'Date',
-  timeFrom: 'Start Time',
-  timeTo: 'End Time',
-  courts: 'Courts',
-  skillCodes: 'Skill Level',
-  priceMin: 'Price',
-  priceMax: 'Male Fee',
-  recurringWeekdays: 'Weekdays',
-  recurringWeeks: 'Number of Weeks',
-  format: 'Format',
-  maxPlayers: 'Max Players',
-  coverUrl: 'Cover Image URL',
-};
+function getFieldLabels(t: Translate): Record<string, string> {
+  return {
+    title: t('matches.host.fieldLabel.title'),
+    venueName: t('matches.host.fieldLabel.venueName'),
+    venueAddress: t('matches.host.fieldLabel.venueAddress'),
+    province: t('matches.host.fieldLabel.province'),
+    city: t('matches.host.fieldLabel.city'),
+    date: t('matches.host.fieldLabel.date'),
+    timeFrom: t('matches.host.fieldLabel.timeFrom'),
+    timeTo: t('matches.host.fieldLabel.timeTo'),
+    courts: t('matches.host.fieldLabel.courts'),
+    skillCodes: t('matches.host.fieldLabel.skillCodes'),
+    priceMin: t('matches.host.fieldLabel.priceMin'),
+    priceMax: t('matches.host.fieldLabel.priceMax'),
+    recurringWeekdays: t('matches.host.fieldLabel.recurringWeekdays'),
+    recurringWeeks: t('matches.host.fieldLabel.recurringWeeks'),
+    format: t('matches.host.fieldLabel.format'),
+    maxPlayers: t('matches.host.fieldLabel.maxPlayers'),
+    coverUrl: t('matches.host.fieldLabel.coverUrl'),
+  };
+}
 
 // @react-native-community/datetimepicker has no web build, so on web fall
 // back to the browser's own native date/time inputs. `date` is held as an
@@ -109,7 +123,7 @@ const FIELD_LABELS: Record<string, string> = {
 // the value format of <input type="date"> / <input type="time">.
 const IS_WEB = Platform.OS === 'web';
 
-function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; min?: string; onChange: (v: string) => void }) {
+function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; min?: string; onChange: (v: string) => void; colors: ThemeColors }) {
   // react-native-web renders unrecognised lowercase JSX tags as raw DOM nodes.
   return (
     <input
@@ -120,12 +134,12 @@ function WebDateTimeInput(props: { type: 'date' | 'time'; value: string; min?: s
       style={{
         borderWidth: 1,
         borderStyle: 'solid',
-        borderColor: colors.cardBorder,
+        borderColor: props.colors.chromeBorder,
         borderRadius: 10,
         padding: spacing.sm,
         fontSize: 14,
-        color: colors.headingText,
-        backgroundColor: colors.white,
+        color: props.colors.textPrimary,
+        backgroundColor: props.colors.surface,
         width: '100%',
         boxSizing: 'border-box',
       }}
@@ -160,6 +174,9 @@ function nextCourtKey(): string {
  * behind it.
  */
 export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onUpdated }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const isEdit = matchId != null;
   // Host identity (read-only)
   const [hostName, setHostName] = useState('');
@@ -271,18 +288,18 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
       .then((detail) => {
         if (cancelled) return;
         if (!detail.isHost) {
-          setLoadError('Only the host can edit this match.');
+          setLoadError(t('matches.host.onlyHostCanEdit'));
           setLoadStatus('error');
           return;
         }
         const m = detail.match;
         if (m.status === 'CANCELLED' || m.status === 'COMPLETED') {
-          setLoadError(`This match is ${m.status.toLowerCase()} and cannot be edited.`);
+          setLoadError(t('matches.host.statusCannotBeEdited').replace('{status}', m.status.toLowerCase()));
           setLoadStatus('error');
           return;
         }
         if (new Date(m.startsAt).getTime() <= Date.now()) {
-          setLoadError('Cannot edit a match that has already started.');
+          setLoadError(t('matches.host.cannotEditStarted'));
           setLoadStatus('error');
           return;
         }
@@ -385,8 +402,8 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
   const courtDuplicateWarning = useMemo(() => {
     const names = courts.map((c) => c.name.trim().toLowerCase()).filter(Boolean);
     if (names.length < 2) return null;
-    return new Set(names).size !== names.length ? 'Court names must be unique' : null;
-  }, [courts]);
+    return new Set(names).size !== names.length ? t('matches.host.courtNamesUnique') : null;
+  }, [courts, t]);
 
   // Expands the (anchor date, weekdays, weekCount) trio into concrete
   // schedule dates — starts at the anchor's own week, walks forward
@@ -482,15 +499,16 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
         if (!errors[key]) errors[key] = issue.message;
       }
       setFieldErrors(errors);
+      const fieldLabels = getFieldLabels(t);
       const orderedKeys = [
         ...FIELD_ORDER.filter((key) => errors[key]),
         ...Object.keys(errors).filter((key) => !FIELD_ORDER.includes(key as (typeof FIELD_ORDER)[number])),
       ];
       const summary = orderedKeys
         .slice(0, 3)
-        .map((key) => `${FIELD_LABELS[key] ?? key}: ${errors[key]}`)
+        .map((key) => `${fieldLabels[key] ?? key}: ${errors[key]}`)
         .join('\n');
-      setSubmitError(summary || 'Please fix the highlighted fields.');
+      setSubmitError(summary || t('matches.host.pleaseFixHighlighted'));
       scrollToFirstError(errors);
       return;
     }
@@ -545,11 +563,14 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
         const result = await hostMatchBulk(payload);
         if (result.failed.length > 0) {
           Alert.alert(
-            'Some matches were not created',
-            `${result.totalCreated}/${result.totalRequested} created. ${result.failed.length} slot(s) conflicted with an existing booking.`
+            t('matches.host.someMatchesNotCreatedTitle'),
+            t('matches.host.someMatchesNotCreatedMessage')
+              .replace('{created}', String(result.totalCreated))
+              .replace('{requested}', String(result.totalRequested))
+              .replace('{failedCount}', String(result.failed.length))
           );
         } else {
-          Alert.alert('Matches created', `${result.totalCreated} matches published.`);
+          Alert.alert(t('matches.host.matchesCreatedTitle'), t('matches.host.matchesCreatedMessage').replace('{created}', String(result.totalCreated)));
         }
         if (result.totalCreated > 0) onCreated();
       } else {
@@ -574,7 +595,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
   if (loadStatus === 'error') {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={loadError || 'Could not load match.'} onRetry={onBack} />
+        <ErrorBanner message={loadError || t('matches.host.couldNotLoadMatch')} onRetry={onBack} />
       </SafeAreaView>
     );
   }
@@ -583,9 +604,9 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity testID="host-match-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEdit ? 'Edit Match' : 'Host a Match'}</Text>
+        <Text style={styles.headerTitle}>{isEdit ? t('matches.host.editMatchTitle') : t('matches.host.hostMatchTitle')}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
@@ -597,23 +618,23 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
         <View ref={contentRef} collapsable={false}>
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
-        <Section title="General Information" icon="information-circle-outline">
-          <Field label="Match Title" error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef}>
+        <Section title={t('matches.host.sectionGeneralInfo')} icon="information-circle-outline" colors={colors} styles={styles}>
+          <Field label={t('matches.host.matchTitle')} error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef} styles={styles}>
             <TextInput
               testID="host-match-title"
               style={styles.input}
-              placeholder="e.g., Monday Night Badminton"
-              placeholderTextColor={colors.outline}
+              placeholder={t('matches.host.matchTitlePlaceholder')}
+              placeholderTextColor={colors.outlineMuted}
               value={title}
               onChangeText={setTitle}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t('matches.host.description')} styles={styles}>
             <TextInput
               testID="host-match-notes"
               style={[styles.input, styles.multilineInput]}
-              placeholder="Tell players more about the vibe, rotation, or expectations..."
-              placeholderTextColor={colors.outline}
+              placeholder={t('matches.host.descriptionPlaceholder')}
+              placeholderTextColor={colors.outlineMuted}
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -621,24 +642,24 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
             />
           </Field>
 
-          <Field label="Venue name" error={fieldErrors.venueName} fieldKey="venueName" setFieldRef={setFieldRef}>
+          <Field label={t('matches.host.venueName')} error={fieldErrors.venueName} fieldKey="venueName" setFieldRef={setFieldRef} styles={styles}>
             <View style={styles.locationFieldWrap}>
               <View style={styles.pickerField}>
                 <TextInput
                   testID="host-match-venue-name"
                   style={styles.locationInput}
-                  placeholder="Search or enter venue name"
-                  placeholderTextColor={colors.outline}
+                  placeholder={t('matches.host.venueNamePlaceholder')}
+                  placeholderTextColor={colors.outlineMuted}
                   value={venueName}
-                  onChangeText={(t) => {
-                    setVenueName(t);
+                  onChangeText={(v) => {
+                    setVenueName(v);
                     setVenueSuggestionsVisible(true);
                     setLocationLocked(false);
                   }}
                   onFocus={() => setVenueSuggestionsVisible(true)}
                 />
                 <TouchableOpacity testID="host-match-open-map-picker" onPress={() => setPinPickerVisible(true)}>
-                  <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                  <Ionicons name="map-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               {/* In-flow (not absolute) — absolute overlays inside ScrollView get painted
@@ -657,7 +678,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                       style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
                       onPress={() => applyVenueSuggestion(s)}
                     >
-                      <Ionicons name="location-outline" size={14} color={colors.outline} />
+                      <Ionicons name="location-outline" size={14} color={colors.outlineMuted} />
                       <View style={styles.flexShrink}>
                         <Text style={styles.suggestionText} numberOfLines={1}>{s.venueName}</Text>
                         <Text style={styles.suggestionSubtext} numberOfLines={1}>{s.venueAddress}</Text>
@@ -669,12 +690,12 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
             </View>
           </Field>
 
-          <Field label="Address" error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef}>
+          <Field label={t('matches.host.address')} error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef} styles={styles}>
             <TextInput
               testID="host-match-venue-address"
               style={styles.input}
-              placeholder="Street address"
-              placeholderTextColor={colors.outline}
+              placeholder={t('matches.host.addressPlaceholder')}
+              placeholderTextColor={colors.outlineMuted}
               value={venueAddress}
               onChangeText={setVenueAddress}
             />
@@ -683,8 +704,8 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
           <View style={styles.row}>
             <View ref={setFieldRef('province')} collapsable={false} style={styles.rowItem}>
               <SelectField
-                label="Province/City"
-                placeholder="Select province"
+                label={t('matches.host.provinceCity')}
+                placeholder={t('matches.host.selectProvince')}
                 value={province}
                 onChange={(v) => {
                   setProvince(v);
@@ -697,8 +718,8 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
             </View>
             <View ref={setFieldRef('city')} collapsable={false} style={styles.rowItem}>
               <SelectField
-                label="Ward/Commune"
-                placeholder={province ? 'Select ward' : 'Pick province'}
+                label={t('matches.host.wardCommune')}
+                placeholder={province ? t('matches.host.selectWard') : t('matches.host.pickProvince')}
                 value={city}
                 onChange={setCity}
                 options={cityOptions}
@@ -709,30 +730,30 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
           </View>
         </Section>
 
-        <Section title="Host Info" icon="person-outline">
+        <Section title={t('matches.host.sectionHostInfo')} icon="person-outline" colors={colors} styles={styles}>
           <View style={styles.row}>
             <View style={styles.rowItem}>
-              <Field label="Host Name">
+              <Field label={t('matches.host.hostName')} styles={styles}>
                 <TextInput style={[styles.input, styles.readOnlyInput]} value={hostName || '—'} editable={false} />
               </Field>
             </View>
             <View style={styles.rowItem}>
-              <Field label="Phone Number">
+              <Field label={t('matches.host.phoneNumber')} styles={styles}>
                 <TextInput style={[styles.input, styles.readOnlyInput]} value={hostPhone || '—'} editable={false} />
               </Field>
             </View>
           </View>
-          <Text style={styles.helperText}>Edit your name/phone from Profile — not sent per-match.</Text>
+          <Text style={styles.helperText}>{t('matches.host.editProfileHelper')}</Text>
         </Section>
 
-        <Section title="Schedule" icon="calendar-outline">
-          <Field label="Date" error={fieldErrors.date} fieldKey="date" setFieldRef={setFieldRef}>
+        <Section title={t('matches.host.sectionSchedule')} icon="calendar-outline" colors={colors} styles={styles}>
+          <Field label={t('matches.host.date')} error={fieldErrors.date} fieldKey="date" setFieldRef={setFieldRef} styles={styles}>
             {IS_WEB ? (
-              <WebDateTimeInput type="date" value={date} min={toIsoDate(new Date())} onChange={setDate} />
+              <WebDateTimeInput type="date" value={date} min={toIsoDate(new Date())} onChange={setDate} colors={colors} />
             ) : (
               <TouchableOpacity testID="host-match-date" style={styles.pickerField} onPress={() => setShowDatePicker(true)}>
-                <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>{date ? formatDisplayDate(date) : 'Select a date'}</Text>
-                <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+                <Text style={date ? styles.pickerValue : styles.pickerPlaceholder}>{date ? formatDisplayDate(date) : t('matches.host.selectDate')}</Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.primary} />
               </TouchableOpacity>
             )}
             {showDatePicker && (
@@ -747,25 +768,25 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
           </Field>
           <View style={styles.row}>
             <View style={styles.rowItem}>
-              <Field label="Start Time" error={fieldErrors.timeFrom} fieldKey="timeFrom" setFieldRef={setFieldRef}>
+              <Field label={t('matches.host.startTime')} error={fieldErrors.timeFrom} fieldKey="timeFrom" setFieldRef={setFieldRef} styles={styles}>
                 {IS_WEB ? (
-                  <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} />
+                  <WebDateTimeInput type="time" value={timeFrom} onChange={setTimeFrom} colors={colors} />
                 ) : (
                   <TouchableOpacity testID="host-match-time-from" style={styles.pickerField} onPress={() => setShowTimeFromPicker(true)}>
                     <Text style={timeFrom ? styles.pickerValue : styles.pickerPlaceholder}>{timeFrom || 'HH:mm'}</Text>
-                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                    <Ionicons name="time-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                 )}
               </Field>
             </View>
             <View style={styles.rowItem}>
-              <Field label="End Time" error={fieldErrors.timeTo} fieldKey="timeTo" setFieldRef={setFieldRef}>
+              <Field label={t('matches.host.endTime')} error={fieldErrors.timeTo} fieldKey="timeTo" setFieldRef={setFieldRef} styles={styles}>
                 {IS_WEB ? (
-                  <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} />
+                  <WebDateTimeInput type="time" value={timeTo} onChange={setTimeTo} colors={colors} />
                 ) : (
                   <TouchableOpacity testID="host-match-time-to" style={styles.pickerField} onPress={() => setShowTimeToPicker(true)}>
                     <Text style={timeTo ? styles.pickerValue : styles.pickerPlaceholder}>{timeTo || 'HH:mm'}</Text>
-                    <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+                    <Ionicons name="time-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                 )}
               </Field>
@@ -791,7 +812,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
           )}
         </Section>
 
-        <Section title="Court Configuration" icon="grid-outline">
+        <Section title={t('matches.host.sectionCourtConfig')} icon="grid-outline" colors={colors} styles={styles}>
           <View ref={setFieldRef('courts')} collapsable={false} style={styles.courtList}>
             {courts.map((court, index) => {
               const normalized = court.name.trim().toLowerCase();
@@ -804,10 +825,10 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                   <TextInput
                     testID={`host-match-court-${index}`}
                     style={[styles.input, styles.courtInput, isDuplicate && styles.courtInputDuplicate]}
-                    placeholder={index === 0 ? 'e.g. Court A / Sân 1' : `Court ${index + 1} name`}
-                    placeholderTextColor={colors.outline}
+                    placeholder={index === 0 ? t('matches.host.courtNamePlaceholder') : t('matches.host.courtNumberPlaceholder').replace('{n}', String(index + 1))}
+                    placeholderTextColor={colors.outlineMuted}
                     value={court.name}
-                    onChangeText={(t) => updateCourtName(court.key, t)}
+                    onChangeText={(v) => updateCourtName(court.key, v)}
                   />
                   {courts.length > 1 && (
                     <TouchableOpacity
@@ -815,7 +836,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                       style={styles.removeCourtButton}
                       onPress={() => removeCourt(court.key)}
                     >
-                      <Ionicons name="close" size={16} color={colors.error} />
+                      <Ionicons name="close" size={16} color={colors.roleErrorText} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -829,22 +850,22 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               <Text style={styles.fieldError}>{fieldErrors.courts}</Text>
             ) : null}
             <TouchableOpacity testID="host-match-add-court" style={styles.addCourtButton} onPress={addCourt}>
-              <Ionicons name="add" size={16} color={colors.primaryDark} />
-              <Text style={styles.addCourtText}>Add Court</Text>
+              <Ionicons name="add" size={16} color={colors.primary} />
+              <Text style={styles.addCourtText}>{t('matches.host.addCourt')}</Text>
             </TouchableOpacity>
           </View>
         </Section>
 
-        <Section title="Skill Level" icon="stats-chart-outline">
+        <Section title={t('matches.host.sectionSkillLevel')} icon="stats-chart-outline" colors={colors} styles={styles}>
           <View ref={setFieldRef('skillCodes')} collapsable={false}>
           <TouchableOpacity
             testID="host-match-all-levels"
             style={[styles.allLevelsBanner, allLevels && styles.allLevelsBannerActive]}
             onPress={() => setAllLevels((v) => !v)}
           >
-            {allLevels && <Ionicons name="checkmark-circle" size={16} color={colors.success} />}
+            {allLevels && <Ionicons name="checkmark-circle" size={16} color={colors.successText} />}
             <Text style={[styles.allLevelsLabel, allLevels && styles.allLevelsLabelActive]}>
-              {allLevels ? 'All Levels Welcome' : 'All Levels'}
+              {allLevels ? t('matches.host.allLevelsWelcome') : t('matches.host.allLevels')}
             </Text>
           </TouchableOpacity>
           {!allLevels && (
@@ -852,7 +873,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               <View style={styles.skillGrid}>
                 {skillsForSport(sport).map((skill) => {
                   const selected = skillCodes.includes(skill.code);
-                  const tier = skillTierColor(sport, skill.code);
+                  const tier = groupSkillTier(colors, sport, skill.code);
                   return (
                     <TouchableOpacity
                       key={skill.code}
@@ -860,7 +881,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                       style={[styles.tierChip, { backgroundColor: selected ? tier.text : tier.bg, borderColor: tier.border }]}
                       onPress={() => toggleSkill(skill.code)}
                     >
-                      <Text style={[styles.tierChipText, { color: selected ? colors.white : tier.text }]}>{skill.label}</Text>
+                      <Text style={[styles.tierChipText, { color: selected ? colors.white : tier.text }]}>{groupSkillLabel(t, skill.code) ?? skill.label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -871,9 +892,9 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
           </View>
         </Section>
 
-        <Section title="Entry Fee" icon="cash-outline">
+        <Section title={t('matches.host.sectionEntryFee')} icon="cash-outline" colors={colors} styles={styles}>
           {lockCoreFields ? (
-            <Text style={styles.helperText}>Fee is locked after players have joined.</Text>
+            <Text style={styles.helperText}>{t('matches.host.feeLockedHelper')}</Text>
           ) : null}
           <View style={styles.feeToggleRow}>
             <TouchableOpacity
@@ -882,7 +903,7 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               onPress={() => !lockCoreFields && setFeeType('GENDER_RANGE')}
               disabled={lockCoreFields}
             >
-              <Text style={[styles.feeToggleText, feeType === 'GENDER_RANGE' && styles.feeToggleTextActive]}>By Gender</Text>
+              <Text style={[styles.feeToggleText, feeType === 'GENDER_RANGE' && styles.feeToggleTextActive]}>{t('matches.host.byGender')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="host-match-fee-split"
@@ -890,18 +911,18 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               onPress={() => !lockCoreFields && setFeeType('SPLIT_EVENLY')}
               disabled={lockCoreFields}
             >
-              <Text style={[styles.feeToggleText, feeType === 'SPLIT_EVENLY' && styles.feeToggleTextActive]}>Split Evenly</Text>
+              <Text style={[styles.feeToggleText, feeType === 'SPLIT_EVENLY' && styles.feeToggleTextActive]}>{t('matches.host.splitEvenly')}</Text>
             </TouchableOpacity>
           </View>
           {feeType === 'GENDER_RANGE' ? (
             <View style={styles.row}>
               <View style={styles.rowItem}>
-                <Field label="Male Fee (VND)" error={fieldErrors.priceMax} fieldKey="priceMax" setFieldRef={setFieldRef}>
+                <Field label={t('matches.host.maleFee')} error={fieldErrors.priceMax} fieldKey="priceMax" setFieldRef={setFieldRef} styles={styles}>
                   <TextInput
                     testID="host-match-price-male"
                     style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                     placeholder="0"
-                    placeholderTextColor={colors.outline}
+                    placeholderTextColor={colors.outlineMuted}
                     value={priceMax}
                     onChangeText={setPriceMax}
                     keyboardType="numeric"
@@ -910,12 +931,12 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                 </Field>
               </View>
               <View style={styles.rowItem}>
-                <Field label="Female Fee (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
+                <Field label={t('matches.host.femaleFee')} error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef} styles={styles}>
                   <TextInput
                     testID="host-match-price-female"
                     style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                     placeholder="0"
-                    placeholderTextColor={colors.outline}
+                    placeholderTextColor={colors.outlineMuted}
                     value={priceMin}
                     onChangeText={setPriceMin}
                     keyboardType="numeric"
@@ -925,12 +946,12 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               </View>
             </View>
           ) : (
-            <Field label="Total Price (VND)" error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef}>
+            <Field label={t('matches.host.totalPrice')} error={fieldErrors.priceMin} fieldKey="priceMin" setFieldRef={setFieldRef} styles={styles}>
               <TextInput
                 testID="host-match-price-total"
                 style={[styles.input, lockCoreFields && styles.readOnlyInput]}
                 placeholder="0"
-                placeholderTextColor={colors.outline}
+                placeholderTextColor={colors.outlineMuted}
                 value={priceMin}
                 onChangeText={setPriceMin}
                 keyboardType="numeric"
@@ -942,23 +963,25 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
 
         {!isEdit ? (
         <Section
-          title="Recurring Match"
+          title={t('matches.host.sectionRecurringMatch')}
           icon="repeat-outline"
+          colors={colors}
+          styles={styles}
           right={
             <Switch
               testID="host-match-recurring"
               value={isRecurring}
               onValueChange={setIsRecurring}
-              trackColor={{ true: colors.primaryDark, false: colors.dotInactive }}
+              trackColor={{ true: colors.primary, false: colors.matchSwitchTrackInactive }}
             />
           }
         >
           {isRecurring && (
             <>
-              <Text style={styles.helperText}>Repeats on these weekdays, starting from the Date above.</Text>
+              <Text style={styles.helperText}>{t('matches.host.recurringHelper')}</Text>
               <View ref={setFieldRef('recurringWeekdays')} collapsable={false}>
               <View style={styles.skillGrid}>
-                {WEEKDAY_LABELS.map((label, day) => {
+                {getWeekdayLabels(t).map((label, day) => {
                   const selected = recurringWeekdays.includes(day);
                   return (
                     <TouchableOpacity
@@ -975,28 +998,28 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               {fieldErrors.recurringWeekdays ? <Text style={styles.fieldError}>{fieldErrors.recurringWeekdays}</Text> : null}
               </View>
 
-              <Field label="Number of Weeks" error={fieldErrors.recurringWeeks} fieldKey="recurringWeeks" setFieldRef={setFieldRef}>
+              <Field label={t('matches.host.numberOfWeeks')} error={fieldErrors.recurringWeeks} fieldKey="recurringWeeks" setFieldRef={setFieldRef} styles={styles}>
                 <TextInput
                   testID="host-match-recurring-weeks"
                   style={styles.input}
-                  placeholder="e.g. 8"
-                  placeholderTextColor={colors.outline}
+                  placeholder={t('matches.host.numberOfWeeksPlaceholder')}
+                  placeholderTextColor={colors.outlineMuted}
                   value={recurringWeeks}
                   onChangeText={setRecurringWeeks}
                   keyboardType="numeric"
                 />
               </Field>
               {recurringPreviewCount > 0 && (
-                <Text style={styles.helperText}>This will publish {recurringPreviewCount} matches.</Text>
+                <Text style={styles.helperText}>{t('matches.host.willPublishCount').replace('{count}', String(recurringPreviewCount))}</Text>
               )}
             </>
           )}
         </Section>
         ) : null}
 
-            <Section title="Format & Squad" icon="people-outline">
+            <Section title={t('matches.host.sectionFormatSquad')} icon="people-outline" colors={colors} styles={styles}>
               {lockCoreFields ? (
-                <Text style={styles.helperText}>Format is locked after players have joined.</Text>
+                <Text style={styles.helperText}>{t('matches.host.formatLockedHelper')}</Text>
               ) : null}
               <View ref={setFieldRef('format')} collapsable={false}>
               <View style={styles.skillGrid}>
@@ -1025,12 +1048,12 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               {fieldErrors.format ? <Text style={styles.fieldError}>{fieldErrors.format}</Text> : null}
               </View>
 
-              <Field label="Max Players" error={fieldErrors.maxPlayers} fieldKey="maxPlayers" setFieldRef={setFieldRef}>
+              <Field label={t('matches.host.maxPlayers')} error={fieldErrors.maxPlayers} fieldKey="maxPlayers" setFieldRef={setFieldRef} styles={styles}>
                 <TextInput
                   testID="host-match-max-players"
                   style={styles.input}
-                  placeholder={format ? `e.g. ${minPlayersForFormat(format)}` : 'e.g. 14'}
-                  placeholderTextColor={colors.outline}
+                  placeholder={format ? `e.g. ${minPlayersForFormat(format)}` : t('matches.host.maxPlayersPlaceholder')}
+                  placeholderTextColor={colors.outlineMuted}
                   value={maxPlayers}
                   onChangeText={setMaxPlayers}
                   keyboardType="numeric"
@@ -1038,15 +1061,17 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               </Field>
               {format ? (
                 <Text style={styles.helperText}>
-                  At least {minPlayersForFormat(format)} for {formatsForSport(sport).find((o) => o.value === format)?.label ?? format} (including you as host).
+                  {t('matches.host.atLeastPlayersFor')
+                    .replace('{min}', String(minPlayersForFormat(format)))
+                    .replace('{format}', formatsForSport(sport).find((o) => o.value === format)?.label ?? format)}
                 </Text>
               ) : null}
-              <Field label="Cover Image URL (Optional)">
+              <Field label={t('matches.host.coverImageUrl')} styles={styles}>
                 <TextInput
                   testID="host-match-cover-url"
                   style={styles.input}
                   placeholder="https://..."
-                  placeholderTextColor={colors.outline}
+                  placeholderTextColor={colors.outlineMuted}
                   value={coverUrl}
                   onChangeText={setCoverUrl}
                   autoCapitalize="none"
@@ -1054,8 +1079,8 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
               </Field>
             </Section>
 
-          <Section title="Join Approval Mode" icon="shield-checkmark-outline">
-            <Text style={styles.helperText}>Choose how players join your match squad.</Text>
+          <Section title={t('matches.host.sectionJoinApprovalMode')} icon="shield-checkmark-outline" colors={colors} styles={styles}>
+            <Text style={styles.helperText}>{t('matches.host.joinApprovalHelper')}</Text>
             <View style={styles.row}>
               <TouchableOpacity
                 testID="host-match-join-auto"
@@ -1063,10 +1088,10 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                 onPress={() => setJoinMode('AUTO')}
               >
                 <View style={styles.joinModeCardHeader}>
-                  <Text style={[styles.joinModeTitle, joinMode === 'AUTO' && styles.joinModeTitleSelected]}>Auto-Approval</Text>
-                  {joinMode === 'AUTO' && <Ionicons name="checkmark-circle" size={16} color={colors.primaryDark} />}
+                  <Text style={[styles.joinModeTitle, joinMode === 'AUTO' && styles.joinModeTitleSelected]}>{t('matches.host.autoApproval')}</Text>
+                  {joinMode === 'AUTO' && <Ionicons name="checkmark-circle" size={16} color={colors.primary} />}
                 </View>
-                <Text style={styles.joinModeSubtext}>Players join instantly without host review.</Text>
+                <Text style={styles.joinModeSubtext}>{t('matches.host.autoApprovalDesc')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 testID="host-match-join-approval"
@@ -1074,16 +1099,16 @@ export default function HostMatchScreen({ sport, matchId, onBack, onCreated, onU
                 onPress={() => setJoinMode('APPROVAL')}
               >
                 <View style={styles.joinModeCardHeader}>
-                  <Text style={[styles.joinModeTitle, joinMode === 'APPROVAL' && styles.joinModeTitleSelected]}>Host Review</Text>
-                  {joinMode === 'APPROVAL' && <Ionicons name="checkmark-circle" size={16} color={colors.primaryDark} />}
+                  <Text style={[styles.joinModeTitle, joinMode === 'APPROVAL' && styles.joinModeTitleSelected]}>{t('matches.host.hostReview')}</Text>
+                  {joinMode === 'APPROVAL' && <Ionicons name="checkmark-circle" size={16} color={colors.primary} />}
                 </View>
-                <Text style={styles.joinModeSubtext}>Requests require host approval before joining.</Text>
+                <Text style={styles.joinModeSubtext}>{t('matches.host.hostReviewDesc')}</Text>
               </TouchableOpacity>
             </View>
           </Section>
 
         <SubmitButton
-          label={isEdit ? 'Save Changes' : isRecurring ? 'Publish Matches' : 'Publish Match'}
+          label={isEdit ? t('matches.host.saveChanges') : isRecurring ? t('matches.host.publishMatches') : t('matches.host.publishMatch')}
           loading={isSubmitting}
           onPress={handleSubmit}
         />
@@ -1122,18 +1147,22 @@ function Section({
   subtitle,
   right,
   children,
+  colors,
+  styles,
 }: {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
   subtitle?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionIconCircle}>
-          <Ionicons name={icon} size={16} color={colors.primaryDark} />
+          <Ionicons name={icon} size={16} color={colors.primary} />
         </View>
         <View style={styles.sectionHeaderText}>
           <Text style={styles.sectionTitle}>{title}</Text>
@@ -1152,11 +1181,13 @@ function Field({
   fieldKey,
   setFieldRef,
   children,
+  styles,
 }: {
   label: string;
   error?: string;
   fieldKey?: string;
   setFieldRef?: (key: string) => (node: View | null) => void;
+  styles: ReturnType<typeof createStyles>;
   children: React.ReactNode;
 }) {
   return (
@@ -1172,13 +1203,13 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   centerFill: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.screenBackgroundAlt,
     padding: spacing.md,
   },
   header: {
@@ -1187,67 +1218,67 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.iconBackground,
+    borderBottomColor: colors.roleCardSelectedBg,
   },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.headingText },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.textPrimary },
 
   content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing.xl },
 
-  section: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder, padding: spacing.md, gap: spacing.sm },
+  section: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.chromeBorder, padding: spacing.md, gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sectionIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionHeaderText: { flex: 1, gap: 1 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.headingText },
-  sectionSubtitle: { fontSize: 12, fontWeight: '600', color: colors.success },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  sectionSubtitle: { fontSize: 12, fontWeight: '600', color: colors.successText },
   sectionBody: { gap: spacing.sm },
 
   field: { gap: spacing.xxs },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
-  fieldError: { fontSize: 12, color: colors.error },
-  helperText: { fontSize: 12, color: colors.outline },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondaryAlt },
+  fieldError: { fontSize: 12, color: colors.roleErrorText },
+  helperText: { fontSize: 12, color: colors.outlineMuted },
 
   input: {
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
   multilineInput: { height: 80, textAlignVertical: 'top', paddingTop: spacing.sm },
-  readOnlyInput: { backgroundColor: colors.iconBackground, color: colors.bodyText },
-  locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  readOnlyInput: { backgroundColor: colors.roleCardSelectedBg, color: colors.textSecondaryAlt },
+  locationInput: { flex: 1, fontSize: 14, color: colors.textPrimary, paddingVertical: 0 },
 
   locationFieldWrap: { gap: spacing.xxs },
   suggestionsBox: {
     maxHeight: 180,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 10,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.cardBorder },
-  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
-  suggestionSubtext: { fontSize: 11, color: colors.outline },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.chromeBorder },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: colors.outlineMuted },
   flexShrink: { flexShrink: 1 },
 
   row: { flexDirection: 'row', gap: spacing.sm },
@@ -1258,14 +1289,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  pickerValue: { fontSize: 14, color: colors.headingText },
-  pickerPlaceholder: { fontSize: 14, color: colors.outline },
+  pickerValue: { fontSize: 14, color: colors.textPrimary },
+  pickerPlaceholder: { fontSize: 14, color: colors.outlineMuted },
 
   courtList: { gap: spacing.sm },
   courtRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
@@ -1273,26 +1304,26 @@ const styles = StyleSheet.create({
     width: 22,
     fontSize: 13,
     fontWeight: '700',
-    color: colors.outline,
+    color: colors.outlineMuted,
     textAlign: 'center',
   },
   courtInput: { flex: 1 },
-  courtInputDuplicate: { borderColor: colors.error },
-  removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.errorBackground, alignItems: 'center', justifyContent: 'center' },
+  courtInputDuplicate: { borderColor: colors.roleErrorText },
+  removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.dangerSurface, alignItems: 'center', justifyContent: 'center' },
   addCourtButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xxs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  addCourtText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  addCourtText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   allLevelsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  allLevelsLabel: { fontSize: 14, fontWeight: '600', color: colors.headingText },
+  allLevelsLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
 
   allLevelsBanner: {
     flexDirection: 'row',
@@ -1300,19 +1331,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 12,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  allLevelsBannerActive: { backgroundColor: colors.skillTierGreenBg, borderColor: colors.skillTierGreenBorder },
-  allLevelsLabelActive: { color: colors.skillTierGreenText, fontWeight: '700' },
+  allLevelsBannerActive: { backgroundColor: colors.successSurface, borderColor: colors.successBorder },
+  allLevelsLabelActive: { color: colors.successText, fontWeight: '700' },
 
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  skillChip: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, backgroundColor: colors.white },
-  skillChipSelected: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  skillChip: { borderWidth: 1, borderColor: colors.chromeBorder, borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, backgroundColor: colors.surface },
+  skillChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   skillChipDisabled: { opacity: 0.55 },
-  skillChipText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  skillChipText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   skillChipTextSelected: { color: colors.white },
 
   // Skill Level chips specifically — same green/orange/red tier scale as
@@ -1321,24 +1352,24 @@ const styles = StyleSheet.create({
   tierChip: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   tierChipText: { fontSize: 13, fontWeight: '700' },
 
-  feeToggleRow: { flexDirection: 'row', gap: spacing.xxs, padding: spacing.xxs, borderRadius: 12, backgroundColor: colors.iconBackground },
+  feeToggleRow: { flexDirection: 'row', gap: spacing.xxs, padding: spacing.xxs, borderRadius: 12, backgroundColor: colors.roleCardSelectedBg },
   feeToggleButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 10 },
   feeToggleButtonDisabled: { opacity: 0.55 },
   feeToggleButtonActive: {
-    backgroundColor: colors.white,
-    shadowColor: colors.primaryDark,
+    backgroundColor: colors.surface,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 2,
   },
-  feeToggleText: { fontSize: 13, fontWeight: '600', color: colors.outline },
-  feeToggleTextActive: { color: colors.primaryDark, fontWeight: '700' },
+  feeToggleText: { fontSize: 13, fontWeight: '600', color: colors.outlineMuted },
+  feeToggleTextActive: { color: colors.primary, fontWeight: '700' },
 
-  joinModeCard: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 12, padding: spacing.sm, gap: spacing.xxs, backgroundColor: colors.white },
-  joinModeCardSelected: { borderColor: colors.primaryDark, backgroundColor: colors.selectedBackground },
+  joinModeCard: { borderWidth: 1, borderColor: colors.chromeBorder, borderRadius: 12, padding: spacing.sm, gap: spacing.xxs, backgroundColor: colors.surface },
+  joinModeCardSelected: { borderColor: colors.primary, backgroundColor: colors.roleCardSelectedBg },
   joinModeCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  joinModeTitle: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  joinModeTitleSelected: { color: colors.primaryDark },
-  joinModeSubtext: { fontSize: 11, color: colors.outline },
+  joinModeTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  joinModeTitleSelected: { color: colors.primary },
+  joinModeSubtext: { fontSize: 11, color: colors.outlineMuted },
 });

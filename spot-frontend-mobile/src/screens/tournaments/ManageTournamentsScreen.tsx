@@ -16,8 +16,10 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import ManageTournamentCard from '@/components/tournaments/ManageTournamentCard';
 import TournamentJoinRequestListItem from '@/components/tournaments/TournamentJoinRequestListItem';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getErrorMessage } from '@/services/apiErrors';
 import {
   acceptTournamentRequest,
@@ -40,11 +42,6 @@ type Props = {
   onOpenTournament: (tournamentId: number) => void;
 };
 
-const TABS: { key: TournamentMineTab; label: string }[] = [
-  { key: 'hosted', label: 'Hosted by Me' },
-  { key: 'joined', label: 'Joined' },
-];
-
 /**
  * Manage Tournaments (Pencil "Tournament - Manage (Hosted/Joined/Empty)"
  * frames) — mirrors ManageGroupsScreen: 2 tabs, each 2 stacked sections.
@@ -52,6 +49,13 @@ const TABS: { key: TournamentMineTab; label: string }[] = [
  * Joined = My Tournaments + My Join Requests.
  */
 export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
+  const tabs: { key: TournamentMineTab; label: string }[] = [
+    { key: 'hosted', label: t('tournaments.manage.hosted') },
+    { key: 'joined', label: t('tournaments.manage.joined') },
+  ];
   const [tab, setTab] = useState<TournamentMineTab>('hosted');
   const [hostedTournaments, setHostedTournaments] = useState<Tournament[]>([]);
   const [pendingRequests, setPendingRequests] = useState<TournamentJoinRequest[]>([]);
@@ -131,15 +135,15 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="manage-tournaments-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="manage-tournaments-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('tournaments.common.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Manage Tournaments</Text>
+        <Text style={styles.title}>{t('tournaments.manage.title')}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
       <View style={styles.tabs}>
-        {TABS.map((item) => {
+        {tabs.map((item) => {
           const isActive = item.key === tab;
           return (
             <TouchableOpacity
@@ -165,9 +169,9 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
           <ErrorBanner message={errorMessage} onRetry={() => fetchData()} />
         ) : tab === 'hosted' ? (
           <>
-            <SectionHeader title="My Tournaments" count={hostedTournaments.length} />
+            <SectionHeader title={t('tournaments.manage.myTournaments')} count={hostedTournaments.length} />
             {hostedTournaments.length === 0 ? (
-              <EmptyState text="You don't organize any tournaments yet." />
+              <EmptyState text={t('tournaments.manage.noHosted')} />
             ) : (
               hostedTournaments.map((tournament) => (
                 <ManageTournamentCard
@@ -180,9 +184,9 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
               ))
             )}
 
-            <SectionHeader title="Pending Requests" count={pendingRequests.length} />
+            <SectionHeader title={t('tournaments.manage.requests')} count={pendingRequests.length} />
             {pendingRequests.length === 0 ? (
-              <EmptyState text="No pending join requests." />
+              <EmptyState text={t('tournaments.manage.noRequests')} />
             ) : (
               pendingRequests.map((request) => (
                 <View key={request.requestId} style={styles.requestCard}>
@@ -199,8 +203,8 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
                         {request.teamName}
                       </Text>
                       <Text style={styles.requestSub} numberOfLines={2} ellipsizeMode="tail">
-                        wants to join {tournamentNameById.get(request.tournamentId) ?? 'this tournament'}
-                        {request.captain.fullName ? ` · Capt. ${request.captain.fullName}` : ''}
+                        {t('tournaments.manage.wantsToJoin')} {tournamentNameById.get(request.tournamentId) ?? t('tournaments.manage.thisTournament')}
+                        {request.captain.fullName ? ` · ${t('tournaments.manage.captainShort')} ${request.captain.fullName}` : ''}
                       </Text>
                     </View>
                   </View>
@@ -211,7 +215,7 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
                       disabled={actingRequestId === request.requestId}
                       onPress={() => actOnRequest(request.requestId, rejectTournamentRequest)}
                     >
-                      <Text style={styles.declineButtonText}>Reject</Text>
+                      <Text style={styles.declineButtonText}>{t('tournaments.manage.reject')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       testID={`approve-tournament-request-${request.requestId}`}
@@ -219,7 +223,7 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
                       disabled={actingRequestId === request.requestId}
                       onPress={() => actOnRequest(request.requestId, acceptTournamentRequest)}
                     >
-                      <Text style={styles.approveButtonText}>Approve</Text>
+                      <Text style={styles.approveButtonText}>{t('tournaments.manage.approve')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -228,9 +232,9 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
           </>
         ) : (
           <>
-            <SectionHeader title="My Tournaments" count={joinedTournaments.length} />
+            <SectionHeader title={t('tournaments.manage.myTournaments')} count={joinedTournaments.length} />
             {joinedTournaments.length === 0 ? (
-              <EmptyState text="You haven't joined any tournaments yet." />
+              <EmptyState text={t('tournaments.manage.noJoined')} />
             ) : (
               joinedTournaments.map((tournament) => (
                 <ManageTournamentCard
@@ -243,9 +247,9 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
               ))
             )}
 
-            <SectionHeader title="My Join Requests" count={myRequests.length} />
+            <SectionHeader title={t('tournaments.manage.myRequests')} count={myRequests.length} />
             {myRequests.length === 0 ? (
-              <EmptyState text="No pending or rejected join requests." />
+              <EmptyState text={t('tournaments.manage.noRequests')} />
             ) : (
               myRequests.map((request) => (
                 <TournamentJoinRequestListItem
@@ -262,10 +266,10 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
 
       <ConfirmDialog
         visible={cancelTarget != null}
-        title="Cancel request?"
-        message="You can send a new request again later while registration is open."
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Request"
+        title={t('groups.confirm.cancelTitle')}
+        message={t('groups.confirm.cancelMessage')}
+        confirmLabel={t('matches.actions.cancelRequest')}
+        cancelLabel={t('matches.actions.keepRequest')}
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelTarget(null)}
       />
@@ -274,6 +278,8 @@ export default function ManageTournamentsScreen({ onBack, onOpenTournament }: Pr
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -283,27 +289,29 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
 }
 
 function EmptyState({ text }: { text: string }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="trophy-outline" size={24} color={colors.outline} />
+      <Ionicons name="trophy-outline" size={24} color={colors.textMuted} />
       <Text style={styles.emptyStateText}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   tabs: {
     flexDirection: 'row',
@@ -311,29 +319,29 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.xxs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     gap: spacing.xxs,
   },
   tabButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 8 },
-  tabButtonActive: { backgroundColor: colors.primaryDark },
-  tabText: { fontSize: 13, fontWeight: '700', color: colors.outline },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   tabTextActive: { color: colors.white },
 
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.sm },
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.lg },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginTop: spacing.md },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.headingText },
-  sectionCount: { fontSize: 15, fontWeight: '700', color: colors.outline },
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  sectionCount: { fontSize: 15, fontWeight: '700', color: colors.textMuted },
 
   requestCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -342,16 +350,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   requestInfo: { flex: 1, gap: spacing.xxs },
-  requestName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  requestSub: { fontSize: 12, color: colors.outline },
+  requestName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  requestSub: { fontSize: 12, color: colors.textMuted },
   requestActions: { flexDirection: 'row', gap: spacing.sm },
   declineButton: {
     flex: 1,
@@ -361,6 +369,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   declineButtonText: { fontSize: 13, fontWeight: '700', color: colors.error, textAlign: 'center' },
-  approveButton: { flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: spacing.sm },
+  approveButton: { flex: 1, backgroundColor: colors.successText, borderRadius: 10, paddingVertical: spacing.sm },
   approveButtonText: { fontSize: 13, fontWeight: '700', color: colors.white, textAlign: 'center' },
 });
