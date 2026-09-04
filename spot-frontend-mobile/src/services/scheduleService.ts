@@ -3,7 +3,7 @@ import apiClient from './apiClient';
 
 export interface ScheduleItem {
   type: 'BOOKING' | 'MATCH';
-  bookingId: number;
+  bookingId: number | null;
   matchId: number | null;
   startsAt: string;
   endsAt: string;
@@ -14,6 +14,7 @@ export interface ScheduleItem {
   address: string;
   sportType: string;
   role?: 'HOST' | 'PARTICIPANT';
+  totalAmountVnd: number | null;
 }
 
 export interface ScheduleResult {
