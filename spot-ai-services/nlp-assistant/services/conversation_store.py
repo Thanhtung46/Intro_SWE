@@ -79,6 +79,7 @@ class ConversationStore:
             "messages": [],
             "lastInterpretedRequest": None,
             "lastResults": [],
+            "lastVenueResults": [],
             "pendingAction": None,
             "createdAt": _now_iso(),
             "updatedAt": _now_iso(),
@@ -122,6 +123,15 @@ class ConversationStore:
         it's short-lived working state scoped to the same conversation
         record."""
         conversation["lastResults"] = results
+        await self._write(conversation)
+
+    async def set_last_venue_results(
+        self, conversation: dict[str, Any], venue_results: list[dict[str, Any]]
+    ) -> None:
+        """Same purpose as set_last_results(), for venue search — lets a
+        follow-up like "đăng ký sân đầu tiên" (spec 007 User Story 3) resolve
+        to a venueId without the player repeating the search criteria."""
+        conversation["lastVenueResults"] = venue_results
         await self._write(conversation)
 
     async def set_pending_action(

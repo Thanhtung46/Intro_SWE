@@ -42,9 +42,21 @@ export const ROUTES = {
  * plain string, so it can't live in ROUTES above. `sport` (when known, e.g.
  * from the Booking screen's active tab) narrows the detail screen's pitches
  * to that sport only, so a venue with both football and badminton courts
- * doesn't let a player book the wrong one. */
-export function venueDetailRoute(id: string, sport?: string): string {
-  return sport ? `/venue/${id}?sport=${encodeURIComponent(sport)}` : `/venue/${id}`;
+ * doesn't let a player book the wrong one. `date`/`timeFrom` (both
+ * optional — spec 007-assistant-venue-search P3) preselect that date/time
+ * in the booking step, e.g. when handed off from the AI assistant after a
+ * venue search, instead of defaulting to today with nothing picked. */
+export function venueDetailRoute(
+  id: string,
+  sport?: string,
+  slot?: { date?: string | null; timeFrom?: string | null }
+): string {
+  const params = new URLSearchParams();
+  if (sport) params.set('sport', sport);
+  if (slot?.date) params.set('date', slot.date);
+  if (slot?.timeFrom) params.set('timeFrom', slot.timeFrom);
+  const query = params.toString();
+  return query ? `/venue/${id}?${query}` : `/venue/${id}`;
 }
 
 /** Referee job-board venue detail (Apply + in-app directions). */

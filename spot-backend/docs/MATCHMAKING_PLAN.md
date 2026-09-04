@@ -14,7 +14,7 @@ Locked with Nguyễn (2026-08-15). Do **not** implement Group / Tournament in th
 
 **Sources:** PA1 FR-3 / U033–U037, PA2 Match entity, Figma Matches screens, [Vmito](https://vmito.com/vi), [ALO Booking](https://datlich.alobo.vn/).
 
-When a phase is done: update [`API.md`](./API.md) and [`CLAUDE.md`](../CLAUDE.md). Phases 1–5 + post-phase **P0–P3** (Aug 2026) are **done** — see §7.1.
+When a phase is done: update [`API.md`](./API.md) and [`CLAUDE.md`](../CLAUDE.md). Phases 1–5 + post-phase **P0–P3** (Aug 2026) are **done** — see [`api/04-matchmaking.md`](./api/04-matchmaking.md).
 
 ---
 

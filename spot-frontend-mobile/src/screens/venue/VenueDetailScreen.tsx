@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -111,11 +111,17 @@ type Props = {
    * football and badminton courts and a player shouldn't be able to book
    * the wrong one. */
   sport?: string;
+  /** Preselected date (YYYY-MM-DD) / start time (HH:mm) — set when handed
+   * off from the AI assistant after a venue search (spec
+   * 007-assistant-venue-search P3), so the player lands with the slot
+   * they asked for already picked instead of a blank "today" view. */
+  initialDate?: string;
+  initialTimeFrom?: string;
   onBack: () => void;
 };
 
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
-export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
+export default function VenueDetailScreen({ venueId, sport, initialDate, initialTimeFrom, onBack }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
   const TABS = getTabs(t);
@@ -129,6 +135,7 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [heroImageFailed, setHeroImageFailed] = useState(false);
+  const [imagesLoading, setImagesLoading] = useState(true);
   const [refereeHired, setRefereeHired] = useState(false);
   const [pitchTimeVisible, setPitchTimeVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('about');
@@ -137,6 +144,7 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
   useEffect(() => {
     if (!Number.isInteger(numericVenueId)) return;
     setHeroImageFailed(false);
+    setImagesLoading(true);
     getVenueDetail(numericVenueId, sport).then((result) => {
       if (!result.success || !result.venue) return;
       const apiVenue = result.venue;
@@ -202,10 +210,22 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         setImages([]);
         setImagesError(result.message ?? t('common.genericError'));
       }
+      setImagesLoading(false);
     });
   }, [numericVenueId, sport]);
 
   const parsedHours = parseHours(venue.hours);
+
+  // Assistant hand-off (spec 007-assistant-venue-search P3): open the
+  // slot picker automatically, already positioned at the requested
+  // date/time, instead of making the player tap "Book Now" again after
+  // the assistant already asked them to confirm this exact slot.
+  useEffect(() => {
+    if ((initialDate || initialTimeFrom) && parsedHours) {
+      setPitchTimeVisible(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDate, initialTimeFrom, Boolean(parsedHours)]);
   const hasCoords = venue.latitude != null && venue.longitude != null;
   const mapMarkers: AppMapMarker[] = hasCoords
     ? [{ id: 'venue', latitude: venue.latitude as number, longitude: venue.longitude as number, tintColor: colors.primaryDark, emoji: '📍' }]
@@ -232,12 +252,22 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.hero}>
-          <Image
-            source={images[0]?.imageUrl && !heroImageFailed ? { uri: images[0].imageUrl } : venue.heroImage}
-            style={styles.heroImage}
-            resizeMode="cover"
-            onError={() => setHeroImageFailed(true)}
-          />
+          {imagesLoading ? (
+            // Avoid flashing the generic stock photo before the venue's own
+            // uploaded photo arrives — show a neutral placeholder instead
+            // and swap in the real image (or the stock fallback) once the
+            // photo fetch has actually settled.
+            <View style={[styles.heroImage, styles.heroImageLoading]}>
+              <ActivityIndicator color={colors.white} />
+            </View>
+          ) : (
+            <Image
+              source={images[0]?.imageUrl && !heroImageFailed ? { uri: images[0].imageUrl } : venue.heroImage}
+              style={styles.heroImage}
+              resizeMode="cover"
+              onError={() => setHeroImageFailed(true)}
+            />
+          )}
           <View style={styles.heroActions}>
             <TouchableOpacity
               style={styles.heroButton}
@@ -569,6 +599,8 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         closeHour={parsedHours[1]}
         hireReferee={refereeHired}
         refereeFeeVnd={REFEREE_FEE_VND}
+        initialDate={initialDate}
+        initialTimeFrom={initialTimeFrom}
         onClose={() => setPitchTimeVisible(false)}
         onConfirm={() => setPitchTimeVisible(false)}
       />
@@ -591,6 +623,11 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  heroImageLoading: {
+    backgroundColor: colors.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroActions: {
     position: 'absolute',
