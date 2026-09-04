@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import config from '../config/env.js';
 
 let client = null;
@@ -12,6 +13,7 @@ function getClient() {
   if (!client) {
     client = createClient(config.supabase.url, config.supabase.serviceRoleKey, {
       auth: { persistSession: false },
+      realtime: { transport: WebSocket },
     });
   }
   return client;
