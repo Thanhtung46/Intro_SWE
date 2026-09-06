@@ -27,6 +27,7 @@ interface RegisterFieldError {
 interface RegisterErrorBody {
   message?: string;
   errors?: RegisterFieldError[];
+  details?: { field?: string };
 }
 
 // spot-backend's DTO field names differ from this form's local field names.
@@ -55,7 +56,9 @@ export async function register(payload: RegisterPayload): Promise<RegisterResult
     const { status, data } = error.response;
 
     if (status === 409) {
-      return { success: false, fieldErrors: { email: data?.message || 'This email is already registered' } };
+      const backendField = data?.details?.field;
+      const formField = backendField ? (BACKEND_TO_FORM_FIELD[backendField] || backendField) : 'email';
+      return { success: false, fieldErrors: { [formField]: data?.message || 'This email is already registered' } };
     }
 
     if (status === 400 && Array.isArray(data?.errors)) {

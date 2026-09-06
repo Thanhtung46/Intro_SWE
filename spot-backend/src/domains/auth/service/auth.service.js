@@ -178,7 +178,7 @@ export async function registerPlayer(input) {
 
     const existingEmail = await userRepository.findByEmail(client, input.email);
     if (existingEmail) {
-      throw new AppError('Email is already registered', 409);
+      throw new AppError('Email is already registered', 409, { field: 'email' });
     }
 
     const existingPhone = await userRepository.findByPhone(
@@ -186,7 +186,7 @@ export async function registerPlayer(input) {
       input.phoneNumber,
     );
     if (existingPhone) {
-      throw new AppError('Phone number is already registered', 409);
+      throw new AppError('Phone number is already registered', 409, { field: 'phoneNumber' });
     }
 
     user = await userRepository.createUser(client, {
