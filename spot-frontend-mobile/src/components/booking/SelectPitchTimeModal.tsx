@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ThemeColors } from '@/constants/theme';
 import { comingSoon } from '@/utils/comingSoon';
 import { useLanguage } from '@/context/LanguageContext';
 import { getFieldAvailability } from '@/services/venueService';
+import { setCheckoutDraft } from '@/services/checkoutDraft';
+import type { PaymentLineItem } from '@/screens/checkout/CheckoutScreen';
 import DatePickerModal from './DatePickerModal';
-import PaymentConfirmModal, { PaymentLineItem } from './PaymentConfirmModal';
 
 export type Pitch = { fieldId: number; name: string; format: string; pricePerHour: number };
 
@@ -16,6 +18,10 @@ type Props = {
   visible: boolean;
   venueId: number;
   pitches: Pitch[];
+  venueName: string;
+  venueAddress: string;
+  venueLatitude?: number | null;
+  venueLongitude?: number | null;
   /** Venue opening hours as 24h integers, e.g. 6 and 23 for "06:00 - 23:00". */
   openHour: number;
   closeHour: number;
@@ -85,6 +91,10 @@ export default function SelectPitchTimeModal({
   visible,
   venueId,
   pitches,
+  venueName,
+  venueAddress,
+  venueLatitude,
+  venueLongitude,
   openHour,
   closeHour,
   onClose,
@@ -96,6 +106,7 @@ export default function SelectPitchTimeModal({
   themeColors,
 }: Props) {
   const { t } = useLanguage();
+  const router = useRouter();
   const timeSlots = useMemo(() => buildTimeSlots(openHour, closeHour), [openHour, closeHour]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(
@@ -131,8 +142,6 @@ export default function SelectPitchTimeModal({
   // several pitches at once, all for the currently selected date.
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
   const [bookedCells, setBookedCells] = useState<Set<string>>(new Set());
-  const [paymentVisible, setPaymentVisible] = useState(false);
-  const [paymentItems, setPaymentItems] = useState<PaymentLineItem[]>([]);
 
   useEffect(() => {
     if (!visible || pitches.length === 0) return;
@@ -221,7 +230,12 @@ export default function SelectPitchTimeModal({
           startTime: timeSlots[rangeStart],
           endTime: timeSlots[rangeEnd + 1] ?? `${String(closeHour).padStart(2, '0')}:00`,
           pitchName: pitch.name,
+          pitchFormat: pitch.format,
           pricePerHour: pitch.pricePerHour,
+          venueName,
+          venueAddress,
+          venueLatitude,
+          venueLongitude,
           hireReferee: hireReferee || undefined,
           refereeFeeVnd: hireReferee ? refereeFeeVnd : undefined,
         });
@@ -238,8 +252,9 @@ export default function SelectPitchTimeModal({
       pushRange();
     }
 
-    setPaymentItems(items);
-    setPaymentVisible(true);
+    setCheckoutDraft(items, formatDateLabel(selectedDate));
+    onClose();
+    router.push('/checkout');
   };
 
   return (
@@ -428,19 +443,6 @@ export default function SelectPitchTimeModal({
           </TouchableOpacity>
         </View>
       </View>
-
-      <PaymentConfirmModal
-        visible={paymentVisible}
-        items={paymentItems}
-        dateLabel={formatDateLabel(selectedDate)}
-        onBack={() => setPaymentVisible(false)}
-        onPaid={() => {
-          setPaymentVisible(false);
-          setSelectedCells(new Set());
-          onConfirm();
-        }}
-        themeColors={themeColors}
-      />
     </Modal>
   );
 }

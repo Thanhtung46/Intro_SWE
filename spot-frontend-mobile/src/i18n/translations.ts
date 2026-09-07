@@ -232,6 +232,14 @@ const en = {
     confirming: 'Processing payment…',
     paymentFailedTitle: 'Payment failed',
     partiallyPaidTitle: 'Some bookings unpaid',
+    checkoutTitle: 'Checkout',
+    viewMapLabel: 'View Map',
+    pitchBookingLabel: 'Pitch Booking',
+    methodMomoLabel: 'MoMo E-Wallet',
+    methodMomoNote: 'Fast and secure',
+    methodCardLabel: 'Visa/Mastercard',
+    methodCardNote: 'Add new card',
+    instantConfirmation: 'Instant Confirmation',
   },
   sportToggle: {
     football: 'Football',
@@ -554,6 +562,17 @@ const en = {
       loadError: 'Could not load your profile.',
     },
   },
+  paymentSuccess: {
+    title: 'Payment Successful!',
+    subtitle: 'Your booking is confirmed. See you on the pitch!',
+    badge: 'Booking Confirmed',
+    dateLabel: 'Date',
+    timeLabel: 'Time',
+    bookingIdPrefix: 'Booking ID',
+    totalPaidLabel: 'Total Paid',
+    viewDetailsButton: 'View Details',
+    returnHomeButton: 'Return Home',
+  },
 } as const;
 
 // Mirrors `en`'s exact shape (same keys, nesting) but with plain `string`
@@ -797,6 +816,14 @@ const vi: DeepStringDict<typeof en> = {
     confirming: 'Đang xử lý thanh toán…',
     paymentFailedTitle: 'Thanh toán thất bại',
     partiallyPaidTitle: 'Một số booking chưa thanh toán',
+    checkoutTitle: 'Thanh toán',
+    viewMapLabel: 'Xem bản đồ',
+    pitchBookingLabel: 'Đặt sân',
+    methodMomoLabel: 'Ví MoMo',
+    methodMomoNote: 'Nhanh chóng và an toàn',
+    methodCardLabel: 'Visa/Mastercard',
+    methodCardNote: 'Thêm thẻ mới',
+    instantConfirmation: 'Xác nhận ngay',
   },
   sportToggle: {
     football: 'Bóng đá',
@@ -1118,6 +1145,17 @@ const vi: DeepStringDict<typeof en> = {
       edit: 'Sửa',
       loadError: 'Không thể tải hồ sơ của bạn.',
     },
+  },
+  paymentSuccess: {
+    title: 'Thanh toán thành công!',
+    subtitle: 'Sân của bạn đã được xác nhận. Hẹn gặp bạn trên sân!',
+    badge: 'Đã xác nhận đặt sân',
+    dateLabel: 'Ngày',
+    timeLabel: 'Giờ',
+    bookingIdPrefix: 'Mã đặt sân',
+    totalPaidLabel: 'Đã thanh toán',
+    viewDetailsButton: 'Xem chi tiết',
+    returnHomeButton: 'Về trang chủ',
   },
 };
 

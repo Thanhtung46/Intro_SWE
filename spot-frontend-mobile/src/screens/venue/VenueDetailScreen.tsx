@@ -595,6 +595,10 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
         visible={pitchTimeVisible}
         venueId={numericVenueId}
         pitches={venue.pitches}
+        venueName={venue.name}
+        venueAddress={venue.address}
+        venueLatitude={venue.latitude}
+        venueLongitude={venue.longitude}
         openHour={parsedHours[0]}
         closeHour={parsedHours[1]}
         hireReferee={refereeHired}
