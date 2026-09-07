@@ -48,6 +48,7 @@ class FakeConversationStore:
             "messages": [],
             "lastInterpretedRequest": None,
             "lastResults": [],
+            "lastVenueResults": [],
             "pendingAction": None,
             "createdAt": self._now_iso(),
             "updatedAt": self._now_iso(),
@@ -72,6 +73,9 @@ class FakeConversationStore:
 
     async def set_last_results(self, conversation, results):
         conversation["lastResults"] = results
+
+    async def set_last_venue_results(self, conversation, venue_results):
+        conversation["lastVenueResults"] = venue_results
 
     async def set_pending_action(
         self, conversation, *, action_type, match_id, summary

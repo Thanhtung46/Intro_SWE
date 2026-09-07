@@ -6,5 +6,10 @@ export type VenueBase = {
   id: string;
   name: string;
   image: ImageSourcePropType;
+  /** Bundled placeholder to swap to if `image` is a remote URI that fails
+   * to load (e.g. an uploaded photo whose file no longer exists on disk) —
+   * without this, a broken remote image renders as blank/white instead of
+   * degrading gracefully. */
+  fallbackImage: ImageSourcePropType;
   distanceLabel: string;
 };

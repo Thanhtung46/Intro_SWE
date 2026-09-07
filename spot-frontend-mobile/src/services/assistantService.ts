@@ -10,6 +10,20 @@ export interface MatchResult {
   spotsLeft: number;
 }
 
+export interface VenueResult {
+  venueId: number;
+  venueName: string;
+  address: string;
+  priceFromPerHour: number | null;
+}
+
+export interface BookingHandoff {
+  venueId: number;
+  venueName: string;
+  date: string | null;
+  timeFrom: string | null;
+}
+
 export interface PendingActionSummary {
   venueName?: string;
   startsAt?: string;
@@ -30,8 +44,10 @@ export interface AssistantReply {
   text: string;
   transcript: string | null;
   results: MatchResult[] | null;
+  venueResults: VenueResult[] | null;
   pendingAction: PendingAction | null;
   clarifyingQuestion: string | null;
+  bookingHandoff: BookingHandoff | null;
 }
 
 export interface ConflictAlternative {
@@ -65,6 +81,13 @@ export async function getOrCreateConversationId(): Promise<string> {
   if (existing) {
     return existing;
   }
+  return startNewConversation();
+}
+
+/** Persists a fresh conversation id, replacing whatever was stored before —
+ * used when the player clears the chat, so the next message starts a new
+ * server-side conversation rather than reusing the just-cleared one. */
+export async function startNewConversation(): Promise<string> {
   const generated = generateUuid();
   await AsyncStorage.setItem(CONVERSATION_ID_KEY, generated);
   return generated;

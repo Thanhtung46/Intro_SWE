@@ -1,12 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppMap from '@/components/common/AppMap';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
+import MatchCoverImage from '@/components/matches/MatchCoverImage';
 import TeamSlotStrip from '@/components/tournaments/TeamSlotStrip';
 import TournamentMatchListItem from '@/components/tournaments/TournamentMatchListItem';
 import TournamentResultSheet from '@/components/tournaments/TournamentResultSheet';
@@ -33,7 +32,6 @@ import {
   getTournamentPlayers,
   getTournamentStandings,
   listTournamentMatches,
-  setTournamentFavorite,
   withdrawTournamentJoin,
 } from '@/services/tournamentService';
 import type {
@@ -52,6 +50,12 @@ type Props = {
   onBack: () => void;
   onJoin: (tournamentId: number) => void;
   onManage: () => void;
+  onOpenVenueMap: (venue: {
+    venueName: string;
+    venueAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
   // Organizer-only navigation — passed by the route; undefined for pure viewers.
   onManageRequests?: () => void;
   onAddMatch?: () => void;
@@ -63,10 +67,39 @@ type Props = {
 
 const TABS: { key: DetailTab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
-  { key: 'matches', label: 'Matches' },
-  { key: 'standings', label: 'Standings' },
-  { key: 'players', label: 'Players' },
+  { key: 'matches', label: 'Schedule' },
+  { key: 'standings', label: 'Table' },
+  { key: 'players', label: 'Rosters' },
 ];
+
+function TabIntro({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.tabIntro}>
+      <Text style={styles.tabIntroTitle}>{title}</Text>
+      <Text style={styles.tabIntroBody}>{body}</Text>
+    </View>
+  );
+}
+
+function EmptyHint({
+  icon,
+  title,
+  body,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+}) {
+  return (
+    <View style={styles.emptyHint}>
+      <View style={styles.emptyHintIcon}>
+        <Ionicons name={icon} size={22} color={colors.primaryDark} />
+      </View>
+      <Text style={styles.emptyHintTitle}>{title}</Text>
+      <Text style={styles.emptyHintBody}>{body}</Text>
+    </View>
+  );
+}
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -98,6 +131,7 @@ export default function TournamentDetailScreen({
   onBack,
   onJoin,
   onManage,
+  onOpenVenueMap,
   onManageRequests,
   onAddMatch,
   onEditMatch,
@@ -181,17 +215,6 @@ export default function TournamentDetailScreen({
     if (tab === 'standings' && !standingsLoaded) fetchStandings();
   }, [tab, matchesLoaded, standingsLoaded, fetchMatches, fetchStandings]);
 
-  const handleToggleFavorite = async () => {
-    if (!tournament) return;
-    const next = !tournament.isFavorited;
-    setTournament({ ...tournament, isFavorited: next });
-    try {
-      await setTournamentFavorite(tournamentId, next);
-    } catch (err) {
-      setTournament((prev) => (prev ? { ...prev, isFavorited: !next } : prev));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   const handleConfirmWithdraw = async () => {
     setWithdrawDialogVisible(false);
@@ -230,13 +253,6 @@ export default function TournamentDetailScreen({
     } finally {
       setIsActioning(false);
     }
-  };
-
-  const handleShare = () => {
-    if (!tournament) return;
-    Share.share({
-      message: `Check out "${tournament.title}" on SPOT! spot://tournaments/${tournament.tournamentId}`,
-    }).catch(() => undefined);
   };
 
   const roundsPresent = useMemo(
@@ -311,16 +327,7 @@ export default function TournamentDetailScreen({
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
-          {tournament.coverUrl ? (
-            <Image source={{ uri: tournament.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          ) : (
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            />
-          )}
+          <MatchCoverImage sport={tournament.sport} coverUrl={tournament.coverUrl} />
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <TournamentStatusPill status={tournament.status} />
@@ -432,25 +439,39 @@ export default function TournamentDetailScreen({
                   <Text style={styles.venueName} numberOfLines={1} ellipsizeMode="tail">
                     {tournament.venueName}
                   </Text>
-                  <View style={styles.venueMap}>
-                    <AppMap
-                      markers={[
-                        {
-                          id: String(tournament.tournamentId),
+                  {tournament.latitude != null && tournament.longitude != null ? (
+                    <TouchableOpacity
+                      testID="tournament-detail-map"
+                      style={styles.venueMap}
+                      onPress={() =>
+                        onOpenVenueMap({
+                          venueName: tournament.venueName,
+                          venueAddress: tournament.venueAddress,
                           latitude: tournament.latitude,
                           longitude: tournament.longitude,
-                          tintColor: colors.primaryDark,
-                          emoji: '📍',
-                        },
-                      ]}
-                      initialRegion={{
-                        latitude: tournament.latitude,
-                        longitude: tournament.longitude,
-                        latitudeDelta: 0.02,
-                        longitudeDelta: 0.02,
-                      }}
-                    />
-                  </View>
+                        })
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <AppMap
+                        markers={[
+                          {
+                            id: String(tournament.tournamentId),
+                            latitude: tournament.latitude,
+                            longitude: tournament.longitude,
+                            tintColor: colors.primaryDark,
+                            emoji: '📍',
+                          },
+                        ]}
+                        initialRegion={{
+                          latitude: tournament.latitude,
+                          longitude: tournament.longitude,
+                          latitudeDelta: 0.02,
+                          longitudeDelta: 0.02,
+                        }}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
                   <View style={styles.venueAddressRow}>
                     <Ionicons name="location-outline" size={14} color={colors.bodyText} />
                     <Text style={styles.venueAddressText} numberOfLines={2} ellipsizeMode="tail">
@@ -459,16 +480,15 @@ export default function TournamentDetailScreen({
                   </View>
                 </View>
               </View>
-
-              <TouchableOpacity testID="tournament-detail-share" style={styles.shareButton} onPress={handleShare}>
-                <Ionicons name="share-social-outline" size={16} color={colors.primaryDark} />
-                <Text style={styles.shareButtonText}>Share Tournament</Text>
-              </TouchableOpacity>
             </>
           )}
 
           {tab === 'matches' && (
             <>
+              <TabIntro
+                title="Match schedule"
+                body="Fixtures for this tournament by round. Scores appear after the organizer records results."
+              />
               {organizer && onAddMatch && (
                 <TouchableOpacity testID="tournament-add-match" style={styles.addMatchButton} onPress={onAddMatch}>
                   <Ionicons name="add" size={15} color={colors.white} />
@@ -490,7 +510,7 @@ export default function TournamentDetailScreen({
                         onPress={() => setRoundFilter(r)}
                       >
                         <Text style={[styles.roundChipText, active && styles.roundChipTextActive]}>
-                          {r === 'ALL' ? 'All' : ROUND_LABELS[r]}
+                          {r === 'ALL' ? 'All rounds' : ROUND_LABELS[r]}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -502,7 +522,15 @@ export default function TournamentDetailScreen({
               ) : matchesError ? (
                 <ErrorBanner message={matchesError} onRetry={fetchMatches} />
               ) : visibleMatches.length === 0 ? (
-                <Text style={styles.placeholderText}>No matches scheduled yet.</Text>
+                <EmptyHint
+                  icon="calendar-outline"
+                  title="No fixtures yet"
+                  body={
+                    organizer
+                      ? 'Add matches to build the schedule (group stage, knockouts, final…). Viewers will see them here.'
+                      : 'The organizer has not published any fixtures yet. Check back later.'
+                  }
+                />
               ) : (
                 <View style={styles.matchList}>
                   {visibleMatches.map((m) => (
@@ -518,45 +546,93 @@ export default function TournamentDetailScreen({
             </>
           )}
 
-          {tab === 'standings' &&
-            (standingsLoading ? (
-              <ActivityIndicator style={styles.tabSpinner} color={colors.primary} />
-            ) : standingsError ? (
-              <ErrorBanner message={standingsError} onRetry={fetchStandings} />
-            ) : (
-              <TournamentStandingsTable sport={tournament.sport} standings={standings} />
-            ))}
+          {tab === 'standings' && (
+            <>
+              <TabIntro
+                title="Team table"
+                body={
+                  tournament.sport === 'FOOTBALL'
+                    ? 'Ranking from recorded match results. P=played, W=won, D=draw, L=lost, GD=goal difference, PTS=points.'
+                    : 'Ranking from recorded match results. P=played, W=won, L=lost, SD=set difference, PTS=points.'
+                }
+              />
+              {standingsLoading ? (
+                <ActivityIndicator style={styles.tabSpinner} color={colors.primary} />
+              ) : standingsError ? (
+                <ErrorBanner message={standingsError} onRetry={fetchStandings} />
+              ) : standings.length === 0 ? (
+                <EmptyHint
+                  icon="podium-outline"
+                  title="Table is empty"
+                  body="Standings fill in automatically after match results are entered. No results yet."
+                />
+              ) : (
+                <TournamentStandingsTable sport={tournament.sport} standings={standings} />
+              )}
+            </>
+          )}
 
-          {tab === 'players' &&
-            (teams.length === 0 ? (
-              <Text style={styles.placeholderText}>No teams accepted yet.</Text>
-            ) : (
-              <View style={styles.teamsList}>
-                {teams.map((team) => (
-                  <View key={team.teamId} style={styles.teamCard}>
-                    <View style={styles.teamCardHead}>
-                      {team.teamLogoUrl ? (
-                        <Image source={{ uri: team.teamLogoUrl }} style={styles.teamLogo} />
-                      ) : (
-                        <View style={styles.teamLogo} />
-                      )}
-                      <Text style={styles.teamCardName} numberOfLines={1} ellipsizeMode="tail">
-                        {team.teamName}
-                      </Text>
-                    </View>
-                    {team.roster.map((p) => (
-                      <View key={p.rosterPlayerId} style={styles.playerRow}>
-                        {p.rank != null && <Text style={styles.playerRank}>{p.rank}</Text>}
-                        <Text style={styles.playerName} numberOfLines={1} ellipsizeMode="tail">
-                          {p.name}
-                        </Text>
-                        {p.jerseyNumber != null && <Text style={styles.playerJersey}>#{p.jerseyNumber}</Text>}
+          {tab === 'players' && (
+            <>
+              <TabIntro
+                title="Team rosters"
+                body="Players on each accepted team. Numbers on the left are optional in-team ranks set by the organizer."
+              />
+              {teams.length === 0 ? (
+                <EmptyHint
+                  icon="people-outline"
+                  title="No accepted teams"
+                  body="Rosters appear here after teams join and the organizer approves them."
+                />
+              ) : (
+                <View style={styles.teamsList}>
+                  {teams.map((team) => (
+                    <View key={team.teamId} style={styles.teamCard}>
+                      <View style={styles.teamCardHead}>
+                        {team.teamLogoUrl ? (
+                          <Image source={{ uri: team.teamLogoUrl }} style={styles.teamLogo} />
+                        ) : (
+                          <View style={styles.teamLogo} />
+                        )}
+                        <View style={styles.teamCardHeadText}>
+                          <Text style={styles.teamCardName} numberOfLines={1} ellipsizeMode="tail">
+                            {team.teamName}
+                          </Text>
+                          <Text style={styles.teamCardMeta}>
+                            {team.roster.length} player{team.roster.length === 1 ? '' : 's'}
+                          </Text>
+                        </View>
                       </View>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            ))}
+                      {team.roster.length === 0 ? (
+                        <Text style={styles.placeholderText}>No players listed for this team.</Text>
+                      ) : (
+                        <>
+                          <View style={styles.playerHeadRow}>
+                            <Text style={styles.playerHeadRank}>#</Text>
+                            <Text style={styles.playerHeadName}>Player</Text>
+                            <Text style={styles.playerHeadJersey}>No.</Text>
+                          </View>
+                          {team.roster.map((p) => (
+                            <View key={p.rosterPlayerId} style={styles.playerRow}>
+                              <Text style={styles.playerRank}>{p.rank != null ? p.rank : '—'}</Text>
+                              <Text style={styles.playerName} numberOfLines={1} ellipsizeMode="tail">
+                                {p.name}
+                              </Text>
+                              {p.jerseyNumber != null ? (
+                                <Text style={styles.playerJersey}>#{p.jerseyNumber}</Text>
+                              ) : (
+                                <Text style={styles.playerJerseyMuted}>—</Text>
+                              )}
+                            </View>
+                          ))}
+                        </>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -564,17 +640,6 @@ export default function TournamentDetailScreen({
         <View style={styles.heroTopBar}>
           <TouchableOpacity testID="tournament-detail-back" style={styles.heroIconButton} onPress={onBack}>
             <Ionicons name="arrow-back" size={18} color={colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="tournament-detail-favorite"
-            style={styles.heroIconButton}
-            onPress={handleToggleFavorite}
-          >
-            <Ionicons
-              name={tournament.isFavorited ? 'heart' : 'heart-outline'}
-              size={18}
-              color={tournament.isFavorited ? colors.error : colors.white}
-            />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -713,9 +778,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: { paddingBottom: 140 },
 
-  hero: { height: 210, overflow: 'hidden' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
-  heroContent: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.lg, gap: spacing.xs },
+  hero: { height: 210, overflow: 'hidden', position: 'relative' },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim, zIndex: 1 },
+  heroContent: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.lg,
+    gap: spacing.xs,
+    zIndex: 2,
+  },
   heroTitle: { color: colors.white, fontSize: 22, fontWeight: '800' },
   heroSubtitle: { color: colors.white, fontSize: 12, opacity: 0.9 },
 
@@ -786,18 +858,6 @@ const styles = StyleSheet.create({
   venueAddressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   venueAddressText: { fontSize: 13, color: colors.bodyText, flexShrink: 1 },
 
-  shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.primaryDark,
-    borderRadius: 12,
-    paddingVertical: spacing.sm,
-  },
-  shareButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
-
   roundScroller: { gap: spacing.xs, paddingBottom: spacing.sm },
   roundChip: {
     borderWidth: 1,
@@ -828,11 +888,53 @@ const styles = StyleSheet.create({
   teamCard: { backgroundColor: colors.cardBackground, borderRadius: 14, padding: spacing.md, gap: spacing.xs },
   teamCardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xxs },
   teamLogo: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.iconBackground },
+  teamCardHeadText: { flex: 1, gap: 2 },
   teamCardName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.headingText },
+  teamCardMeta: { fontSize: 12, color: colors.outline },
+  playerHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingBottom: spacing.xxs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.cardBorder,
+    marginBottom: spacing.xxs,
+  },
+  playerHeadRank: { width: 22, fontSize: 11, fontWeight: '800', color: colors.outline },
+  playerHeadName: { flex: 1, fontSize: 11, fontWeight: '800', color: colors.outline },
+  playerHeadJersey: { width: 36, textAlign: 'right', fontSize: 11, fontWeight: '800', color: colors.outline },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxs },
-  playerRank: { width: 18, fontSize: 12, fontWeight: '700', color: colors.outline },
-  playerName: { flex: 1, fontSize: 13, color: colors.bodyText },
-  playerJersey: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  playerRank: { width: 22, fontSize: 12, fontWeight: '700', color: colors.outline },
+  playerName: { flex: 1, fontSize: 13, color: colors.headingText },
+  playerJersey: { width: 36, textAlign: 'right', fontSize: 12, fontWeight: '600', color: colors.bodyText },
+  playerJerseyMuted: { width: 36, textAlign: 'right', fontSize: 12, color: colors.outline },
+
+  tabIntro: {
+    backgroundColor: colors.selectedBackground,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.xxs,
+    marginBottom: spacing.sm,
+  },
+  tabIntroTitle: { fontSize: 15, fontWeight: '800', color: colors.headingText },
+  tabIntroBody: { fontSize: 13, lineHeight: 18, color: colors.bodyText },
+  emptyHint: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  emptyHintIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.selectedBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xxs,
+  },
+  emptyHintTitle: { fontSize: 16, fontWeight: '800', color: colors.headingText, textAlign: 'center' },
+  emptyHintBody: { fontSize: 13, lineHeight: 18, color: colors.outline, textAlign: 'center' },
 
   actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white },
   actionBar: {

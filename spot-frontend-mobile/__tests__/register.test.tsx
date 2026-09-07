@@ -60,7 +60,7 @@ describe('RegisterScreen (mocked authService via USE_MOCK_API)', () => {
     expect(mockPush).not.toHaveBeenCalled();
   }, 10000);
 
-  it('navigates to /auth/choose-role (register step 2) on a successful registration', async () => {
+  it('navigates to /auth/otp (register step 2 — verify before role) on a successful registration', async () => {
     const { getByPlaceholderText, getByText, getByTestId } = render(<RegisterScreen />);
     fillValidForm(getByPlaceholderText, 'new-user@example.com');
 
@@ -69,7 +69,7 @@ describe('RegisterScreen (mocked authService via USE_MOCK_API)', () => {
     await waitFor(
       () =>
         expect(mockPush).toHaveBeenCalledWith({
-          pathname: '/auth/choose-role',
+          pathname: '/auth/otp',
           params: { email: 'new-user@example.com' },
         }),
       { timeout: 3000 }

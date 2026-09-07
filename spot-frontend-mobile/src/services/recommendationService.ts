@@ -12,7 +12,7 @@ export interface RecommendationItem {
   address: string;
   sport: string;
   score: number;
-  distanceKm?: number;
+  distanceKm?: number | null;
   suggestedSlots: SuggestedSlot[];
 }
 

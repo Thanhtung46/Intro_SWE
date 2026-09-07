@@ -6,6 +6,10 @@ export default function JoinMatchMapRoute() {
   const router = useRouter();
 
   return (
-    <JoinMatchMapScreen onBack={() => router.back()} onOpenMatch={(matchId) => router.push(`/matches/${matchId}`)} />
+    <JoinMatchMapScreen
+      mode="matches"
+      onBack={() => router.back()}
+      onOpenItem={(matchId) => router.push(`/matches/${matchId}`)}
+    />
   );
 }

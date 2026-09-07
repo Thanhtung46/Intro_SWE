@@ -1,10 +1,13 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { colors } from '@/constants/colors';
-import { useTheme } from '@/context/ThemeContext';
-import { ThemeColors } from '@/constants/theme';
+
+const ACTIVE_BG = '#2170E4';
+const INACTIVE_TEXT = '#334155';
+const SPRING = { damping: 20, stiffness: 320, mass: 0.6 };
 
 type Props = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -13,45 +16,66 @@ type Props = {
   onPress: () => void;
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /** One tab of the bottom navigation shell — Figma node 8:139. */
-export default function BottomNavItem({ icon, label, active, onPress }: Props) {
-  const { colors: themeColors } = useTheme();
-  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
+export default function BottomNavItem({ icon, label, active = false, onPress }: Props) {
+  const pressScale = useSharedValue(1);
+
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
 
   return (
-    <TouchableOpacity
-      style={[styles.item, active && styles.itemActive]}
+    <AnimatedPressable
+      style={[styles.item, pressStyle]}
       onPress={onPress}
-      activeOpacity={0.8}
+      onPressIn={() => {
+        pressScale.value = withSpring(0.94, SPRING);
+      }}
+      onPressOut={() => {
+        pressScale.value = withSpring(1, SPRING);
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
     >
-      <Ionicons name={icon} size={20} color={active ? colors.white : themeColors.inactiveTabText} />
-      <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
-    </TouchableOpacity>
+      {/* Pill hugs icon+label; outer item stays flex:1 for a decent tap target. */}
+      <View style={[styles.pill, active && styles.pillActive]}>
+        <Ionicons name={icon} size={18} color={active ? colors.white : INACTIVE_TEXT} />
+        <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    </AnimatedPressable>
   );
 }
 
-function getStyles(c: ThemeColors) {
-  return StyleSheet.create({
-    item: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 2,
-      paddingVertical: 6,
-      borderRadius: 12,
-    },
-    itemActive: {
-      backgroundColor: c.activeTabBg,
-    },
-    label: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.inactiveTabText,
-    },
-    labelActive: {
-      color: colors.white,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  item: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  pill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    minWidth: 56,
+  },
+  pillActive: {
+    backgroundColor: ACTIVE_BG,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: INACTIVE_TEXT,
+  },
+  labelActive: {
+    color: colors.white,
+  },
+});

@@ -13,6 +13,7 @@ router.use(requireActiveUser);
 
 router.get('/me', refereeController.getMe);
 router.get('/me/certifications', refereeController.getCertifications);
+router.post('/me/activation-ack', refereeController.acknowledgeActivation);
 
 router.get('/board', refereeController.getBoard);
 
@@ -30,6 +31,7 @@ router.delete('/venues/:venueId/favorite', refereeController.unfavoriteVenue);
 router.get('/schedule', refereeController.getSchedule);
 router.get('/earnings', refereeController.getEarnings);
 router.get('/earnings/history', refereeController.getEarningsHistory);
+router.get('/earnings/monthly', refereeController.getEarningsMonthly);
 
 if (config.node_env !== 'production') {
   router.post('/assignments/:id/dev/complete', refereeController.devCompleteAssignment);

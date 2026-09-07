@@ -21,15 +21,60 @@ export const ROUTES = {
   AUTH_CHOOSE_ROLE: '/auth/choose-role',
   OWNER_REGISTER: '/owner/register',
   OWNER_WELCOME: '/owner/welcome',
-  // NOTE: app/referee/register.tsx does not exist yet — this is already a
-  // dead target today (ChooseRoleScreen's DESTINATION map references it).
-  // Centralizing it here just makes the gap visible; not fixing the
-  // referee flow itself.
+  // Referee flow (SPOT-93). Onboarding: register → OTP → choose-role →
+  // REFEREE_REGISTER (3-doc upload) → REFEREE_PENDING → admin approves →
+  // login → REFEREE_ACTIVATED → REFEREE_INVITATIONS. The 5 tab destinations mirror
+  // the player AppShell tabs but live under app/referee/* with their own
+  // RefereeShell bottom bar.
   REFEREE_REGISTER: '/referee/register',
+  REFEREE_PENDING: '/referee/pending',
+  REFEREE_ACTIVATED: '/referee/activated',
+  REFEREE_INVITATIONS: '/referee/invitations',
+  REFEREE_BOARD: '/referee/board',
+  REFEREE_BOARD_MAP: '/referee/map',
+  REFEREE_SCHEDULE: '/referee/schedule',
+  REFEREE_EARNINGS: '/referee/earnings',
+  REFEREE_SETTINGS: '/referee/settings',
+  REFEREE_PROFILE: '/referee/profile',
 } as const;
 
 /** Dynamic route to a venue's detail screen (app/venue/[id].tsx) — not a
- * plain string, so it can't live in ROUTES above. */
-export function venueDetailRoute(id: string): string {
-  return `/venue/${id}`;
+ * plain string, so it can't live in ROUTES above. `sport` (when known, e.g.
+ * from the Booking screen's active tab) narrows the detail screen's pitches
+ * to that sport only, so a venue with both football and badminton courts
+ * doesn't let a player book the wrong one. `date`/`timeFrom` (both
+ * optional — spec 007-assistant-venue-search P3) preselect that date/time
+ * in the booking step, e.g. when handed off from the AI assistant after a
+ * venue search, instead of defaulting to today with nothing picked. */
+export function venueDetailRoute(
+  id: string,
+  sport?: string,
+  slot?: { date?: string | null; timeFrom?: string | null }
+): string {
+  const params = new URLSearchParams();
+  if (sport) params.set('sport', sport);
+  if (slot?.date) params.set('date', slot.date);
+  if (slot?.timeFrom) params.set('timeFrom', slot.timeFrom);
+  const query = params.toString();
+  return query ? `/venue/${id}?${query}` : `/venue/${id}`;
+}
+
+/** Referee job-board venue detail (Apply + in-app directions). */
+export function refereeVenueDetailRoute(
+  venueId: number | string,
+  opts: { sport: string; favorited?: boolean } = { sport: 'Football' }
+): { pathname: '/referee/venues/[id]'; params: { id: string; sport: string; favorited?: string } } {
+  return {
+    pathname: '/referee/venues/[id]',
+    params: {
+      id: String(venueId),
+      sport: opts.sport,
+      ...(opts.favorited ? { favorited: '1' } : {}),
+    },
+  };
+}
+
+/** Dynamic route to a referee assignment detail (app/referee/assignments/[id].tsx). */
+export function refereeAssignmentRoute(id: number | string): string {
+  return `/referee/assignments/${id}`;
 }

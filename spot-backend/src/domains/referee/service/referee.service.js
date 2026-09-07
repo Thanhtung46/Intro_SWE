@@ -99,6 +99,17 @@ export async function getCertifications(userId) {
   }
 }
 
+export async function acknowledgeActivation(userId) {
+  const client = await pool.connect();
+  try {
+    const row = await profileRepository.markActivationAck(client, userId);
+    if (!row) throw new AppError('Referee profile not found', 404);
+    return { activationAcknowledged: true };
+  } finally {
+    client.release();
+  }
+}
+
 export async function getBoard(userId, query) {
   const client = await pool.connect();
   try {
@@ -454,21 +465,55 @@ export async function getEarnings(userId, query) {
   }
 }
 
+export async function getEarningsMonthly(userId, query) {
+  const client = await pool.connect();
+  try {
+    const anchor = query.anchor ?? currentMonthInBangkok();
+    const months = query.months ?? 6;
+
+    const [ay, am] = anchor.split('-').map(Number);
+    const startD = new Date(Date.UTC(ay, am - 1 - (months - 1), 1));
+    const startStr = `${startD.getUTCFullYear()}-${String(startD.getUTCMonth() + 1).padStart(2, '0')}`;
+    const { monthStart } = monthWindow(startStr);
+    const { monthEnd } = monthWindow(anchor);
+
+    await assignmentRepository.syncPastAcceptedToCompleted(client, userId);
+
+    const rows = await assignmentRepository.earningsByMonth(client, userId, monthStart, monthEnd);
+
+    return {
+      anchor,
+      months,
+      currency: 'VND',
+      buckets: rows.map((r) => ({
+        key: r.key,
+        amountVnd: Number(r.amount),
+        matchCount: r.match_count,
+      })),
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export async function getEarningsHistory(userId, query) {
   const client = await pool.connect();
   try {
     await assignmentRepository.syncPastAcceptedToCompleted(client, userId);
-    const { rows, total } = await assignmentRepository.listEarningsHistory(
-      client,
-      userId,
-      query,
-    );
+    const window = query.month ? monthWindow(query.month) : {};
+    const { rows, total } = await assignmentRepository.listEarningsHistory(client, userId, {
+      limit: query.limit,
+      offset: query.offset,
+      monthStart: window.monthStart,
+      monthEnd: window.monthEnd,
+    });
     return {
       items: rows.map((row, idx) =>
         toPublicEarningsHistoryItem(row, idx, query.offset)),
       total,
       limit: query.limit,
       offset: query.offset,
+      month: query.month ?? null,
     };
   } finally {
     client.release();

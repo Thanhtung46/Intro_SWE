@@ -7,6 +7,8 @@ export interface CreateBookingPayload {
   bookingDate: string;
   startTime: string;
   endTime: string;
+  hireReferee?: boolean;
+  refereeFeeVnd?: number;
 }
 
 export interface PublicBooking {
@@ -45,6 +47,15 @@ export interface CreateBookingsBulkResult {
 
 const client: AxiosInstance = axios.create();
 
+/**
+ * DTO validation failures come back as `{ message: "Validation failed",
+ * errors: [{ field, message }] }` — the top-level `message` alone is
+ * useless to the user, so prefer the first field error when present.
+ */
+function extractErrorMessage(data: { message?: string; errors?: { message?: string }[] } | undefined): string {
+  return data?.errors?.[0]?.message || data?.message || 'Something went wrong. Please try again.';
+}
+
 /** POST /bookings */
 export async function createBooking(
   payload: CreateBookingPayload,
@@ -57,11 +68,36 @@ export async function createBooking(
     });
     return { success: true, booking: res.data.booking };
   } catch (err) {
-    const error = err as AxiosError<{ message?: string }>;
+    const error = err as AxiosError<{ message?: string; errors?: { message?: string }[] }>;
     if (!error.response) {
       return { success: false, message: 'Network error. Please check your connection and try again.' };
     }
-    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+    return { success: false, message: extractErrorMessage(error.response.data) };
+  }
+}
+
+/**
+ * POST /bookings/:id/dev/mark-paid — non-prod stub that completes a
+ * PENDING_PAYMENT booking (no real payment gateway exists yet, see
+ * spot-backend/CLAUDE.md). Also fans out referee invitations when the
+ * booking had `hireReferee` set.
+ */
+export async function markBookingPaidDev(bookingId: number): Promise<CreateBookingResult> {
+  try {
+    const token = await getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await client.post<{ booking: PublicBooking }>(
+      `${API_URL}/bookings/${bookingId}/dev/mark-paid`,
+      undefined,
+      { headers },
+    );
+    return { success: true, booking: res.data.booking };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string; errors?: { message?: string }[] }>;
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+    return { success: false, message: extractErrorMessage(error.response.data) };
   }
 }
 
@@ -94,6 +130,7 @@ export async function createBookingsBulk(payload: {
   } catch (err) {
     const error = err as AxiosError<{
       message?: string;
+      errors?: { message?: string }[];
       details?: { failed?: BookingFailure[]; totalRequested?: number; totalCreated?: number };
     }>;
     if (!error.response) {
@@ -110,6 +147,6 @@ export async function createBookingsBulk(payload: {
         failed: details.failed ?? [],
       };
     }
-    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+    return { success: false, message: extractErrorMessage(error.response.data) };
   }
 }

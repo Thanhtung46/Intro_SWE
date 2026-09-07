@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { ThemeColors } from '@/constants/theme';
@@ -18,9 +18,15 @@ export default function MapVenuePopup({ venue, onBookPress }: Props) {
   const { t } = useLanguage();
   const { colors: c } = useTheme();
   const styles = useMemo(() => getStyles(c), [c]);
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <View style={styles.card}>
-      <Image source={venue.image} style={styles.photo} resizeMode="cover" />
+      <Image
+        source={imageFailed ? venue.fallbackImage : venue.image}
+        style={styles.photo}
+        resizeMode="cover"
+        onError={() => setImageFailed(true)}
+      />
       <View style={styles.body}>
         <Text style={styles.name}>{venue.name}</Text>
         <Text style={styles.distance}>{venue.distanceLabel}</Text>

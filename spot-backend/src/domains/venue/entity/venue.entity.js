@@ -16,6 +16,9 @@ export function toPublicVenue(row) {
     closingHours: formatTime(row.closing_hours),
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
+    coverImageUrl: row.cover_image_url ?? null,
+    priceFromPerHour: row.min_price_per_hour != null ? Number(row.min_price_per_hour) : null,
+    footballVariants: row.football_variants ?? [],
     avgRating: Number(row.avg_rating),
     ratingCount: Number(row.rating_count),
     ownerName: row.owner_name ?? null,
@@ -32,12 +35,13 @@ export function toPublicVenue(row) {
   return venue;
 }
 
-export function toPublicVenueImage(row) {
+export function toPublicVenueImage(row, venueId) {
   if (!row) return null;
 
   return {
     imageId: row.image_id,
-    venueId: row.venue_id,
+    venueId,
+    source: row.source,
     imageUrl: row.image_url,
     displayOrder: row.display_order,
   };

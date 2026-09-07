@@ -65,8 +65,10 @@ async def _run_turn(
             "text": reply["text"],
             "transcript": transcript,
             "results": reply.get("results"),
+            "venueResults": reply.get("venueResults"),
             "pendingAction": reply.get("pendingAction"),
             "clarifyingQuestion": reply.get("clarifyingQuestion"),
+            "bookingHandoff": reply.get("bookingHandoff"),
         },
     }
 
@@ -110,8 +112,10 @@ async def send_message(
                     "text": REPEAT_OR_TYPE_MESSAGE,
                     "transcript": None,
                     "results": None,
+                    "venueResults": None,
                     "pendingAction": None,
                     "clarifyingQuestion": REPEAT_OR_TYPE_MESSAGE,
+                    "bookingHandoff": None,
                 },
             }
 

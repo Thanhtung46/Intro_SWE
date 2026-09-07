@@ -26,13 +26,18 @@ export default function EditGroupRoute() {
   const fetchGroup = useCallback(async () => {
     setStatus('loading');
     try {
-      setGroup(await getGroupDetail(groupId));
+      const detail = await getGroupDetail(groupId);
+      if (detail.myRole !== 'ADMIN') {
+        router.replace(`/groups/${groupId}`);
+        return;
+      }
+      setGroup(detail);
       setStatus('ready');
     } catch (err) {
       setError(getErrorMessage(err));
       setStatus('error');
     }
-  }, [groupId]);
+  }, [groupId, router]);
 
   useEffect(() => {
     fetchGroup();

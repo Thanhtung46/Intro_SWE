@@ -85,11 +85,19 @@ const config = {
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
   },
 
-  /** Public origin for uploaded avatar URLs (no trailing slash). */
+  /** Public origin for locally-served uploads (avatars, verification docs — no trailing slash). */
   publicBaseUrl: (
     process.env.PUBLIC_BASE_URL ||
     `http://localhost:${process.env.PORT || 3000}`
   ).replace(/\/$/, ''),
+
+  /** Supabase Storage — used for facility/venue photos so uploads survive
+   * server restarts/redeploys (local disk under uploads/ does not). */
+  supabase: {
+    url: (process.env.SUPABASE_URL || '').trim(),
+    serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+    storageBucket: process.env.SUPABASE_STORAGE_BUCKET || 'spot-uploads',
+  },
 
   assistant: {
     nlpServiceUrl: process.env.NLP_SERVICE_URL || 'http://localhost:5003',

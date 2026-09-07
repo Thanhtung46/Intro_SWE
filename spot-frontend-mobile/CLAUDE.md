@@ -89,31 +89,51 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
 - **Booking** (`app/booking/index.tsx`, `app/booking/map.tsx`): reached from
   Home's "Book Field" quick action. `BookingScreen.tsx` is a venue list
   (Figma node `79:1390`) with its own search/filter bar and a map-view
-  button (→ `/booking/map`); `BookingMapScreen.tsx` is a static map-image
-  mockup (Figma node `79:1286`) with tappable pins and a venue popup — no
-  real map SDK (`react-native-maps`) or `GOOGLE_MAPS_KEY` wiring exists
-  yet, so pan/zoom/location controls are `comingSoon()` placeholders.
-  Venue data for both is local mock arrays, not an API call.
-- The top app bar (logo + AI/notification/avatar) is **not** actually one
-  shared component today: `src/components/layout/AppHeader.tsx` (with
-  `onAssistantPress`/`onAvatarPress` props) is only used by `BookingScreen.tsx`;
-  Home/Schedule/Settings instead go through `src/components/AppShell.tsx`,
-  which has its own separately duplicated inline copy of the same header
-  markup (own `onPress={() => router.push(ROUTES.ASSISTANT)}` wiring for
-  the AI icon — kept in sync by hand, not by sharing code).
+  button (→ `/booking/map`); `BookingMapScreen.tsx` is a **pre-SPOT-76
+  static map-image mockup** (Figma node `79:1286`) with tappable pins and a
+  venue popup — its pan/zoom/location controls are `comingSoon()`
+  placeholders and its venue data is a local mock array. This is the one
+  screen still on the old mockup; the SPOT-76 map stack below (real map via
+  WebView + Leaflet + Geoapify) has not been ported to it yet.
+- **Maps (SPOT-76)** — no `react-native-maps`, no Google Maps key. The stack
+  is `react-native-webview` + Leaflet (CDN) + Geoapify raster tiles
+  (`EXPO_PUBLIC_GEOAPIFY_API_KEY`, see `src/config/env.ts`):
+  - `src/components/common/AppMap.tsx` — marker map + an optional `routeLine`
+    polyline (Leaflet `L.polyline` in `colors.primary`, fits its bounds).
+    Embedded on Match / Group / Tournament detail (venue mini-map) and
+    full-screen in `JoinMatchMapScreen` (browse-all, `/matches/map`).
+    `AppMap.web.tsx` is a deliberate "not available on web" stub — `npm run
+    web` isn't the primary target.
+  - `src/screens/common/VenueMapScreen.tsx` + `app/venue-map.tsx` — the
+    shared single-venue map (pin + text fallback when a venue has no
+    coords). Reached via `openVenueDirections(router, venue)`
+    (`src/utils/directions.ts`) from the `MatchCard` paper-plane, referee
+    board / assignment flows, and every detail screen's venue block — that
+    helper is the single choke point for the `/venue-map` route. Its
+    **"Chỉ đường"** button requests GPS (`requestCurrentPosition`,
+    `src/utils/location.ts`) and calls `getMotorcycleRoute`
+    (`geoapifyService.ts` — Geoapify Routing, `mode=motorcycle`, same
+    key/quota) to draw a blue route line + show distance/ETA. Native only;
+    any failure (no coords / permission declined / routing error / web)
+    falls back to `openDirections` (external Google Maps).
+  - `src/components/matches/PinDropModal.tsx` (+ `PinDropMap.tsx` / `.web.tsx`)
+    — "find it on the map" pin picker used by all three create screens
+    (`HostMatchScreen`, `CreateGroupScreen`, `CreateTournamentScreen`):
+    Geoapify autocomplete search → drop/drag pin → `reverseGeocode` prefills
+    Address + best-effort Province/Ward (`src/utils/vnAdminMatch.ts`, pre-2025
+    GSO codes, always lands in an editable field).
+- The top app bar (logo + AI/notification/avatar) is primarily owned by
+  `src/components/AppShell.tsx` (Home/Matches/Schedule/Settings), with the
+  AI sparkle wired to `router.push(ROUTES.ASSISTANT)`. `BookingScreen` may
+  still use `src/components/layout/AppHeader.tsx` separately;
   `BookingMapScreen` has no header (full-bleed map). The
   football/badminton segmented toggle is shared via
   `src/components/venue/SportSegmentedToggle.tsx` (Home/Booking only —
   the map screen's "All/Football/Badminton" filter-chip row is a
   different shape and stays screen-local).
-- **Bottom navigation**: `src/components/navigation/BottomNav.tsx` (owns
-  the 5-tab array — Home/Booking/Matches/Schedule/Settings — and its
-  navigation wiring; the individual tab leaf is
-  `src/components/navigation/BottomNavItem.tsx`) renders on Home, Booking,
-  Booking Map, Schedule, Settings, and Profile. All five tabs navigate to
-  their real routes (`/booking`, `/matches`, `/schedule`, `/settings`; Home
-  goes back or replaces to `/home`) — the `comingSoon` placeholders that
-  used to sit on Schedule/Settings/Matches have all been wired up.
+- **Bottom navigation**: `SlidingBottomNav` (via `AppShell` / `BottomNav.tsx`)
+  owns the 5-tab array — Home/Booking/Matches/Schedule/Settings — and
+  navigates with `router.replace` so tab switches don't stack screens.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
   `*.test.ts(x)` next to several schemas/components) and a jest config
   **is** committed (`"jest": {"preset": "jest-expo"}` in `package.json`) —
@@ -127,12 +147,7 @@ exists beyond what's listed above.
 
 ## Known Gotchas
 
-- **Plain `npm install` works now** — `react` is pinned to `19.2.8`
-  (matching what `react-test-renderer` wants transitively), so the
-  `ERESOLVE` conflict older notes describe is gone; verified with a fresh
-  `npm install --dry-run`. `npm install --legacy-peer-deps` still works
-  too and is harmless if you're used to typing it, but it's no longer
-  required.
+- Plain `npm install` works (`react` pinned to `19.2.8`, matching what `react-test-renderer` wants transitively) — no `--legacy-peer-deps` needed.
 - **`npm start` can silently no-op** if a stale `expo start` process from
   an earlier session is still holding port 8081 — in non-interactive
   contexts (scripts, agents) Expo prints "Skipping dev server" instead of
@@ -161,31 +176,15 @@ exists beyond what's listed above.
   If `npm start`/`npm run web` looks like it's serving fine but the app
   itself won't render, check for another route file pair like this before
   assuming it's a dependency or config problem.
-- **Version drift from the repo-root docs**: the root `CLAUDE.md` describes
-  this app as "Expo 49 / React Native 0.72". `package.json` actually pins
-  `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`). Trust
-  `package.json` over that prose.
-- **Jest config exists** (`"jest": {"preset": "jest-expo"}` in
-  `package.json`) — a prior version of this note claimed no config was
-  committed; that's no longer true. What *is* still broken in this
-  environment: `npm test` fails with "Cannot find module
-  'expo-modules-core'" because that package is missing from
-  `node_modules` — an install gap (`npm install` incomplete/stale), not a
-  missing-config problem. Re-run `npm install` before debugging further.
-- **No ESLint/Prettier config is committed** — style is enforced by hand,
-  not tooling (see Code Style & Conventions below).
-- **`.env.example`'s vars aren't wired up yet.** It lists `API_URL`,
-  `SOCKET_URL`, `GOOGLE_MAPS_KEY`, `ENV`, but nothing reads them into the
-  app yet — `process.env` is not populated at runtime in Expo/RN without
-  extra bundler config. `expo-constants` **is** already a dependency, so
-  the intended path is `app.json`'s `expo.extra` + `Constants.expoConfig.extra`,
-  not a `.env` loader.
-- **Two color-token files used to exist** (`src/constants/colors.ts` and
-  `src/theme/colors.ts`) with different values for the same semantic
-  colors (e.g. two different "primary blue"s). `src/theme/colors.ts` has
-  been merged into `src/constants/colors.ts` and deleted — every screen
-  now imports one `colors` object from `@/constants/colors`. If you see a
-  reference to `theme/colors` anywhere, it's stale.
+- `package.json` pins `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`) — trust `package.json` over any prose elsewhere that says otherwise.
+- Jest config exists (`"jest": {"preset": "jest-expo"}` in `package.json`). `npm test` fails today with "Cannot find module 'expo-modules-core'" — an install gap (re-run `npm install`), not a config gap.
+- **No ESLint/Prettier config is committed** — style is enforced by hand, not tooling (see Code Style & Conventions below).
+- **`.env.example` — mixed.** `EXPO_PUBLIC_GEOAPIFY_API_KEY` **is** wired:
+  `src/config/env.ts` reads `process.env.EXPO_PUBLIC_*` (Metro inlines
+  `EXPO_PUBLIC_`-prefixed vars at build time, SDK 49+). The rest
+  (`API_URL`, `SOCKET_URL`, `ENV`) are still placeholders that nothing
+  reads — `API_URL` is actually derived at runtime in `env.ts`.
+- Single color-token source: `src/constants/colors.ts` — every screen imports `colors` from `@/constants/colors`.
 - **`spot-backend` is runnable** (tracked by the root repo) — see
   `../spot-backend/CLAUDE.md` + `docs/API.md`. Mobile UI can call real APIs
   when the backend is up; mock only when working offline.
@@ -196,14 +195,29 @@ exists beyond what's listed above.
 ## Common Commands
 
 ```bash
-npm install           # plain install works now, see Known Gotchas
-npm start            # expo start
-npm run android       # expo start --android
-npm run ios           # expo start --ios
-npm run web           # expo start --web
-npm test              # jest config exists; currently fails on missing expo-modules-core, see Known Gotchas
+npm install            # install dependencies
+npm start              # expo start (Metro). Then press a / i / w
+npm run android        # expo run:android — build + install Dev Client APK (first time / after native changes)
+npm run ios            # expo run:ios
+npm run web            # expo start --web
+npm test               # jest config exists; currently fails on missing expo-modules-core, see Known Gotchas
 npm run test:watch
 ```
+
+**Android first-time (required once per emulator/device):** this app ships
+`expo-dev-client` (AI voice / native modules). `npm start` → `a` will fail
+with `No development build (com.anonymous.spotapp)` until the APK is
+installed. Fix:
+
+```bash
+# Need JDK 17+ (Android Studio's bundled JBR is fine). Then:
+npm run android        # builds + installs com.anonymous.spotapp on the emulator
+```
+
+After that, daily flow is just `npm start` → press `a` (or open the **SPOT**
+app on the emulator). Do **not** log in to Expo Go for this path.
+
+Web does not need a Dev Client: `npm start` → `w`.
 
 Production builds go through EAS, not local scripts (`eas.json` already
 configures `development`/`preview`/`production` profiles):
@@ -233,6 +247,8 @@ app/                       # expo-router routes (file-based) — every feature
 │   └── map.tsx                 # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup)
 ├── venue/[id].tsx            # "/venue/:id" → src/screens/venue/VenueDetailScreen.tsx (venue detail)
 ├── assistant/index.tsx        # thin route → src/screens/assistant/AssistantScreen.tsx (AI chat, spec 004)
+├── venue-map.tsx             # "/venue-map" → src/screens/common/VenueMapScreen.tsx (shared single-venue map — Matches/Groups/Tournaments/Referee)
+├── matches/ , groups/ , tournaments/ , referee/   # SPOT-76 / SPOT-93 feature routes (not expanded here — see each feature's Figma/plan)
 └── tabs/                    # route group, still empty (.gitignore placeholder only)
 src/
 ├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,assistant,profile,settings,schedule}/   # presentational screen components

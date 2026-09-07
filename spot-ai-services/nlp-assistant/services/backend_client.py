@@ -48,8 +48,23 @@ class BackendClient:
         response.raise_for_status()
         return response.json().get("items", [])
 
+    async def search_venues(self, criteria: dict[str, Any]) -> list[dict[str, Any]]:
+        """GET /venues — already excludes venues with no open field slot in
+        the given date/timeFrom/timeTo window (research.md decision 1 under
+        specs/007-assistant-venue-search/); this client sends the already-
+        normalized criteria through unchanged, same as search_matches()."""
+        params = {k: v for k, v in criteria.items() if v is not None}
+        response = await self._client.get("/venues", params=params)
+        response.raise_for_status()
+        return response.json().get("venues", [])
+
     async def get_match(self, match_id: int) -> dict[str, Any]:
         response = await self._client.get(f"/matches/{match_id}")
+        response.raise_for_status()
+        return response.json()
+
+    async def get_geo_vn(self) -> dict[str, Any]:
+        response = await self._client.get("/geo/vn")
         response.raise_for_status()
         return response.json()
 

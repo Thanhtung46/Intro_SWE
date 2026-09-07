@@ -125,6 +125,15 @@ export async function submitVerificationBatch(req, res, next) {
   }
 }
 
+export async function listMyVerificationRequests(req, res, next) {
+  try {
+    const result = await adminService.listMyVerificationRequests(req.user.userId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function submitCertUpdate(req, res, next) {
   try {
     const dto = parseSubmitCertUpdateDto(req.body);

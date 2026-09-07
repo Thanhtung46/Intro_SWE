@@ -15,96 +15,205 @@ pin ở `19.2.8`, tương thích với `react-test-renderer`/
 `@testing-library/react-native`, nên xung đột peer-dependency cũ không còn
 tái hiện.
 
-**Tính năng AI Assistant (chat + voice) cần Dev Client, không chạy được
-trên Expo Go** — voice input dùng `expo-speech-recognition` (native module
-nhận diện giọng nói on-device của Android/iOS), và Expo Go chỉ hỗ trợ các
-module có sẵn trong bản build cố định của nó. Các màn hình khác (auth,
-home, booking, ...) vẫn chạy bình thường trên Expo Go. Xem mục
-[Dev Client](#dev-client-bắt-buộc-cho-ai-assistantvoice) bên dưới.
+**Không còn chạy thuần Expo Go như trước.** Project có `expo-dev-client`
+(AI voice / native modules) — mỗi máy/emulator phải cài app **SPOT** một lần.
+Cách nhanh: [tải APK đã build sẵn](#cách-nhanh-nhất-tải-apk-dev-client-đã-build-sẵn)
+(không cần Android SDK). Muốn tự build: [Cài lần đầu trên máy mới](#cài-lần-đầu-trên-máy-mới-android).
 
 Xem `CLAUDE.md` trong thư mục này để biết chi tiết đầy đủ (kiến trúc, known
 gotchas, trạng thái từng màn hình).
 
 ## Quick Start
 
+### Hàng ngày (sau khi máy đã cài Dev Client)
+
 ```bash
-# Install dependencies
 npm install
-
-# Setup environment
-cp .env.example .env
-
-# Start development server
+cp .env.example .env   # lần đầu; sửa API_URL / key nếu cần
 npm start
+# nhấn: a (Android) / i (iOS) / w (Web)
+```
 
-# Run on iOS
-npm run ios
+Mở app **SPOT** trên emulator — **không** mở Expo Go, **không** cần login Expo.
 
-# Run on Android
+### Web (không cần APK)
+
+```bash
+npm start
+# nhấn w
+```
+
+---
+
+## Cài lần đầu trên máy mới (Android)
+
+Trước đây chỉ cần Expo Go + `npm start`. Giờ **mỗi máy + mỗi emulator**
+phải cài app SPOT **một lần** (`npm run android` tự build + tự cài APK).
+
+### Bước 0 — Chuẩn bị
+
+1. Cài **Node.js**, **Android Studio**, tạo/bật **emulator**
+2. Path project nên **ngắn, ít khoảng trắng** (tránh lỗi Windows 260 ký tự)  
+   Nên: `C:\dev\Intro_SWE\spot-frontend-mobile`  
+   Tránh: `D:\Code test\Project ...` (dài + có space → hay fail CMake)
+
+### Bước 1 — JDK 17+ và Android SDK
+
+Mở PowerShell trong `spot-frontend-mobile`:
+
+```powershell
+# JDK — JBR đi kèm Android Studio (đổi path cho đúng máy bạn)
+$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+# Ví dụ path khác: "D:\Program file\adroid studio\jbr"
+
+$env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
+$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
+
+java -version
+# Phải hiện 17 hoặc 21 — KHÔNG phải "1.8.0_xxx"
+```
+
+Tạo file **`android/local.properties`** (mỗi máy một file, **không commit**):
+
+```properties
+sdk.dir=C:/Users/<TEN_USER>/AppData/Local/Android/Sdk
+```
+
+Thay `<TEN_USER>` bằng tên user Windows. Dùng dấu `/` như trên.
+
+### Bước 2 — Install + build lần đầu
+
+```powershell
+npm install
 npm run android
 ```
 
-Mở app bằng Expo Go (quét QR) như bình thường nếu bạn không cần test AI
-Assistant/voice. Nếu cần, dùng Dev Client thay cho Expo Go — xem bên dưới.
+- Lần đầu **5–15 phút**
+- Tự build + tự cài APK lên emulator đang chạy — **không cần tải APK tay**
+- Xong sẽ mở app **SPOT** (`com.anonymous.spotapp`)
+
+### Bước 3 — Sau đó dùng như cũ
+
+```powershell
+npm start
+# nhấn a
+```
+
+Chỉ cần `npm run android` lại khi: wipe emulator, đổi máy ảo, hoặc thêm/đổi native module.
+
+---
+
+## Lỗi thường gặp khi `npm run android` (máy mới)
+
+### 1) `Gradle requires JVM 17 ... currently JVM 8`
+
+Đang dùng Java 8. Set lại `JAVA_HOME` (Bước 1), mở terminal mới, kiểm tra
+`java -version`, rồi chạy lại `npm run android`.
+
+Ghi cố định cho máy (không commit vào repo) —
+`%USERPROFILE%\.gradle\gradle.properties`:
+
+```properties
+org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr
+```
+
+### 2) `SDK location not found` / thiếu `ANDROID_HOME`
+
+Tạo `android/local.properties` với `sdk.dir=...` (Bước 1), hoặc set
+`$env:ANDROID_HOME`.
+
+### 3) `Filename longer than 260 characters` (ninja / CMake)
+
+Path Windows quá dài. Chuyển project sang path ngắn (`C:\dev\...`), rồi:
+
+```powershell
+Remove-Item -Recurse -Force android\app\.cxx -ErrorAction SilentlyContinue
+npm run android
+```
+
+### 4) `No development build (com.anonymous.spotapp)`
+
+Emulator chưa có app SPOT. Bật đúng emulator → chạy lại `npm run android`.
+
+### 5) Metro hỏi Log in / Expo Go
+
+**Ctrl+C** — đừng login. Dùng app **SPOT**, không dùng Expo Go.
+
+### 6) Bundle lỗi kiểu `Unable to resolve "./C:/..."`
+
+Cache Metro lệch path:
+
+```powershell
+npx expo start --clear
+```
+
+---
+
+## Cách nhanh nhất: tải APK Dev Client đã build sẵn
+
+Không cần Android SDK / NDK / build gì. **1 người build → cả team dùng chung
+1 file.** APK là universal (đủ 4 ABI: arm64-v8a, armeabi-v7a, x86, x86_64) nên
+chạy trên mọi emulator/máy Android.
+
+**Tải:** https://drive.google.com/file/d/1ZIjrHZ9PsXNJa0MNgAJgdJXge0Fw9pko/view
+(`app-debug.apk`, ~261 MB — link nội bộ, đăng nhập tài khoản đã được add vào
+Share; ai vào team sau thì nhờ chủ file add thêm)
+
+```powershell
+# emulator/máy Android đang chạy + adb thấy device
+adb install -r app-debug.apk
+
+cd spot-frontend-mobile
+npm install
+# .env (Windows): thêm EXPO_PUBLIC_API_HOST=10.0.2.2 để app trong emulator gọi được backend
+npm start          # bấm a — mở app SPOT (KHÔNG dùng Expo Go, KHÔNG login Expo)
+```
+
+**Khi nào cần tải APK mới:** chỉ khi có thay đổi **native module**
+(thêm/bớt package có code native) hoặc sửa `app.json` (plugins / permissions).
+Code JS/TS thường → Metro hot-reload, dùng APK cũ được.
+
+**Tự build lại APK** (khi cần bản mới): `npm run android` trên máy có
+Android SDK + path ngắn; hoặc EAS; hoặc build trên Linux/WSL rồi copy `.apk`
+ra (`android/app/build/outputs/apk/debug/app-debug.apk`) — xem 2 mục dưới.
+
+---
 
 ## Dev Client (bắt buộc cho AI Assistant/voice)
 
-`expo-speech-recognition` là native module — cần một build riêng của app
-("Dev Client") cài lên máy ảo/thiết bị thật, thay cho app Expo Go. Chỉ cần
-build lại khi bạn (hoặc ai đó) thêm/đổi một native module mới; các thay
-đổi code JS/TS bình thường vẫn hot-reload qua Metro như cũ, không cần build
-lại mỗi lần.
+`expo-speech-recognition` là native module — cần build riêng ("Dev Client")
+thay cho Expo Go. Chỉ build lại khi thêm/đổi native module; code JS/TS vẫn
+hot-reload qua Metro.
 
-### Cách 1 — EAS Build (khuyến nghị, dùng chung cho cả team)
-
-Build trên hạ tầng cloud của Expo — không ai cần cài Android SDK/Docker,
-kết quả đồng nhất 100% giữa các máy vì không phụ thuộc môi trường cục bộ.
+### Cách 1 — EAS Build (cloud, dùng chung team)
 
 ```bash
-npm install -g eas-cli   # một lần
-eas login                # tài khoản Expo (miễn phí)
+npm install -g eas-cli
+eas login
 eas build --profile development --platform android
 ```
 
-Đợi build xong (vài phút, chạy trên cloud), EAS in ra link tải `.apk`.
-Tải về rồi cài vào máy ảo:
+EAS trả link tải `.apk` → cài vào emulator:
 
 ```bash
 adb install ten-file-tai-ve.apk
 ```
 
-(hoặc kéo-thả file `.apk` vào cửa sổ máy ảo Android Studio). Sau đó chạy
-`npx expo start --dev-client` (thay vì `npm start`) và mở app Dev Client đã
-cài — nó sẽ tự kết nối tới Metro như Expo Go từng làm.
+Sau đó `npm start` → nhấn `a` / mở app **SPOT**.
 
-Build cho iOS tương tự với `--platform ios` (cần tài khoản Apple Developer
-để cài lên thiết bị thật; Simulator không cần).
-
-### Cách 2 — Docker build local (không cần tài khoản Expo, build offline)
-
-Dùng khi không có/không muốn dùng tài khoản Expo. Image chứa sẵn Android
-SDK/NDK/Gradle nên không cần cài gì thêm ngoài Docker — nhưng **vẫn cần
-`adb` trên máy host** để cài APK lên máy ảo sau khi build xong (container
-không có quyền truy cập máy ảo/thiết bị của host).
+### Cách 2 — Docker build local
 
 ```bash
-# Build APK bên trong container (lần đầu khá lâu — tải Android SDK, ~10-20 phút)
 docker build -f docker/android-build.Dockerfile -t spot-mobile-dev-client .
-
-# Lấy file APK ra khỏi image vừa build
 docker create --name spot-mobile-apk-extract spot-mobile-dev-client
 docker cp spot-mobile-apk-extract:/app-debug.apk ./app-debug.apk
 docker rm spot-mobile-apk-extract
-
-# Cài lên máy ảo/thiết bị đang chạy (từ host, không phải trong container)
 adb install ./app-debug.apk
 ```
 
-Sau đó chạy `npx expo start --dev-client` như Cách 1.
+Sau đó `npm start` như Cách 1.
 
-**Lưu ý**: build local qua Docker chỉ ra file `.apk` (Android). Build iOS
-(`.ipa`) bắt buộc cần máy Mac + Xcode thật (Apple không cho build iOS
-trong Linux container) — dùng Cách 1 (EAS) cho iOS.
+**Lưu ý:** Docker chỉ ra `.apk` (Android). iOS cần Mac + Xcode hoặc EAS.
 
 ## Project Structure
 

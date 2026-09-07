@@ -1,6 +1,12 @@
-import { MatchResult, PendingAction } from '@/services/assistantService';
+import { MatchResult, PendingAction, VenueResult } from '@/services/assistantService';
 
-export type ChatMessageKind = 'text' | 'results' | 'clarifying' | 'pendingAction' | 'error';
+export type ChatMessageKind =
+  | 'text'
+  | 'results'
+  | 'venueResults'
+  | 'clarifying'
+  | 'pendingAction'
+  | 'error';
 
 /**
  * Client-side rendering model for one conversation turn — wraps
@@ -12,7 +18,7 @@ export type ChatMessage = {
   role: 'player' | 'assistant';
   kind: ChatMessageKind;
   text: string;
-  payload?: MatchResult[] | PendingAction;
+  payload?: MatchResult[] | VenueResult[] | PendingAction;
   sendState?: 'sent' | 'sending' | 'failed';
   timestamp: string;
 };

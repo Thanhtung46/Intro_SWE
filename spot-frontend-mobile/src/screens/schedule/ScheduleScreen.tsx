@@ -1,8 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { comingSoon } from '@/utils/comingSoon';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 import { ReviewModal } from '@/components/ReviewModal';
 import { useLanguage } from '@/context/LanguageContext';
@@ -20,12 +20,21 @@ import {
 type ScheduleEvent = {
   id: string;
   date: Date;
-  type: string;
+  sportType: string;
   time: string;
   location: string;
   host?: string;
   status: 'upcoming' | 'completed';
-  bookingId: number;
+  bookingId: number | null;
+  itemType: 'BOOKING' | 'MATCH';
+  matchId: number | null;
+  totalAmountVnd: number | null;
+  venueName: string;
+  fieldName: string;
+  address: string;
+  /** Raw backend booking status (PENDING_PAYMENT/PAID/CHECKED_IN/NO_SHOW/COMPLETED) —
+   * `status` above is only the upcoming/completed bucket used for card branching. */
+  rawStatus: string;
 };
 
 function isSameDay(a: Date, b: Date) {
@@ -55,15 +64,22 @@ function mapItemsToEvents(items: ScheduleItem[]): ScheduleEvent[] {
   return items.map((item) => ({
     id: `${item.type}-${item.bookingId}-${item.matchId ?? ''}`,
     date: new Date(item.bookingDate),
-    type: item.sportType,
+    sportType: item.sportType,
     time: formatTimeRange(item.startsAt, item.endsAt),
-    location: `${item.venueName} • ${item.fieldName}`,
+    location: item.fieldName ? `${item.venueName} • ${item.fieldName}` : item.venueName,
     status: item.status === 'COMPLETED' ? 'completed' : 'upcoming',
     bookingId: item.bookingId,
+    itemType: item.type,
+    matchId: item.matchId,
+    totalAmountVnd: item.totalAmountVnd,
+    venueName: item.venueName,
+    fieldName: item.fieldName,
+    address: item.address,
+    rawStatus: item.status,
   }));
 }
 
-function SportIcon({ type, color, size = 14 }: { type: string; color: string; size?: number }) {
+export function SportIcon({ type, color, size = 14 }: { type: string; color: string; size?: number }) {
   if (type.startsWith('Football')) {
     return <Ionicons name="football" size={size} color={color} />;
   }
@@ -119,7 +135,10 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
-export default function ScheduleScreen() {
+export default function ScheduleScreen({
+  justReviewedBookingId,
+}: { justReviewedBookingId?: string } = {}) {
+  const router = useRouter();
   const { t, language } = useLanguage();
   const { colors: c } = useTheme();
   const styles = useMemo(() => getStyles(c), [c]);
@@ -133,6 +152,41 @@ export default function ScheduleScreen() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [reviewBookingId, setReviewBookingId] = useState<number | null>(null);
   const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<number>>(new Set());
+
+  // Booking Details' own "Leave a review" flow reports back here (via the
+  // `/schedule?reviewedBookingId=` route param) since that screen is a
+  // separate stack entry with its own ReviewModal instance.
+  useEffect(() => {
+    const id = Number(justReviewedBookingId);
+    if (justReviewedBookingId && !Number.isNaN(id)) {
+      setReviewedBookingIds((prev) => new Set(prev).add(id));
+    }
+  }, [justReviewedBookingId]);
+
+  const openEventDetails = (event: ScheduleEvent) => {
+    if (event.itemType === 'MATCH' && event.matchId) {
+      router.push(`/matches/${event.matchId}`);
+      return;
+    }
+    if (event.itemType !== 'BOOKING' || event.bookingId == null) return;
+    const bookingId = event.bookingId;
+    router.push({
+      pathname: '/booking/[id]',
+      params: {
+        id: String(bookingId),
+        venueName: event.venueName,
+        fieldName: event.fieldName,
+        address: event.address,
+        sportType: event.sportType,
+        startTime: event.time.split(' - ')[0],
+        endTime: event.time.split(' - ')[1],
+        bookingDate: toLocalDateString(event.date),
+        status: event.rawStatus,
+        totalAmountVnd: event.totalAmountVnd != null ? String(event.totalAmountVnd) : '',
+        alreadyReviewed: reviewedBookingIds.has(bookingId) ? '1' : '0',
+      },
+    });
+  };
 
   useEffect(() => {
     const year = currentMonth.getFullYear();
@@ -166,7 +220,7 @@ export default function ScheduleScreen() {
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
+    <SafeAreaView edges={[]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>{t('schedule.title')}</Text>
@@ -258,8 +312,8 @@ export default function ScheduleScreen() {
                   <View key={event.id} style={styles.upcomingCard}>
                     <Text style={styles.cardStatusLabel}>{t('schedule.statusUpcoming')}</Text>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={c.primary} />
-                      <Text style={styles.sportBadgeText}>{event.type}</Text>
+                      <SportIcon type={event.sportType} color={c.primary} />
+                      <Text style={styles.sportBadgeText}>{event.sportType}</Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Ionicons name="time-outline" size={16} color={c.textSecondary} />
@@ -278,9 +332,11 @@ export default function ScheduleScreen() {
                     <TouchableOpacity
                       testID={`schedule-match-details-${event.id}`}
                       style={styles.primaryButton}
-                      onPress={() => comingSoon(t('schedule.matchDetails'))}
+                      onPress={() => openEventDetails(event)}
                     >
-                      <Text style={styles.primaryButtonText}>{t('schedule.matchDetails')}</Text>
+                      <Text style={styles.primaryButtonText}>
+                        {t(event.itemType === 'MATCH' ? 'schedule.matchDetails' : 'schedule.details')}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -290,8 +346,8 @@ export default function ScheduleScreen() {
                       <Ionicons name="checkmark-circle" size={20} color={c.successText} />
                     </View>
                     <View style={styles.sportBadge}>
-                      <SportIcon type={event.type} color={c.primary} />
-                      <Text style={styles.sportBadgeText}>{event.type}</Text>
+                      <SportIcon type={event.sportType} color={c.primary} />
+                      <Text style={styles.sportBadgeText}>{event.sportType}</Text>
                     </View>
                     <Text style={styles.completedDate}>
                       {isYesterday(event.date)
@@ -299,17 +355,28 @@ export default function ScheduleScreen() {
                         : `${MONTH_ABBR[event.date.getMonth()]} ${event.date.getDate()}, ${event.time.split(' - ')[0]}`}
                     </Text>
                     <Text style={styles.detailText}>{event.location}</Text>
-                    {reviewedBookingIds.has(event.bookingId) ? (
-                      <Text style={styles.reviewedText}>{t('schedule.reviewed')}</Text>
-                    ) : (
-                      <TouchableOpacity
-                        testID={`schedule-leave-review-${event.id}`}
-                        style={styles.outlineButton}
-                        onPress={() => setReviewBookingId(event.bookingId)}
-                      >
-                        <Text style={styles.outlineButtonText}>{t('schedule.leaveReview')}</Text>
-                      </TouchableOpacity>
-                    )}
+                    <TouchableOpacity
+                      testID={`schedule-match-details-${event.id}`}
+                      style={styles.outlineButton}
+                      onPress={() => openEventDetails(event)}
+                    >
+                      <Text style={styles.outlineButtonText}>
+                        {t(event.itemType === 'MATCH' ? 'schedule.matchDetails' : 'schedule.details')}
+                      </Text>
+                    </TouchableOpacity>
+                    {event.itemType === 'BOOKING' && event.bookingId != null ? (
+                      reviewedBookingIds.has(event.bookingId) ? (
+                        <Text style={styles.reviewedText}>{t('schedule.reviewed')}</Text>
+                      ) : (
+                        <TouchableOpacity
+                          testID={`schedule-leave-review-${event.id}`}
+                          style={styles.outlineButton}
+                          onPress={() => setReviewBookingId(event.bookingId)}
+                        >
+                          <Text style={styles.outlineButtonText}>{t('schedule.leaveReview')}</Text>
+                        </TouchableOpacity>
+                      )
+                    ) : null}
                   </View>
                 )
               )

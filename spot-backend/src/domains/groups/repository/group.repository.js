@@ -5,35 +5,68 @@ import {
 
 const FOLD = 'schema_matchmaking.fold_search_text';
 
+/** All non-empty tokens of q must appear inside a single field. */
+function tokensInSameField(q, field) {
+  return `(
+    ${q} LIKE '% %'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
+      WHERE length(tok.t) > 0
+        AND position(tok.t in ${field}) = 0
+    )
+  )`;
+}
+
 function locationPredicate(locationSlot) {
   const q = `${FOLD}(${locationSlot})`;
   const name = `${FOLD}(g.name)`;
+  const title = `${FOLD}(g.title)`;
   const venue = `${FOLD}(g.venue_name)`;
   const address = `${FOLD}(g.venue_address)`;
-  const hay = `(${name} || ' ' || ${venue} || ' ' || ${address})`;
+  // Fuzzy is single-token only — same contract as matches homepage search.
   return `(
     ${q} <> ''
     AND (
       position(${q} in ${name}) > 0
+      OR position(${q} in ${title}) > 0
       OR position(${q} in ${venue}) > 0
       OR position(${q} in ${address}) > 0
       OR (
-        length(${q}) >= ${GROUP_SEARCH.FUZZY_MIN_CHARS}
+        ${q} NOT LIKE '% %'
+        AND length(${q}) >= ${GROUP_SEARCH.FUZZY_MIN_CHARS}
         AND GREATEST(
           similarity(${name}, ${q}),
+          similarity(${title}, ${q}),
           similarity(${venue}, ${q}),
           similarity(${address}, ${q})
         ) >= ${GROUP_SEARCH.LIST_SIMILARITY}
       )
-      OR (
-        ${q} LIKE '% %'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM unnest(string_to_array(${q}, ' ')) AS tok(t)
-          WHERE length(tok.t) > 0
-            AND position(tok.t in ${hay}) = 0
-        )
-      )
+      OR ${tokensInSameField(q, name)}
+      OR ${tokensInSameField(q, title)}
+      OR ${tokensInSameField(q, venue)}
+      OR ${tokensInSameField(q, address)}
+    )
+  )`;
+}
+
+/** Score a folded field for suggestion ranking — exact / substring beat fuzzy. */
+function suggestionFieldScore(field, q) {
+  return `CASE
+    WHEN ${field} = ${q} THEN 1.0::float
+    WHEN position(${q} in ${field}) > 0 THEN 0.95::float
+    ELSE similarity(${field}, ${q})::float
+  END`;
+}
+
+function suggestionFieldPredicate(field, q) {
+  return `(
+    position(${q} in ${field}) > 0
+    OR ${tokensInSameField(q, field)}
+    OR (
+      ${q} NOT LIKE '% %'
+      AND length(${q}) >= ${GROUP_SEARCH.FUZZY_MIN_CHARS}
+      AND similarity(${field}, ${q}) >= ${GROUP_SEARCH.SUGGEST_SIMILARITY}
     )
   )`;
 }
@@ -204,6 +237,7 @@ export async function listGroups(client, filters) {
   const orderBy = locationSlot
     ? `GREATEST(
          similarity(${FOLD}(g.name), ${FOLD}(${locationSlot})),
+         similarity(${FOLD}(g.title), ${FOLD}(${locationSlot})),
          similarity(${FOLD}(g.venue_name), ${FOLD}(${locationSlot})),
          similarity(${FOLD}(g.venue_address), ${FOLD}(${locationSlot}))
        ) DESC, g.created_at DESC`
@@ -250,6 +284,7 @@ export async function listSearchSuggestions(client, filters) {
   const qSlot = add(filters.location);
   const q = `${FOLD}(${qSlot})`;
   const name = `${FOLD}(g.name)`;
+  const title = `${FOLD}(g.title)`;
   const venue = `${FOLD}(g.venue_name)`;
   const address = `${FOLD}(g.venue_address)`;
 
@@ -266,30 +301,36 @@ export async function listSearchSuggestions(client, filters) {
        FROM (
          SELECT g.name AS text,
                 'name'::text AS kind,
-                similarity(${name}, ${q})::float AS score
+                ${suggestionFieldScore(name, q)} AS score
          FROM schema_groups.groups g
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${name} <> ${q}
-           AND similarity(${name}, ${q}) >= ${GROUP_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(name, q)}
+         UNION ALL
+         SELECT g.title,
+                'title',
+                ${suggestionFieldScore(title, q)}
+         FROM schema_groups.groups g
+         WHERE ${where.join(' AND ')}
+           AND ${q} <> ''
+           AND COALESCE(g.title, '') <> ''
+           AND ${suggestionFieldPredicate(title, q)}
          UNION ALL
          SELECT g.venue_name,
                 'venueName',
-                similarity(${venue}, ${q})::float
+                ${suggestionFieldScore(venue, q)}
          FROM schema_groups.groups g
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${venue} <> ${q}
-           AND similarity(${venue}, ${q}) >= ${GROUP_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(venue, q)}
          UNION ALL
          SELECT g.venue_address,
                 'venueAddress',
-                similarity(${address}, ${q})::float
+                ${suggestionFieldScore(address, q)}
          FROM schema_groups.groups g
          WHERE ${where.join(' AND ')}
            AND ${q} <> ''
-           AND ${address} <> ${q}
-           AND similarity(${address}, ${q}) >= ${GROUP_SEARCH.SUGGEST_SIMILARITY}
+           AND ${suggestionFieldPredicate(address, q)}
        ) s
      ) ranked
      WHERE rn = 1

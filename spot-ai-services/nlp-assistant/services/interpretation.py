@@ -8,6 +8,7 @@ validation rules; spec FR-003).
 from typing import Any, Optional
 
 CRITERIA_FIELDS = [
+    "searchKind",
     "sport",
     "province",
     "city",
@@ -19,10 +20,13 @@ CRITERIA_FIELDS = [
     "priceMax",
 ]
 
-# Minimum criteria needed to "search meaningfully" (spec FR-003). Only
-# `sport` is required — location/time/etc. narrow results but aren't
-# required to run a search at all.
-REQUIRED_SEARCH_FIELDS = ["sport"]
+# Minimum criteria needed to "search meaningfully" (spec FR-003). `sport` is
+# required for either search kind; `searchKind` ("match" | "venue") is also
+# required once resolved, per spec 007's FR-003/FR-004 — a player asking to
+# find something must first be understood as wanting to join a kèo or book a
+# venue before either search runs (research.md decision 3 under
+# specs/007-assistant-venue-search/).
+REQUIRED_SEARCH_FIELDS = ["sport", "searchKind"]
 
 
 def merge_criteria(

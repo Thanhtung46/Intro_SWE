@@ -16,7 +16,7 @@ import {
   listMatchRequests,
   rejectJoinRequest,
 } from '@/services/matchService';
-import type { JoinRequest, Match, Participant } from '@/types/match';
+import type { Guest, JoinRequest, Match, Participant, Sport } from '@/types/match';
 import { formatVnd } from '@/utils/format';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -24,7 +24,45 @@ type Status = 'loading' | 'ready' | 'error';
 type Props = {
   matchId: number;
   onBack: () => void;
+  /** Opens Check Profile (`GET /users/:id`) — host + joiner rows. Guests have no account. */
+  onOpenProfile: (userId: number) => void;
 };
+
+function genderShort(gender: string | null | undefined): 'M' | 'F' | null {
+  if (gender === 'female') return 'F';
+  if (gender === 'male') return 'M';
+  return null;
+}
+
+function GuestMeta({ sport, guest }: { sport: Sport; guest: Guest }) {
+  const tier = skillTierColor(sport, guest.skill);
+  const label = skillLabel(sport, guest.skill);
+  const gender = genderShort(guest.gender);
+  return (
+    <View style={styles.guestMeta}>
+      <View style={styles.guestMetaChips}>
+        {gender ? (
+          <View style={styles.metaChip}>
+            <Text style={styles.metaChipText}>{gender}</Text>
+          </View>
+        ) : null}
+        {label ? (
+          <View style={[styles.skillPill, { backgroundColor: tier.bg, borderColor: tier.border }]}>
+            <Text style={[styles.skillPillText, { color: tier.text }]}>{label}</Text>
+          </View>
+        ) : null}
+      </View>
+      {guest.phoneNumber ? (
+        <View style={styles.phoneRow}>
+          <Ionicons name="call-outline" size={12} color={colors.outline} />
+          <Text style={styles.phoneText} numberOfLines={1}>
+            {guest.phoneNumber}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 /**
  * Manage Squad (Figma `M1ItLK`) — host-only screen opened from the Active
@@ -32,7 +70,7 @@ type Props = {
  * Not part of MatchDetailScreen — that screen only shows a read-only squad
  * grid, no approve/reject flow.
  */
-export default function ManageSquadScreen({ matchId, onBack }: Props) {
+export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Props) {
   const [match, setMatch] = useState<Match | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
@@ -41,6 +79,8 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
   const [actingRequestId, setActingRequestId] = useState<number | null>(null);
   const [kickTarget, setKickTarget] = useState<Participant | null>(null);
   const [kicking, setKicking] = useState(false);
+
+  const sport: Sport = match?.sport ?? 'FOOTBALL';
 
   const fetchData = useCallback(async () => {
     setStatus('loading');
@@ -132,48 +172,85 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
             <Text style={styles.emptyText}>No pending requests.</Text>
           ) : (
             pendingRequests.map((request) => {
-              const tier = skillTierColor(match?.sport ?? 'FOOTBALL', request.skill);
-              const label = skillLabel(match?.sport ?? 'FOOTBALL', request.skill);
+              const tier = skillTierColor(sport, request.skill);
+              const label = skillLabel(sport, request.skill);
               return (
-                <View key={request.requestId} style={styles.requestRow}>
-                  <View style={styles.avatar}>
-                    {request.avatarUrl ? (
-                      <Image source={{ uri: request.avatarUrl }} style={styles.avatarImage} />
-                    ) : (
-                      <Text style={styles.avatarText}>{(request.fullName || 'P').charAt(0).toUpperCase()}</Text>
-                    )}
-                  </View>
-                  <View style={styles.requestInfo}>
-                    <Text style={styles.requestName} numberOfLines={1} ellipsizeMode="tail">
-                      {request.fullName}
-                    </Text>
-                    <View style={styles.requestMetaRow}>
-                      {label && (
-                        <View style={[styles.skillPill, { backgroundColor: tier.bg, borderColor: tier.border }]}>
-                          <Text style={[styles.skillPillText, { color: tier.text }]}>{label}</Text>
+                <View key={request.requestId} style={styles.requestBlock}>
+                  <View style={styles.requestRow}>
+                    <TouchableOpacity
+                      testID={`pending-profile-${request.userId}`}
+                      style={styles.profileHit}
+                      onPress={() => onOpenProfile(request.userId)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.avatar}>
+                        {request.avatarUrl ? (
+                          <Image source={{ uri: request.avatarUrl }} style={styles.avatarImage} />
+                        ) : (
+                          <Text style={styles.avatarText}>{(request.fullName || 'P').charAt(0).toUpperCase()}</Text>
+                        )}
+                      </View>
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.requestName} numberOfLines={1} ellipsizeMode="tail">
+                          {request.fullName}
+                          {request.guests.length > 0 ? ` +${request.guests.length}` : ''}
+                        </Text>
+                        <View style={styles.guestMeta}>
+                          {label ? (
+                            <View style={styles.guestMetaChips}>
+                              <View style={[styles.skillPill, { backgroundColor: tier.bg, borderColor: tier.border }]}>
+                                <Text style={[styles.skillPillText, { color: tier.text }]}>{label}</Text>
+                              </View>
+                            </View>
+                          ) : null}
+                          {request.phoneNumber ? (
+                            <View style={styles.phoneRow}>
+                              <Ionicons name="call-outline" size={12} color={colors.outline} />
+                              <Text style={styles.phoneText} numberOfLines={1}>
+                                {request.phoneNumber}
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
-                      )}
-                      {request.phoneNumber && <Text style={styles.requestPhone}>{request.phoneNumber}</Text>}
+                      </View>
+                    </TouchableOpacity>
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity
+                        testID={`decline-request-${request.requestId}`}
+                        style={styles.declineButton}
+                        disabled={actingRequestId === request.requestId}
+                        onPress={() => handleReject(request.requestId)}
+                      >
+                        <Text style={styles.declineButtonText}>Decline</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        testID={`approve-request-${request.requestId}`}
+                        style={styles.approveButton}
+                        disabled={actingRequestId === request.requestId}
+                        onPress={() => handleAccept(request.requestId)}
+                      >
+                        <Text style={styles.approveButtonText}>Approve</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
-                  <View style={styles.requestActions}>
-                    <TouchableOpacity
-                      testID={`decline-request-${request.requestId}`}
-                      style={styles.declineButton}
-                      disabled={actingRequestId === request.requestId}
-                      onPress={() => handleReject(request.requestId)}
-                    >
-                      <Text style={styles.declineButtonText}>Decline</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      testID={`approve-request-${request.requestId}`}
-                      style={styles.approveButton}
-                      disabled={actingRequestId === request.requestId}
-                      onPress={() => handleAccept(request.requestId)}
-                    >
-                      <Text style={styles.approveButtonText}>Approve</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {request.guests.map((guest) => (
+                    <View key={guest.guestId} style={styles.guestRow} testID={`pending-guest-${guest.guestId}`}>
+                      <View style={styles.guestAvatar}>
+                        <Text style={styles.guestAvatarText}>{(guest.name || 'G').charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.requestInfo}>
+                        <View style={styles.guestNameRow}>
+                          <Text style={styles.guestName} numberOfLines={1} ellipsizeMode="tail">
+                            {guest.name}
+                          </Text>
+                          <View style={styles.guestTag}>
+                            <Text style={styles.guestTagText}>GUEST</Text>
+                          </View>
+                        </View>
+                        <GuestMeta sport={sport} guest={guest} />
+                      </View>
+                    </View>
+                  ))}
                 </View>
               );
             })
@@ -188,35 +265,99 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
             )}
           </View>
           {participants.map((participant) => (
-            <View key={participant.userId} style={styles.squadRow}>
-              <View style={styles.avatar}>
-                {participant.avatarUrl ? (
-                  <Image source={{ uri: participant.avatarUrl }} style={styles.avatarImage} />
+            <View key={participant.userId} style={styles.squadBlock}>
+              <View style={styles.squadRow}>
+                <TouchableOpacity
+                  testID={`squad-profile-${participant.userId}`}
+                  style={styles.profileHit}
+                  onPress={() => onOpenProfile(participant.userId)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.avatar}>
+                    {participant.avatarUrl ? (
+                      <Image source={{ uri: participant.avatarUrl }} style={styles.avatarImage} />
+                    ) : (
+                      <Text style={styles.avatarText}>{(participant.fullName || 'P').charAt(0).toUpperCase()}</Text>
+                    )}
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.squadName} numberOfLines={1} ellipsizeMode="tail">
+                      {participant.fullName}
+                      {participant.guests.length > 0 ? ` +${participant.guests.length}` : ''}
+                    </Text>
+                    {participant.role !== 'HOST' && (participant.skill || participant.phoneNumber) ? (
+                      <View style={styles.guestMeta}>
+                        {participant.skill ? (
+                          <View style={styles.guestMetaChips}>
+                            <View
+                              style={[
+                                styles.skillPill,
+                                {
+                                  backgroundColor: skillTierColor(sport, participant.skill).bg,
+                                  borderColor: skillTierColor(sport, participant.skill).border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.skillPillText,
+                                  { color: skillTierColor(sport, participant.skill).text },
+                                ]}
+                              >
+                                {skillLabel(sport, participant.skill)}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+                        {participant.phoneNumber ? (
+                          <View style={styles.phoneRow}>
+                            <Ionicons name="call-outline" size={12} color={colors.outline} />
+                            <Text style={styles.phoneText} numberOfLines={1}>
+                              {participant.phoneNumber}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+                {participant.role === 'HOST' ? (
+                  <View style={styles.hostTag}>
+                    <Text style={styles.hostTagText}>HOST</Text>
+                  </View>
                 ) : (
-                  <Text style={styles.avatarText}>{(participant.fullName || 'P').charAt(0).toUpperCase()}</Text>
+                  <>
+                    {participant.paymentStatus === 'SUCCESS' && (
+                      <Text style={styles.paidText}>Paid: {formatVnd(participant.shareAmount)}</Text>
+                    )}
+                    <TouchableOpacity
+                      testID={`kick-participant-${participant.userId}`}
+                      style={styles.kickButton}
+                      onPress={() => setKickTarget(participant)}
+                    >
+                      <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
-              <Text style={styles.squadName} numberOfLines={1} ellipsizeMode="tail">
-                {participant.fullName}
-              </Text>
-              {participant.role === 'HOST' ? (
-                <View style={styles.hostTag}>
-                  <Text style={styles.hostTagText}>HOST</Text>
+              {participant.guests.map((guest) => (
+                <View key={guest.guestId} style={styles.guestRow} testID={`squad-guest-${guest.guestId}`}>
+                  <View style={styles.guestAvatar}>
+                    <Text style={styles.guestAvatarText}>{(guest.name || 'G').charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <View style={styles.guestNameRow}>
+                      <Text style={styles.guestName} numberOfLines={1} ellipsizeMode="tail">
+                        {guest.name}
+                      </Text>
+                      <View style={styles.guestTag}>
+                        <Text style={styles.guestTagText}>GUEST</Text>
+                      </View>
+                    </View>
+                    <GuestMeta sport={sport} guest={guest} />
+                  </View>
                 </View>
-              ) : (
-                <>
-                  {participant.paymentStatus === 'SUCCESS' && (
-                    <Text style={styles.paidText}>Paid: {formatVnd(participant.shareAmount)}</Text>
-                  )}
-                  <TouchableOpacity
-                    testID={`kick-participant-${participant.userId}`}
-                    style={styles.kickButton}
-                    onPress={() => setKickTarget(participant)}
-                  >
-                    <Ionicons name="close-circle-outline" size={20} color={colors.error} />
-                  </TouchableOpacity>
-                </>
-              )}
+              ))}
             </View>
           ))}
         </ScrollView>
@@ -225,7 +366,11 @@ export default function ManageSquadScreen({ matchId, onBack }: Props) {
       <ConfirmDialog
         visible={kickTarget != null}
         title="Kick this player?"
-        message={`${kickTarget?.fullName ?? 'This player'} will be removed from the squad and won't be able to rejoin this match.`}
+        message={
+          kickTarget?.guests.length
+            ? `${kickTarget.fullName ?? 'This player'} and ${kickTarget.guests.length} guest(s) will be removed and won't be able to rejoin this match.`
+            : `${kickTarget?.fullName ?? 'This player'} will be removed from the squad and won't be able to rejoin this match.`
+        }
         confirmLabel={kicking ? 'Kicking…' : 'Kick'}
         destructive
         onConfirm={kicking ? () => {} : handleKick}
@@ -269,16 +414,27 @@ const styles = StyleSheet.create({
   squadCount: { fontSize: 12, fontWeight: '700', color: colors.outline },
   emptyText: { fontSize: 13, color: colors.outline },
 
-  requestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  requestBlock: {
     backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+  squadBlock: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     padding: spacing.sm,
   },
+  profileHit: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
   avatar: {
     width: 40,
     height: 40,
@@ -290,31 +446,91 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
-  requestInfo: { flex: 1, gap: spacing.xxs },
+  requestInfo: { flex: 1, gap: spacing.xxs, minWidth: 0 },
   requestName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  requestMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  skillPill: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  guestMeta: { gap: 4 },
+  guestMetaChips: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  metaChip: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaChipText: { fontSize: 10, fontWeight: '800', color: colors.primaryDark },
+  skillPill: {
+    borderWidth: 1,
+    borderRadius: 9999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
   skillPillText: { fontSize: 10, fontWeight: '700' },
-  requestPhone: { fontSize: 11, color: colors.outline },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  phoneText: { flexShrink: 1, fontSize: 12, color: colors.subtitle, letterSpacing: 0.2 },
   requestActions: { gap: spacing.xxs },
-  declineButton: { borderWidth: 1, borderColor: colors.error, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  declineButton: {
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   declineButtonText: { fontSize: 12, fontWeight: '700', color: colors.error, textAlign: 'center' },
-  approveButton: { backgroundColor: colors.primaryDark, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  approveButton: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   approveButtonText: { fontSize: 12, fontWeight: '700', color: colors.white, textAlign: 'center' },
 
   squadRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
     padding: spacing.sm,
   },
-  squadName: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.headingText },
-  hostTag: { backgroundColor: colors.primaryDark, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  squadName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  hostTag: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
   hostTagText: { fontSize: 10, fontWeight: '700', color: colors.white },
   paidText: { fontSize: 12, fontWeight: '700', color: colors.priceText },
   kickButton: { padding: spacing.xxs },
+
+  guestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginLeft: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.cardBorder,
+  },
+  guestAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.screenBackground,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestAvatarText: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  guestNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
+  guestName: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.headingText },
+  guestTag: {
+    backgroundColor: colors.iconBackground,
+    borderRadius: 8,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+  },
+  guestTagText: { fontSize: 9, fontWeight: '800', color: colors.primaryDark },
 });

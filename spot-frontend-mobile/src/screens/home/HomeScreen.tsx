@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -45,8 +44,9 @@ const UPCOMING_MATCH_IMAGE_BY_SPORT: Record<Sport, number> = {
   badminton: require('../../../assets/home/upcoming-match-badminton.png'),
 };
 
-// GET /venues has no per-venue photo/price at list level (data-model.md
-// PublicVenue) — this is a static placeholder image/price, not real data.
+// GET /venues has no per-venue price at list level (data-model.md
+// PublicVenue) — the photo now comes from venue.coverImageUrl when the
+// owner has uploaded one; this is only the fallback when they haven't.
 const VENUE_PLACEHOLDER_IMAGE_BY_SPORT: Record<Sport, number> = {
   football: require('../../../assets/home/venue-skyline-arena.png'),
   badminton: require('../../../assets/home/venue-badminton-elite.png'),
@@ -68,27 +68,18 @@ function formatUpcomingTime(startsAt: string): string {
   return `${dateLabel}, ${timeLabel}`;
 }
 
-function mapVenueToCard(venue: PublicVenue, placeholderImage: number): Venue {
-  return {
-    id: String(venue.venueId),
-    name: venue.name,
-    image: placeholderImage,
-    distanceLabel:
-      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
-    priceLabel: NOT_AVAILABLE_LABEL,
-    rating: venue.avgRating,
-    tag: venue.amenities ?? '',
-  };
-}
-
-// GET /recommendations has no per-venue photo/price either (data-model.md
-// Suggestion mapping table) — same placeholder convention as mapVenueToCard.
-function mapRecommendationToCard(item: RecommendationItem, placeholderImage: number): Venue {
+// GET /recommendations proxies a separate AI microservice and has no
+// per-venue photo (data-model.md Suggestion mapping table) — coverImageUrl
+// is cross-referenced from the same-sport GET /venues list fetched above
+// (recommended venues are drawn from that same pool), falling back to the
+// placeholder only when a match isn't found there either.
+function mapRecommendationToCard(item: RecommendationItem, placeholderImage: number, coverImageUrl?: string): Venue {
   return {
     id: String(item.venueId),
     name: item.venueName,
-    image: placeholderImage,
-    distanceLabel: item.distanceKm !== undefined ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+    image: coverImageUrl ? { uri: coverImageUrl } : placeholderImage,
+    fallbackImage: placeholderImage,
+    distanceLabel: item.distanceKm != null ? `${item.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
     priceLabel: NOT_AVAILABLE_LABEL,
     rating: 0,
     tag: 'Suggested for you',
@@ -112,25 +103,26 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselWidth, setCarouselWidth] = useState(0);
   const carouselScrollRef = useRef<ScrollView>(null);
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [venuesError, setVenuesError] = useState<string | null>(null);
-  const [venuesLoading, setVenuesLoading] = useState(true);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
-  const [suggestions, setSuggestions] = useState<Venue[]>([]);
+  const [rawSuggestions, setRawSuggestions] = useState<RecommendationItem[]>([]);
+  const [venueCoverById, setVenueCoverById] = useState<Record<number, string>>({});
   const userLocation = useUserLocation();
 
+  // Only used to cross-reference real cover photos onto "Suggested for you"
+  // cards (mapRecommendationToCard below) — the plain venue browse grid this
+  // used to feed was removed (duplicated "Suggested for you" with the same
+  // handful of test venues); Booking screen is the real full venue list now.
   useEffect(() => {
-    setVenuesLoading(true);
     const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
     listVenues(sport, opts).then((result) => {
-      if (result.success) {
-        setVenues((result.venues ?? []).map((v) => mapVenueToCard(v, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport])));
-        setVenuesError(null);
-      } else {
-        setVenues([]);
-        setVenuesError(result.message ?? t('common.genericError'));
-      }
-      setVenuesLoading(false);
+      if (!result.success) return;
+      const list = result.venues ?? [];
+      setVenueCoverById(
+        Object.fromEntries(
+          list.filter((v): v is PublicVenue & { coverImageUrl: string } => !!v.coverImageUrl)
+            .map((v) => [v.venueId, v.coverImageUrl]),
+        ),
+      );
     });
   }, [sport, userLocation]);
 
@@ -138,15 +130,18 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
     // A failed/unavailable fetch just leaves this section empty — never a
     // visible error, per FR-004 (spec 004-ai-features-frontend-integration).
     getRecommendations(sport).then((result) => {
-      setSuggestions(
-        result.success
-          ? (result.items ?? []).map((item) =>
-              mapRecommendationToCard(item, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport]),
-            )
-          : [],
-      );
+      setRawSuggestions(result.success ? (result.items ?? []) : []);
     });
   }, [sport]);
+
+  const suggestions = useMemo(
+    () =>
+      rawSuggestions.map((item) =>
+        mapRecommendationToCard(item, VENUE_PLACEHOLDER_IMAGE_BY_SPORT[sport], venueCoverById[item.venueId]),
+      ),
+    [rawSuggestions, venueCoverById, sport],
+  );
+
 
   useEffect(() => {
     getMySchedule({ type: 'booking', limit: 1 }).then((result) => {
@@ -166,7 +161,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search bar — opens the AI assistant chat (nlp-assistant), same
             screen as AppShell's header sparkle icon; voice capture lives
@@ -231,7 +226,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
             </View>
             <Text style={styles.quickActionLabel}>{t('home.bookField')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push(ROUTES.MATCHES)}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.replace(ROUTES.MATCHES)}>
             <View style={[styles.quickActionIcon, { backgroundColor: themeColors.quickActionSecondaryBg }]}>
               <Ionicons name="trophy-outline" size={22} color={themeColors.quickActionSecondaryIcon} />
             </View>
@@ -270,13 +265,20 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
           </View>
         </View>
 
-        {/* Suggested for you — personalized recommendations (spec 004); omitted
-            entirely when unavailable, never a visible error (FR-004). */}
-        {suggestions.length > 0 ? (
-          <View style={styles.venuesSection}>
-            <View style={styles.venuesHeader}>
-              <Text style={styles.venuesHeading}>Suggested for you</Text>
-            </View>
+        {/* Suggested for you — personalized recommendations (spec 004); the
+            only venue-list section on Home now (the plain "Recommended
+            Venues" grid was removed — same GET /venues pool, redundant with
+            this one). "Explore All" still links to the full Booking list. */}
+        <View style={styles.venuesSection}>
+          <View style={styles.venuesHeader}>
+            <Text style={styles.venuesHeading}>Suggested for you</Text>
+            <TouchableOpacity onPress={() => router.push(ROUTES.BOOKING)}>
+              <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
+            </TouchableOpacity>
+          </View>
+          {suggestions.length === 0 ? (
+            <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
+          ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -288,33 +290,6 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
                   venue={venue}
                   onPress={() => router.push(venueDetailRoute(venue.id))}
                 />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* Recommended venues */}
-        <View style={styles.venuesSection}>
-          <View style={styles.venuesHeader}>
-            <Text style={styles.venuesHeading}>{t('home.venuesHeading')}</Text>
-            <TouchableOpacity onPress={() => router.push(ROUTES.BOOKING)}>
-              <Text style={styles.exploreAll}>{t('home.exploreAll')}</Text>
-            </TouchableOpacity>
-          </View>
-          {venuesLoading ? (
-            <ActivityIndicator style={styles.venuesLoading} color={themeColors.primary} />
-          ) : venuesError ? (
-            <Text style={styles.venuesEmptyText}>{venuesError}</Text>
-          ) : venues.length === 0 ? (
-            <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.venuesList}
-            >
-              {venues.map((venue) => (
-                <VenueCard key={venue.id} venue={venue} onPress={() => router.push(venueDetailRoute(venue.id))} />
               ))}
             </ScrollView>
           )}
@@ -513,9 +488,6 @@ function getStyles(c: ThemeColors) {
     marginHorizontal: 20,
     fontSize: 14,
     color: c.textSecondaryAlt,
-  },
-  venuesLoading: {
-    marginTop: 8,
   },
   });
 }

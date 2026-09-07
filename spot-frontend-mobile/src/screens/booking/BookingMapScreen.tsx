@@ -35,9 +35,10 @@ function toPreview(venue: PublicVenue): MapVenuePreview {
   return {
     id: String(venue.venueId),
     name: venue.name,
-    image: VENUE_PLACEHOLDER_IMAGE,
+    image: venue.coverImageUrl ? { uri: venue.coverImageUrl } : VENUE_PLACEHOLDER_IMAGE,
+    fallbackImage: VENUE_PLACEHOLDER_IMAGE,
     distanceLabel:
-      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
+      venue.distanceKm != null ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
   };
 }
 

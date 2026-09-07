@@ -67,8 +67,8 @@ export const listTournamentsQuerySchema = z
       blankToUndefined,
       z.coerce
         .number()
-        .min(1, 'radiusKm must be at least 1')
-        .max(20, 'radiusKm must be at most 20')
+        .min(0, 'radiusKm must be at least 0')
+        .max(50, 'radiusKm must be at most 50')
         .optional(),
     ),
     favorited: z.preprocess(optionalBoolean, z.boolean().optional()),
@@ -91,7 +91,7 @@ export const listTournamentsQuerySchema = z
           code: z.ZodIssueCode.custom,
           path: !hasRadius ? ['radiusKm'] : !hasLat ? ['latitude'] : ['longitude'],
           message:
-            'latitude, longitude, and radiusKm must be sent together (distance 1–20 km)',
+            'latitude, longitude, and radiusKm must be sent together (distance 0–50 km)',
         });
       }
     }

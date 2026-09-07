@@ -9,6 +9,7 @@ import JoinTournamentScreen from '@/screens/tournaments/JoinTournamentScreen';
 import { getErrorMessage } from '@/services/apiErrors';
 import { getTournamentDetail } from '@/services/tournamentService';
 import type { TournamentDetail } from '@/types/tournament';
+import { safeBack } from '@/utils/safeBack';
 
 // Thin route (.claude/rules/code-style.md) — pre-fetches the tournament so
 // JoinTournamentScreen knows the sport + format that drive the roster rules
@@ -41,7 +42,7 @@ export default function JoinTournamentRoute() {
     return (
       <JoinTournamentScreen
         tournament={tournament}
-        onBack={() => router.back()}
+        onBack={() => safeBack(router, '/matches')}
         onJoined={() => router.replace(`/tournaments/${tournamentId}`)}
       />
     );

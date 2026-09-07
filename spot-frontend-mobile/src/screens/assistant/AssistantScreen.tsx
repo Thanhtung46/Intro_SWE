@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,17 +16,20 @@ import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { venueDetailRoute } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
 import ChatMessageBubble from '@/components/assistant/ChatMessageBubble';
 import PendingActionCard from '@/components/assistant/PendingActionCard';
+import TypingIndicator from '@/components/assistant/TypingIndicator';
 import VoiceRecorderButton from '@/components/assistant/VoiceRecorderButton';
 import {
   AssistantReply,
   ConflictAlternative,
   MatchResult,
+  VenueResult,
+  clearConversation,
   getHistory,
   getOrCreateConversationId,
   sendMessage,
+  startNewConversation,
 } from '@/services/assistantService';
 import { ChatMessage, nextMessageId } from '@/types/assistant';
 
@@ -51,6 +55,16 @@ function replyToChatMessage(reply: AssistantReply): ChatMessage {
       kind: 'results',
       text: reply.text,
       payload: reply.results,
+      timestamp: new Date().toISOString(),
+    };
+  }
+  if (reply.venueResults) {
+    return {
+      id: nextMessageId(),
+      role: 'assistant',
+      kind: 'venueResults',
+      text: reply.text,
+      payload: reply.venueResults,
       timestamp: new Date().toISOString(),
     };
   }
@@ -113,6 +127,12 @@ export default function AssistantScreen({ onBack }: Props) {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   };
 
+  useEffect(() => {
+    if (sending) {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [sending]);
+
   const handleSend = async (text: string) => {
     if (!conversationId || sending) return;
     const playerMessage: ChatMessage = {
@@ -134,6 +154,14 @@ export default function AssistantScreen({ onBack }: Props) {
 
     if (result.outcome === 'ok') {
       appendMessage(replyToChatMessage(result.reply));
+      if (result.reply.bookingHandoff) {
+        // Hand-off only — no booking was created (spec
+        // 007-assistant-venue-search FR-010). The player still reviews
+        // and confirms in the venue's own booking screen, pre-filled with
+        // the date/time they asked for.
+        const { venueId, date, timeFrom } = result.reply.bookingHandoff;
+        router.push(venueDetailRoute(String(venueId), undefined, { date, timeFrom }));
+      }
     } else if (result.outcome === 'unavailable') {
       appendMessage({
         id: nextMessageId(),
@@ -157,14 +185,32 @@ export default function AssistantScreen({ onBack }: Props) {
   };
 
   const handleResultPress = (result: MatchResult) => {
-    // No match-detail screen exists in this app yet (only /venue/[id]) —
-    // matches the "coming soon" convention already used elsewhere for
-    // not-yet-built destinations (e.g. Home's "Find Match").
-    comingSoon(result.title);
+    router.push(`/matches/${result.matchId}`);
+  };
+
+  const handleVenuePress = (venue: VenueResult) => {
+    router.push(venueDetailRoute(String(venue.venueId)));
   };
 
   const handleConfirmAction = (actionText: string) => {
     handleSend(actionText);
+  };
+
+  const handleClearConversation = () => {
+    if (!conversationId || sending || messages.length === 0) return;
+    Alert.alert('Xoá đoạn hội thoại?', 'Toàn bộ tin nhắn với trợ lý sẽ bị xoá.', [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xoá',
+        style: 'destructive',
+        onPress: async () => {
+          await clearConversation(conversationId);
+          const newId = await startNewConversation();
+          setConversationId(newId);
+          setMessages([]);
+        },
+      },
+    ]);
   };
 
   return (
@@ -179,7 +225,19 @@ export default function AssistantScreen({ onBack }: Props) {
           <Ionicons name="arrow-back" size={18} color={colors.headingText} />
         </TouchableOpacity>
         <Text style={styles.title}>AI Assistant</Text>
-        <View style={styles.backButton} />
+        <TouchableOpacity
+          onPress={handleClearConversation}
+          disabled={sending || messages.length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Xoá đoạn hội thoại"
+          style={styles.backButton}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={18}
+            color={messages.length === 0 ? colors.cardBorder : colors.headingText}
+          />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -205,18 +263,17 @@ export default function AssistantScreen({ onBack }: Props) {
                   onCancel={() => handleConfirmAction('Thôi, hủy giúp mình')}
                 />
               ) : (
-                <ChatMessageBubble key={message.id} message={message} onResultPress={handleResultPress} />
+                <ChatMessageBubble
+                  key={message.id}
+                  message={message}
+                  onResultPress={handleResultPress}
+                  onVenuePress={handleVenuePress}
+                />
               ),
             )}
+            {sending ? <TypingIndicator /> : null}
           </ScrollView>
         )}
-
-        {sending ? (
-          <View style={styles.typingRow}>
-            <Ionicons name="ellipsis-horizontal" size={16} color={colors.bodyText} />
-            <Text style={styles.typingText}>Trợ lý đang trả lời...</Text>
-          </View>
-        ) : null}
 
         <View style={styles.inputRow}>
           <VoiceRecorderButton
@@ -303,17 +360,6 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     paddingVertical: 12,
-  },
-  typingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  typingText: {
-    fontSize: 12,
-    color: colors.bodyText,
   },
   inputRow: {
     flexDirection: 'row',
