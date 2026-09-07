@@ -25,6 +25,7 @@ export function toPublicBooking(row) {
     depositAmount: Number(row.deposit_amount),
     hireReferee: Boolean(row.hire_referee),
     refereeFeeVnd: row.referee_fee_vnd != null ? Number(row.referee_fee_vnd) : null,
+    bookingCode: row.booking_code ?? null,
     status: row.status,
   };
 }

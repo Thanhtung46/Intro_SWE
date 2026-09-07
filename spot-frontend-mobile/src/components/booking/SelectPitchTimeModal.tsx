@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ThemeColors } from '@/constants/theme';
@@ -16,21 +17,16 @@ type Props = {
   visible: boolean;
   venueId: number;
   pitches: Pitch[];
+  venueName: string;
+  venueAddress: string;
+  venueLatitude?: number | null;
+  venueLongitude?: number | null;
   /** Venue opening hours as 24h integers, e.g. 6 and 23 for "06:00 - 23:00". */
   openHour: number;
   closeHour: number;
   onClose: () => void;
   /** Called after at least one slot in the multi-select was booked successfully. */
   onConfirm: () => void;
-  /** Preselected date (YYYY-MM-DD) — e.g. handed off from the AI assistant
-   * after a venue search (spec 007-assistant-venue-search P3). Falls back
-   * to today when absent/unparseable, same as before this prop existed. */
-  initialDate?: string;
-  /** Preselected start time (HH:mm) — same hand-off source as
-   * initialDate. Only used to scroll the grid into view; the player still
-   * taps the cell themselves to actually select it (no slot is
-   * pre-selected/booked on their behalf). */
-  initialTimeFrom?: string;
   /** "Hire a Referee" toggle from VenueDetailScreen's Extra Services — applied
    * to every booking created in this session (fee added per line item). */
   hireReferee?: boolean;
@@ -85,17 +81,20 @@ export default function SelectPitchTimeModal({
   visible,
   venueId,
   pitches,
+  venueName,
+  venueAddress,
+  venueLatitude,
+  venueLongitude,
   openHour,
   closeHour,
   onClose,
   onConfirm,
   hireReferee,
   refereeFeeVnd,
-  initialDate,
-  initialTimeFrom,
   themeColors,
 }: Props) {
   const { t } = useLanguage();
+  const router = useRouter();
   const timeSlots = useMemo(() => buildTimeSlots(openHour, closeHour), [openHour, closeHour]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(

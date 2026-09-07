@@ -57,6 +57,12 @@ function emailPayloadForType(type, { title, body, data = {} }) {
       text: body,
     };
   }
+  if (type === NOTIFICATION_TYPES.BOOKING_PAYMENT_SUCCESS) {
+    return {
+      subject: title || 'SPOT payment successful',
+      text: body,
+    };
+  }
   if (type === NOTIFICATION_TYPES.BOOKING_REMINDER) {
     return {
       subject: title || 'SPOT booking reminder',
@@ -124,6 +130,7 @@ export async function createNotification({
     const allowEmail =
       sendEmail &&
       (        type === NOTIFICATION_TYPES.BOOKING_CREATED ||
+        type === NOTIFICATION_TYPES.BOOKING_PAYMENT_SUCCESS ||
         type === NOTIFICATION_TYPES.BOOKING_REMINDER ||
         type === NOTIFICATION_TYPES.MATCH_EXPIRED_UNDERFILLED ||
         type === NOTIFICATION_TYPES.MATCH_CANCELLED ||
