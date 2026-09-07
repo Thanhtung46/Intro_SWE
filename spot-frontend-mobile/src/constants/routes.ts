@@ -43,8 +43,17 @@ export const ROUTES = {
  * from the Booking screen's active tab) narrows the detail screen's pitches
  * to that sport only, so a venue with both football and badminton courts
  * doesn't let a player book the wrong one. */
-export function venueDetailRoute(id: string, sport?: string): string {
-  return sport ? `/venue/${id}?sport=${encodeURIComponent(sport)}` : `/venue/${id}`;
+export function venueDetailRoute(
+  id: string,
+  sport?: string,
+  opts?: { date?: string | null; timeFrom?: string | null },
+): string {
+  const params = new URLSearchParams();
+  if (sport) params.set('sport', sport);
+  if (opts?.date) params.set('date', opts.date);
+  if (opts?.timeFrom) params.set('timeFrom', opts.timeFrom);
+  const query = params.toString();
+  return query ? `/venue/${id}?${query}` : `/venue/${id}`;
 }
 
 /** Referee job-board venue detail (Apply + in-app directions). */

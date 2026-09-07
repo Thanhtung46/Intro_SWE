@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   NativeScrollEvent,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
@@ -24,7 +24,8 @@ import { listVenues, PublicVenue } from '@/services/venueService';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 import { getRecommendations, RecommendationItem } from '@/services/recommendationService';
 import { venueDetailRoute } from '@/constants/routes';
-import useUserLocation from '@/hooks/useUserLocation';
+import { useHomeVenuesCache } from '@/state/homeVenuesCache';
+import { useCancelledGuard } from '@/hooks/useCancelledGuard';
 
 type Sport = 'football' | 'badminton';
 
@@ -105,26 +106,52 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const carouselScrollRef = useRef<ScrollView>(null);
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
   const [rawSuggestions, setRawSuggestions] = useState<RecommendationItem[]>([]);
-  const [venueCoverById, setVenueCoverById] = useState<Record<number, string>>({});
-  const userLocation = useUserLocation();
+  const venuesCache = useHomeVenuesCache();
+  const createGuard = useCancelledGuard();
+  const venueCoverById = useMemo(
+    () =>
+      Object.fromEntries(
+        (venuesCache.data ?? [])
+          .filter((v): v is PublicVenue & { coverImageUrl: string } => !!v.coverImageUrl)
+          .map((v) => [v.venueId, v.coverImageUrl]),
+      ),
+    [venuesCache.data],
+  );
 
   // Only used to cross-reference real cover photos onto "Suggested for you"
   // cards (mapRecommendationToCard below) — the plain venue browse grid this
   // used to feed was removed (duplicated "Suggested for you" with the same
   // handful of test venues); Booking screen is the real full venue list now.
-  useEffect(() => {
-    const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
-    listVenues(sport, opts).then((result) => {
-      if (!result.success) return;
-      const list = result.venues ?? [];
-      setVenueCoverById(
-        Object.fromEntries(
-          list.filter((v): v is PublicVenue & { coverImageUrl: string } => !!v.coverImageUrl)
-            .map((v) => [v.venueId, v.coverImageUrl]),
-        ),
-      );
+  // Deliberately not passing device GPS here: the backend treats any
+  // lat/long pair as an active 20km distance filter (defaulted when
+  // radiusKm is omitted — list-venues.dto.js), which would silently drop
+  // every venue whose seeded coordinates don't happen to be near wherever
+  // the device/emulator's GPS resolves to (see BookingScreen for the same
+  // fix — this was reported as "no venues found" after GPS had time to
+  // resolve).
+  const fetchVenuesForCovers = useCallback(() => {
+    const guard = createGuard();
+    listVenues(sport).then((result) => {
+      if (guard.isCancelled() || !result.success) return;
+      venuesCache.applyResult(result.venues ?? []);
     });
-  }, [sport, userLocation]);
+    return guard.cancel;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- venuesCache/createGuard are stable
+  }, [sport]);
+
+  useEffect(() => fetchVenuesForCovers(), [fetchVenuesForCovers]);
+
+  /** ~30s TTL (research.md §3) — refresh the cover-photo lookup silently on
+   * a tab revisit once stale, same pattern as Booking/Schedule. */
+  const HOME_STALE_TTL_MS = 30_000;
+  useFocusEffect(
+    useCallback(() => {
+      if (venuesCache.data !== null && venuesCache.isStale(HOME_STALE_TTL_MS)) {
+        fetchVenuesForCovers();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- venuesCache is stable
+    }, [fetchVenuesForCovers])
+  );
 
   useEffect(() => {
     // A failed/unavailable fetch just leaves this section empty — never a

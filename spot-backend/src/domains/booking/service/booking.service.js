@@ -56,7 +56,13 @@ export function bangkokRangeToUtc(fromDate, toDate) {
 function resolveDateWindow(query) {
   const from = query.from ?? todayInBangkok();
   const to = query.to ?? addCalendarDays(from, SCHEDULE_DEFAULT_DAYS);
-  return bangkokRangeToUtc(from, to);
+  const { rangeStart, rangeEnd } = bangkokRangeToUtc(from, to);
+  // When the caller didn't pin an explicit `from` (e.g. Home's single
+  // "upcoming match" card, vs. Schedule's calendar which always passes the
+  // viewed month), start-of-today would still include a booking/match
+  // earlier today that has already ended — `now()` is the correct lower
+  // bound for "what's upcoming", not "what's today".
+  return { rangeStart: query.from ? rangeStart : new Date(), rangeEnd };
 }
 
 export async function listMySchedule(userId, query) {
@@ -69,10 +75,28 @@ export async function listMySchedule(userId, query) {
       rangeEnd,
       limit: query.limit,
     });
+    const now = Date.now();
     return {
-      items: rows.map(toPublicScheduleItem),
+      items: rows.map((row) => toPublicScheduleItem(row, now)),
       timezone: SCHEDULE_TIMEZONE,
     };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Poll-driven auto-completion for bookings whose end time has passed —
+ * mirrors matchmaking's processExpiredFullMatches (match.service.js).
+ * Run via `npm run worker:booking-completion`.
+ */
+export async function processExpiredBookings({ limit = 50 } = {}) {
+  const client = await pool.connect();
+  try {
+    const bookingIds = await bookingRepository.completeExpiredBookings(client, {
+      limit,
+    });
+    return { processed: bookingIds.length, bookingIds };
   } finally {
     client.release();
   }

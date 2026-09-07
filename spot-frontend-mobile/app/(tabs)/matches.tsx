@@ -12,7 +12,7 @@ export default function MatchesHomepageRoute() {
   const router = useRouter();
 
   return (
-    <AppShell activeTab="matches">
+    <AppShell>
       <MatchesHomepageScreen
         onOpenMap={(tab) => {
           if (tab === 'groups') return router.push('/groups/map');

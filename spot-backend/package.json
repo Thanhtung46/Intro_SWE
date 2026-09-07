@@ -42,6 +42,7 @@
     "smoke:payment": "node scripts/smoke-payment.js",
     "worker:reminders": "node scripts/reminder-worker.js",
     "worker:match-expiry": "node scripts/match-expiry-worker.js",
+    "worker:booking-completion": "node scripts/booking-completion-worker.js",
     "worker:payment-expiry": "node scripts/payment-expiry-worker.js",
     "worker:tournament-lifecycle": "node scripts/tournament-lifecycle-worker.js",
     "fetch:vmito": "node scripts/fetch-vmito-listings.js",

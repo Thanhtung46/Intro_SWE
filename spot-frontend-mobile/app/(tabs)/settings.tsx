@@ -6,7 +6,7 @@ import { ROUTES } from '@/constants/routes';
 export default function SettingsRoute() {
   const router = useRouter();
   return (
-    <AppShell activeTab="settings">
+    <AppShell>
       <SettingsScreen
         onEditProfile={() => router.push(ROUTES.PROFILE)}
         onSignedOut={() => router.replace(ROUTES.AUTH_LOGIN)}

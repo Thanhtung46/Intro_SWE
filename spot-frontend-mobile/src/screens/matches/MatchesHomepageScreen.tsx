@@ -201,23 +201,52 @@ export default function MatchesHomepageScreen(props: Props) {
     [sport, appliedLocation, filters]
   );
 
+  // Guards against an earlier, superseded fetchMatches call (e.g. a rapid
+  // filter change while a previous request is still in flight) applying its
+  // stale result after a newer call has already started — only the most
+  // recently *started* call is allowed to write into state.
+  const fetchRequestIdRef = useRef(0);
+  /** Set after every successful/failed fetch — read by the staleness check
+   * in the focus-revalidation effect below (T023). */
+  const matchesFetchedAtRef = useRef<number | null>(null);
+  /** ~30s TTL (research.md §3). */
+  const MATCHES_STALE_TTL_MS = 30_000;
+
   const fetchMatches = useCallback(
     async (isRefresh = false) => {
+      const requestId = ++fetchRequestIdRef.current;
       isRefresh ? setRefreshing(true) : setStatus('loading');
       try {
         if (isRefresh) await refreshViewerCoords(true);
         const result = await listMatches(buildListQuery(0));
+        if (fetchRequestIdRef.current !== requestId) return;
         setMatches(result.matches);
         setTotal(result.total);
         setStatus('ready');
+        matchesFetchedAtRef.current = Date.now();
       } catch (err) {
+        if (fetchRequestIdRef.current !== requestId) return;
         setErrorMessage(getErrorMessage(err));
         setStatus('error');
       } finally {
-        if (isRefresh) setRefreshing(false);
+        if (isRefresh && fetchRequestIdRef.current === requestId) setRefreshing(false);
       }
     },
     [buildListQuery, refreshViewerCoords]
+  );
+
+  // Screens stay mounted across tab switches now (US1) — on a stale revisit,
+  // silently revalidate via the same `isRefresh` path pull-to-refresh uses
+  // (RefreshControl spinner, matches stay visible throughout — no full-screen
+  // loading state, per data-model.md rule 3).
+  useFocusEffect(
+    useCallback(() => {
+      if (subTab === 'matches' && status === 'ready' && matchesFetchedAtRef.current != null &&
+        Date.now() - matchesFetchedAtRef.current > MATCHES_STALE_TTL_MS) {
+        fetchMatches(true);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately re-checked on every focus + subTab/status change
+    }, [fetchMatches, subTab, status])
   );
 
   const loadMoreMatches = useCallback(async () => {
@@ -532,13 +561,17 @@ export default function MatchesHomepageScreen(props: Props) {
         <FlatList
           style={styles.list}
           contentContainerStyle={styles.listContent}
-          data={status === 'ready' ? matches : []}
+          data={matches}
           keyExtractor={(item) => String(item.matchId)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchMatches(true)} />}
           onEndReached={loadMoreMatches}
           onEndReachedThreshold={0.4}
           ListHeaderComponent={
-            status === 'loading' ? (
+            // Only shown on a true first load (no matches yet) — a
+            // sport/filter change re-fetches with status:'loading' too, but
+            // `matches` keeps its previous results visible throughout per
+            // data-model.md rule 3, instead of blanking to a spinner.
+            status === 'loading' && matches.length === 0 ? (
               <ActivityIndicator style={styles.spinner} color={themeColors.primary} />
             ) : status === 'error' ? (
               <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />

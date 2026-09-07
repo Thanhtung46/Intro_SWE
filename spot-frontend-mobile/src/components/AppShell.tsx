@@ -3,10 +3,9 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { ReactNode, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ROUTES } from '@/constants/routes';
-import SlidingBottomNav, { type SlidingTab, type SlidingTabKey } from '@/components/navigation/SlidingBottomNav';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUser } from '../context/UserContext';
@@ -14,36 +13,24 @@ import { getUnreadCount } from '../services/notificationService';
 import { NotificationMenu } from './NotificationMenu';
 import { ProfileMenu } from './ProfileMenu';
 
-type TabKey = SlidingTabKey;
-
-const TAB_PATH: Record<TabKey, '/home' | '/booking' | '/matches' | '/schedule' | '/settings'> = {
-  home: '/home',
-  booking: '/booking',
-  matches: '/matches',
-  schedule: '/schedule',
-  settings: '/settings',
-};
-
 /**
- * Persistent top header + bottom tab bar shared across Home/Matches/
- * Schedule/Settings (Figma: Football Dashboard.png, Settings.png, View
- * Schedule.png, Matches Homepage all show the same shell). Main Profile/
- * Edit Profile and auth screens intentionally do NOT use this shell
- * (Figma's Main Profile.png has its own back+Edit header, no bottom tabs).
+ * Persistent top header shared across Home/Matches/Schedule/Settings
+ * (Figma: Football Dashboard.png, Settings.png, View Schedule.png, Matches
+ * Homepage all show the same shell). Main Profile/Edit Profile and auth
+ * screens intentionally do NOT use this shell.
+ *
+ * The bottom tab bar previously rendered here (its own copy of
+ * `SlidingBottomNav`, driven by `router.replace()`) moved to `AppTabBar`,
+ * rendered once by `app/(tabs)/_layout.tsx`'s `Tabs` as the shared `tabBar`
+ * — see specs/002-tab-navigation-performance. Rendering it per-screen here
+ * would duplicate it under `Tabs` (which already supplies one bar for the
+ * whole group) and fight the mount-persistence fix this feature relies on.
  */
-export function AppShell({ activeTab, children }: { activeTab: TabKey; children: ReactNode }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useUser();
   const { mode, colors: themeColors } = useTheme();
   const { t } = useLanguage();
-  const tabs: SlidingTab[] = [
-    { key: 'home', label: t('nav.home'), icon: 'home' },
-    { key: 'booking', label: t('nav.booking'), icon: 'ticket-outline' },
-    { key: 'matches', label: t('nav.matches'), icon: 'trophy-outline' },
-    { key: 'schedule', label: t('nav.schedule'), icon: 'calendar-outline' },
-    { key: 'settings', label: t('nav.settings'), icon: 'settings-outline' },
-  ];
   const [profileMenuVisible, setProfileMenuVisible] = useState(false);
   const [notificationMenuVisible, setNotificationMenuVisible] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
@@ -57,13 +44,6 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
   useEffect(() => {
     refreshUnreadCount();
   }, []);
-
-  const goToTab = (tab: TabKey) => {
-    if (activeTab === tab) return;
-    // replace keeps the tab switch from stacking screens; root Stack uses
-    // animation: 'none' for these routes so pages don't overlap while fading.
-    router.replace(TAB_PATH[tab]);
-  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.screenBackgroundAlt }]} edges={['top']}>
@@ -106,10 +86,6 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
       </BlurView>
 
       <View style={styles.content}>{children}</View>
-
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6), backgroundColor: themeColors.glassBarBg, borderTopColor: themeColors.chromeBorder }]}>
-        <SlidingBottomNav tabs={tabs} active={activeTab} onPress={goToTab} activeColor={themeColors.activeTabBg} inactiveColor={themeColors.inactiveTabText} />
-      </View>
 
       <ProfileMenu visible={profileMenuVisible} onClose={() => setProfileMenuVisible(false)} />
       <NotificationMenu
@@ -186,12 +162,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  bottomNav: {
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    // paddingBottom set from safe-area inset so the white bar reaches the
-    // home-indicator edge (no separate gray strip under the tabs).
-    borderTopWidth: 1,
   },
 });

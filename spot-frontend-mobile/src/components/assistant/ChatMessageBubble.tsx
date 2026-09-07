@@ -1,9 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 import { MatchResult, VenueResult } from '@/services/assistantService';
 import { ChatMessage } from '@/types/assistant';
+import ResultCard from './ResultCard';
 
 type Props = {
   message: ChatMessage;
@@ -14,11 +16,16 @@ type Props = {
 /**
  * Renders one conversation turn by kind (data-model.md Chat Message) —
  * "pendingAction" is rendered separately as a PendingActionCard by the
- * screen (User Story 3), not here.
+ * screen (User Story 3), not here. Bubble background switches on `kind` so
+ * a clarifying question / error reads distinct from a normal answer at a
+ * glance (spec 001-assistant-chat-ui-redesign FR-006/FR-007).
  */
 export default function ChatMessageBubble({ message, onResultPress, onVenuePress }: Props) {
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
   const isPlayer = message.role === 'player';
   const isError = message.kind === 'error';
+  const isClarifying = message.kind === 'clarifying';
 
   return (
     <View style={[styles.row, isPlayer ? styles.rowPlayer : styles.rowAssistant]}>
@@ -26,6 +33,7 @@ export default function ChatMessageBubble({ message, onResultPress, onVenuePress
         style={[
           styles.bubble,
           isPlayer ? styles.bubblePlayer : styles.bubbleAssistant,
+          isClarifying && styles.bubbleClarifying,
           isError && styles.bubbleError,
         ]}
       >
@@ -36,17 +44,12 @@ export default function ChatMessageBubble({ message, onResultPress, onVenuePress
         {message.kind === 'results' && Array.isArray(message.payload) ? (
           <View style={styles.resultsList}>
             {(message.payload as MatchResult[]).map((result) => (
-              <TouchableOpacity
+              <ResultCard
                 key={result.matchId}
-                style={styles.resultItem}
+                variant="match"
+                result={result}
                 onPress={() => onResultPress?.(result)}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resultTitle}>{result.title}</Text>
-                <Text style={styles.resultMeta}>
-                  {result.venueName} · {result.spotsLeft} spots left
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         ) : null}
@@ -54,20 +57,12 @@ export default function ChatMessageBubble({ message, onResultPress, onVenuePress
         {message.kind === 'venueResults' && Array.isArray(message.payload) ? (
           <View style={styles.resultsList}>
             {(message.payload as VenueResult[]).map((venue) => (
-              <TouchableOpacity
+              <ResultCard
                 key={venue.venueId}
-                style={styles.resultItem}
+                variant="venue"
+                result={venue}
                 onPress={() => onVenuePress?.(venue)}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resultTitle}>{venue.venueName}</Text>
-                <Text style={styles.resultMeta}>
-                  {venue.address}
-                  {venue.priceFromPerHour != null
-                    ? ` · từ ${venue.priceFromPerHour.toLocaleString('vi-VN')}đ/giờ`
-                    : ''}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         ) : null}
@@ -76,67 +71,55 @@ export default function ChatMessageBubble({ message, onResultPress, onVenuePress
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginVertical: 4,
-  },
-  rowPlayer: {
-    justifyContent: 'flex-end',
-  },
-  rowAssistant: {
-    justifyContent: 'flex-start',
-  },
-  bubble: {
-    maxWidth: '80%',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  bubblePlayer: {
-    backgroundColor: colors.primaryDark,
-    borderBottomRightRadius: 4,
-  },
-  bubbleAssistant: {
-    backgroundColor: colors.glassBackground,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderBottomLeftRadius: 4,
-  },
-  bubbleError: {
-    backgroundColor: colors.errorBackground,
-    borderColor: colors.error,
-  },
-  text: {
-    fontSize: 14,
-  },
-  textPlayer: {
-    color: colors.white,
-  },
-  textAssistant: {
-    color: colors.headingText,
-  },
-  resultsList: {
-    marginTop: 8,
-    gap: 8,
-  },
-  resultItem: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  resultTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.headingText,
-  },
-  resultMeta: {
-    fontSize: 12,
-    color: colors.bodyText,
-    marginTop: 2,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      marginVertical: 4,
+    },
+    rowPlayer: {
+      justifyContent: 'flex-end',
+    },
+    rowAssistant: {
+      justifyContent: 'flex-start',
+    },
+    bubble: {
+      maxWidth: '80%',
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    bubblePlayer: {
+      backgroundColor: c.primary,
+      borderBottomRightRadius: 4,
+    },
+    bubbleAssistant: {
+      backgroundColor: c.glassCardBg,
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+      borderBottomLeftRadius: 4,
+    },
+    bubbleClarifying: {
+      backgroundColor: c.warningSurface,
+      borderColor: c.warningText,
+    },
+    bubbleError: {
+      backgroundColor: c.dangerSurface,
+      borderColor: c.error,
+    },
+    text: {
+      fontSize: 14,
+    },
+    textPlayer: {
+      color: c.white,
+    },
+    textAssistant: {
+      color: c.textPrimary,
+    },
+    resultsList: {
+      marginTop: 8,
+      gap: 8,
+    },
+  });
+}

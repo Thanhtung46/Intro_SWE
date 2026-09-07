@@ -96,15 +96,41 @@ def _search_params(interpreted_request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _venue_search_params(interpreted_request: dict[str, Any]) -> dict[str, Any]:
-    """Same criteria `_search_params()` sends, plus the timeTo default
-    `GET /venues` needs to actually activate its availability filter
-    (spec 007 research.md decision 2) — omitting timeTo while timeFrom is
-    set would silently disable that filter, not widen the window."""
+    """Same criteria `_search_params()` sends, plus a synthesized `timeFrom`
+    or `timeTo` when only one bound was given — `GET /venues`' availability
+    filter only activates when `date`+`timeFrom`+`timeTo` are ALL present
+    (spot-backend venue.repository.js `hasAvailability`); leaving either one
+    null doesn't widen the window, it silently disables filtering entirely
+    and returns venues with no regard to the requested time at all (spec 007
+    research.md decision 2). Handles both directions: "sau 7h" (timeFrom
+    only) gets a synthesized end 1h later; "trước 7h" (timeTo only) gets a
+    synthesized start 1h earlier.
+
+    A single-bound phrase like "trước 7h tối nay" doesn't always come out of
+    Gemini's extraction as *only* `timeTo` — in production it has been
+    observed to fill BOTH `timeFrom` and `timeTo` with the same normalized
+    "19:00", producing a zero-width window spot-backend's DTO rejects
+    outright (`timeTo` must be strictly greater than `timeFrom`), which
+    surfaced as a 500 on every message in that conversation. Treat an
+    already-equal pair the same as a lone `timeTo`: widen the start back by
+    the default window instead of forwarding an impossible range."""
     params = _search_params(interpreted_request)
     if params.get("timeFrom") and not params.get("timeTo"):
         hour, minute = (int(part) for part in params["timeFrom"].split(":"))
         end_hour = (hour + DEFAULT_VENUE_SEARCH_WINDOW_HOURS) % 24
         params["timeTo"] = f"{end_hour:02d}:{minute:02d}"
+    elif params.get("timeTo") and not params.get("timeFrom"):
+        hour, minute = (int(part) for part in params["timeTo"].split(":"))
+        start_hour = (hour - DEFAULT_VENUE_SEARCH_WINDOW_HOURS) % 24
+        params["timeFrom"] = f"{start_hour:02d}:{minute:02d}"
+    elif (
+        params.get("timeFrom")
+        and params.get("timeTo")
+        and params["timeFrom"] == params["timeTo"]
+    ):
+        hour, minute = (int(part) for part in params["timeTo"].split(":"))
+        start_hour = (hour - DEFAULT_VENUE_SEARCH_WINDOW_HOURS) % 24
+        params["timeFrom"] = f"{start_hour:02d}:{minute:02d}"
     return params
 
 

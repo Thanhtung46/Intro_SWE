@@ -10,7 +10,7 @@ import { ROUTES } from '@/constants/routes';
 export default function Home() {
   const router = useRouter();
   return (
-    <AppShell activeTab="home">
+    <AppShell>
       <HomeScreen onNavigateSchedule={() => router.push(ROUTES.SCHEDULE)} />
     </AppShell>
   );

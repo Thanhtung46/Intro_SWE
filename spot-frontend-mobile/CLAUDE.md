@@ -64,10 +64,10 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   `src/screens/common/PendingApprovalScreen.tsx` is the shared
   post-registration waiting screen.
 - **Profile/session**: `app/profile/index.tsx`, `app/profile/edit.tsx`,
-  `app/settings/index.tsx`, all reading from `src/context/UserContext.tsx` (wraps
+  `app/(tabs)/settings.tsx`, all reading from `src/context/UserContext.tsx` (wraps
   the app in `app/_layout.tsx`) and `src/utils/authStorage.ts`
   (secure-store token helpers).
-- **Home** (`SPOT-34`, in progress): `app/home/index.tsx` is a thin route wrapper
+- **Home** (`SPOT-34`, in progress): `app/(tabs)/home.tsx` is a thin route wrapper
   around `src/screens/home/HomeScreen.tsx` — a "Football Dashboard" (Figma
   node `8:2`) with a sport toggle (football/badminton), an image carousel,
   a "Book Field" quick action (→ `/booking`), and a venue list built from
@@ -86,7 +86,7 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   Tapping a chat result currently falls back to `comingSoon()` — no
   match-detail screen exists yet (only `/venue/[id]`, and a `matchId` isn't
   a `venueId`).
-- **Booking** (`app/booking/index.tsx`, `app/booking/map.tsx`): reached from
+- **Booking** (`app/(tabs)/booking.tsx`, `app/booking/map.tsx`): reached from
   Home's "Book Field" quick action. `BookingScreen.tsx` is a venue list
   (Figma node `79:1390`) with its own search/filter bar and a map-view
   button (→ `/booking/map`); `BookingMapScreen.tsx` is a **pre-SPOT-76
@@ -95,6 +95,7 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   placeholders and its venue data is a local mock array. This is the one
   screen still on the old mockup; the SPOT-76 map stack below (real map via
   WebView + Leaflet + Geoapify) has not been ported to it yet.
+- **Schedule** (`app/(tabs)/schedule.tsx` → `src/screens/schedule/ScheduleScreen.tsx`): calendar view over `GET /users/me/schedule` (bookings + pickup matches only — no tournaments/groups). Each item's status (`upcoming` / `in_progress` / `completed` / `cancelled`) is computed server-side (`spot-backend`'s `schedule.entity.js`) and rendered as-is — the screen never re-derives it from `startsAt`/`endsAt`. A booking auto-transitions to `completed` (unlocking the review action) via `spot-backend`'s `npm run worker:booking-completion`, not any client-side timer. A type filter (all/bookings/pickup matches, `schedule-filter-*` testIDs) narrows both the calendar dots and the day list, in-memory only (resets on app restart, not persisted). Pickup-match cards show the host's name and the viewing player's own role (host vs. participant) — see spec `003-schedule-booking-match-rework`. Cancel/leave actions from this screen are explicitly out of scope (kèo leave still lives in Manage Matches; no booking-cancel capability exists anywhere in the app yet).
 - **Maps (SPOT-76)** — no `react-native-maps`, no Google Maps key. The stack
   is `react-native-webview` + Leaflet (CDN) + Geoapify raster tiles
   (`EXPO_PUBLIC_GEOAPIFY_API_KEY`, see `src/config/env.ts`):
@@ -131,19 +132,76 @@ Known Gotchas for a route-conflict crash that blocked this until fixed.
   `src/components/venue/SportSegmentedToggle.tsx` (Home/Booking only —
   the map screen's "All/Football/Badminton" filter-chip row is a
   different shape and stays screen-local).
-- **Bottom navigation**: `SlidingBottomNav` (via `AppShell` / `BottomNav.tsx`)
-  owns the 5-tab array — Home/Booking/Matches/Schedule/Settings — and
-  navigates with `router.replace` so tab switches don't stack screens.
+- **Bottom navigation & tab routing** (spec `002-tab-navigation-performance`,
+  SPOT — fixes the "switching tabs reloads the page" jank): the 5 tab roots
+  (`home`, `booking`, `matches`, `schedule`, `settings`) live under
+  `app/(tabs)/`, a route *group* — the URL paths (`/home`, `/booking`, ...)
+  are unchanged, only the file location moved, via an `app/(tabs)/_layout.tsx`
+  `Tabs` layout (not a plain `Stack`). `Tabs` keeps all 5 tab screens mounted
+  in the background across switches — this is the entire fix; a switch is
+  now a visibility toggle, not a remount, so revisiting a tab renders
+  instantly with no reload/reload-flash. The root `app/_layout.tsx`'s
+  `Stack` treats the whole group as a single entry (`TAB_ROUTES =
+  ['(tabs)']`) with no slide animation. `app/booking/[id].tsx`,
+  `app/booking/map.tsx`, `app/matches/[id].tsx`, `app/matches/host-form.tsx`,
+  etc. are genuine non-tab sibling routes and correctly stayed **outside**
+  `(tabs)/` — expo-router route groups are transparent to these paths, so
+  nothing about them changed.
+  The single shared tab bar is `src/components/navigation/AppTabBar.tsx`,
+  wired to `Tabs`' `tabBar` render prop (`state`/`navigation`/`insets`,
+  imported from `expo-router/build/react-navigation/bottom-tabs` — **not**
+  plain `@react-navigation/bottom-tabs`, whose same-named `BottomTabBarProps`
+  type is structurally different and fails `tsc`) and calling
+  `navigation.navigate(route.name)`, not `router.replace()`. It renders
+  `src/components/navigation/SlidingBottomNav.tsx` (the pill-slide
+  animation). `src/components/navigation/BottomNav.tsx` and
+  `src/components/common/BottomNavBar.tsx` are separate, narrower nav-bar
+  instances kept intentionally — they're used only by the genuinely
+  non-tab `BookingMapScreen`/`JoinMatchMapScreen` routes above, which still
+  need real `router.replace()` navigation since they're leaving/re-entering
+  the Stack, not switching within `Tabs`. Do not add a 4th copy; if a new
+  non-tab screen needs a bottom bar, check whether one of these two already
+  fits before writing another.
+  `src/components/AppShell.tsx` (Home/Matches/Schedule/Settings' shared
+  header) no longer renders its own bottom nav or takes an `activeTab` prop
+  — that responsibility moved entirely to `AppTabBar` above.
+- **Per-tab data caching** (same spec, `src/state/*Cache.ts`): each of
+  Home/Booking/Matches/Schedule reads its list data through a small
+  `zustand` store built from `src/state/createStaleCache.ts` (a generic
+  `{ data, lastFetchedAt, isRefreshing, error }` factory — see
+  `homeVenuesCache.ts`, `bookingVenuesCache.ts`, `matchesCache.ts` (created
+  but not actually wired into `MatchesHomepageScreen.tsx` — that screen's
+  own pre-existing `status`/`matches`/`total` state was judged adequate and
+  lower-risk to touch than a full rewrite; see the feature's `tasks.md`
+  T018 note), `scheduleCache.ts`). This is `zustand`'s first real usage in
+  this app — it was previously a declared-but-unused dependency. Pattern
+  for a new tab-like screen: hold data in one of these stores (`data ??
+  []`/`data ?? null` for rendering, `applyResult`/`applyError` from the
+  fetch's `.then`), gate the *first-ever-load* spinner on a local
+  `isFirstLoad` flag (seeded `cache.data === null`, cleared once after the
+  first fetch resolves) rather than a generic "is fetching" boolean — this
+  is what keeps a revisit or a filter change showing the previous results
+  instead of flashing to a spinner/blank state. Wrap the fetch effect with
+  `src/hooks/useCancelledGuard.ts` (a `createGuard()` factory, fresh per
+  effect invocation — a single mount-scoped flag isn't enough once tabs
+  stay mounted and effects can re-run from a dependency change alone) so a
+  superseded request can't clobber a newer one's result; if a fetch is
+  triggered by both an effect and direct user actions (e.g. pull-to-refresh)
+  a monotonic request-id `useRef` counter is the alternative used by
+  `MatchesHomepageScreen.tsx`. Add a `useFocusEffect` (from `expo-router`)
+  that calls `cache.isStale(ttlMs)` (~30s) and silently refetches in the
+  background on a stale revisit — critical: an error from that background
+  refetch must never blank out already-rendered `data` (render the error as
+  a small banner *above* the content, never as a replacement for it — this
+  was a real bug caught and fixed in `BookingScreen.tsx` during
+  implementation), and a small non-blocking spinner keyed off
+  `cache.isRefreshing` communicates the background activity.
 - Test coverage exists (`__tests__/*.test.tsx`, plus co-located
   `*.test.ts(x)` next to several schemas/components) and a jest config
   **is** committed (`"jest": {"preset": "jest-expo"}` in `package.json`) —
   but `npm test` currently fails in this environment because
   `node_modules/expo-modules-core` is missing (an install gap, not a
   config gap); re-run `npm install` before assuming the suite is broken.
-
-`src/state/` and `app/tabs/` are still empty placeholders (`.gitignore`
-only) — check for actual files before assuming a store or tab route
-exists beyond what's listed above.
 
 ## Known Gotchas
 
@@ -232,28 +290,32 @@ eas submit
 ```
 app/                       # expo-router routes (file-based) — every feature
 │                            # lives in its own folder, even single-route ones
-├── _layout.tsx              # root Stack layout (wraps in UserProvider)
+├── _layout.tsx              # root Stack layout (wraps in UserProvider); TAB_ROUTES=['(tabs)'] — the whole tab group is one Stack entry, no slide animation on tab switch
 ├── index.tsx                 # "/" — Splash screen, bootstraps + redirects
 ├── onboarding/index.tsx      # "/onboarding" — single animated screen
 ├── auth/                    # choose-role, register, login, otp, forgot/reset-password
 ├── owner/                   # register, welcome
 ├── profile/                 # index (view), edit
-├── settings/index.tsx
-├── schedule/index.tsx
 ├── pending/index.tsx         # shared post-registration waiting screen
-├── home/index.tsx            # thin route → src/screens/home/HomeScreen.tsx (Football Dashboard, SPOT-34)
-├── booking/
-│   ├── index.tsx              # thin route → src/screens/booking/BookingScreen.tsx (venue list)
-│   └── map.tsx                 # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup)
+├── (tabs)/                   # route GROUP (spec 002-tab-navigation-performance) — Tabs layout, screens stay mounted across switches; URL paths below are unchanged, only file location moved
+│   ├── _layout.tsx             # Tabs layout, tabBar={AppTabBar}, no unmountOnBlur
+│   ├── home.tsx                 # "/home" → src/screens/home/HomeScreen.tsx (Football Dashboard, SPOT-34)
+│   ├── booking.tsx              # "/booking" → src/screens/booking/BookingScreen.tsx (venue list)
+│   ├── matches.tsx              # "/matches" → src/screens/matches/MatchesHomepageScreen.tsx
+│   ├── schedule.tsx             # "/schedule" → src/screens/schedule/ScheduleScreen.tsx
+│   └── settings.tsx             # "/settings"
+├── booking/map.tsx           # "/booking/map" → src/screens/booking/BookingMapScreen.tsx (venue map mockup) — sibling of (tabs)/booking.tsx, genuinely non-tab, stays outside the group
 ├── venue/[id].tsx            # "/venue/:id" → src/screens/venue/VenueDetailScreen.tsx (venue detail)
 ├── assistant/index.tsx        # thin route → src/screens/assistant/AssistantScreen.tsx (AI chat, spec 004)
 ├── venue-map.tsx             # "/venue-map" → src/screens/common/VenueMapScreen.tsx (shared single-venue map — Matches/Groups/Tournaments/Referee)
-├── matches/ , groups/ , tournaments/ , referee/   # SPOT-76 / SPOT-93 feature routes (not expanded here — see each feature's Figma/plan)
-└── tabs/                    # route group, still empty (.gitignore placeholder only)
+└── matches/ , groups/ , tournaments/ , referee/   # non-tab siblings ([id].tsx, map.tsx, host-form.tsx, ...) + SPOT-76 / SPOT-93 feature routes (not expanded here — see each feature's Figma/plan)
 src/
 ├── screens/{splash,onboarding,auth,owner,common,home,booking,venue,assistant,profile,settings,schedule}/   # presentational screen components
 ├── components/
-│   ├── navigation/{BottomNav,BottomNavItem}.tsx   # shared bottom nav (5-tab array + wiring)
+│   ├── navigation/AppTabBar.tsx                    # THE shared bottom nav for the 5 (tabs)/ screens — wired to Tabs' tabBar prop, renders SlidingBottomNav
+│   ├── navigation/SlidingBottomNav.tsx              # pill-slide animation, consumed by AppTabBar + the two non-tab bars below
+│   ├── navigation/{BottomNav,BottomNavItem}.tsx     # narrower nav bar for BookingMapScreen only (genuinely non-tab, still router.replace()-based)
+│   ├── common/BottomNavBar.tsx                      # separate narrower nav bar for JoinMatchMapScreen only — do not add a 4th copy, check these two first
 │   ├── layout/AppHeader.tsx                        # top app bar — Booking only, see note above (AppShell duplicates it for Home)
 │   ├── venue/SportSegmentedToggle.tsx               # shared football/badminton toggle (Home + Booking)
 │   ├── assistant/{ChatMessageBubble,PendingActionCard,VoiceRecorderButton}.tsx   # AI chat UI (spec 004)
@@ -264,9 +326,9 @@ src/
 ├── context/UserContext.tsx   # session state, wraps app in _layout.tsx
 ├── config/env.ts             # API_URL / USE_MOCK_API / etc. via expo-constants
 ├── utils/{authStorage,onboardingStorage,comingSoon}.ts   # secure-store token, AsyncStorage onboarding flag, shared "coming soon" alert
-├── hooks/useFloatingAnimation.ts
+├── hooks/{useFloatingAnimation,useCancelledGuard}.ts   # useCancelledGuard: createGuard() factory, fresh {isCancelled,cancel} per effect invocation — spec 002
 ├── constants/{colors,routes}.ts   # single color-token source (src/theme/colors.ts was merged in and deleted) + centralized route paths
-└── state/ types/               # state/ still empty; types/ has auth.ts + venue.ts (shared VenueBase type) + assistant.ts (ChatMessage, spec 004)
+└── state/{createStaleCache,homeVenuesCache,bookingVenuesCache,matchesCache,scheduleCache}.ts + types/   # zustand stale-while-revalidate cache stores (spec 002 — zustand's first real usage in this app), one per tab; types/ has auth.ts + venue.ts (shared VenueBase type) + assistant.ts (ChatMessage, spec 004)
 ```
 
 Convention: each screen is a thin `app/<route>.tsx` (owns navigation, calls
@@ -286,8 +348,10 @@ file under `src/` and `app/` follows this today.
 - This directory has no `.git` of its own — it's part of the root monorepo,
   see Project Overview.
 - Auth, owner-registration, profile, and settings flows are real (see
-  Project Overview) — but `src/state/` and `app/tabs/` are still empty;
-  verify a store or tab route exists before assuming it does.
+  Project Overview). `src/state/` and the tab route group are no longer
+  empty (spec `002-tab-navigation-performance` — see Architecture above):
+  the 5 tab roots live under `app/(tabs)/`, and `src/state/` holds the
+  `zustand` stale-cache stores.
 - Auth tokens and other sensitive values must go through `expo-secure-store`
   (see `src/utils/authStorage.ts`), never `AsyncStorage`.
 - Ticket refs in commits follow the existing `SPOT-NNN: ...` convention
