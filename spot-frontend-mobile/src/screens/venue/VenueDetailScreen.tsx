@@ -111,11 +111,17 @@ type Props = {
    * football and badminton courts and a player shouldn't be able to book
    * the wrong one. */
   sport?: string;
+  /** Assistant hand-off (spec 007-assistant-venue-search P3) — when the
+   * player confirmed a specific date/time in the AI chat, these arrive via
+   * the route's query params so the slot picker below can open already
+   * positioned at that slot instead of making the player pick it again. */
+  initialDate?: string;
+  initialTimeFrom?: string;
   onBack: () => void;
 };
 
 /** Venue detail — Figma node 19:297 ("Booking field - Venue Detail"). */
-export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
+export default function VenueDetailScreen({ venueId, sport, initialDate, initialTimeFrom, onBack }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
   const TABS = getTabs(t);
@@ -202,7 +208,6 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         setImages([]);
         setImagesError(result.message ?? t('common.genericError'));
       }
-      setImagesLoading(false);
     });
   }, [numericVenueId, sport]);
 
@@ -585,6 +590,8 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         closeHour={parsedHours[1]}
         hireReferee={refereeHired}
         refereeFeeVnd={REFEREE_FEE_VND}
+        initialDate={initialDate}
+        initialTimeFrom={initialTimeFrom}
         onClose={() => setPitchTimeVisible(false)}
         onConfirm={() => setPitchTimeVisible(false)}
       />
