@@ -254,7 +254,9 @@ export async function listBoardVenuesForReferee(
   ];
 
   let distanceSelect = '';
-  let orderClause = 'ORDER BY v.avg_rating DESC';
+  // Tiebreaker: within venues of equal rating (all seed/new venues are 0),
+  // surface the most recently added first instead of a non-deterministic order.
+  let orderClause = 'ORDER BY v.avg_rating DESC, v.venue_id DESC';
 
   if (lat != null && long != null) {
     const lngSlot = add(long);
@@ -266,7 +268,7 @@ export async function listBoardVenuesForReferee(
       `v.location IS NOT NULL
        AND ST_DWithin(v.location, ST_MakePoint(${lngSlot}, ${latSlot})::geography, ${radiusSlot} * 1000)`,
     );
-    orderClause = 'ORDER BY distance_km ASC';
+    orderClause = 'ORDER BY distance_km ASC, v.venue_id DESC';
   }
 
   if (province) {

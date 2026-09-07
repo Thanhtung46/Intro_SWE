@@ -20,6 +20,10 @@ interface SelectFieldProps {
   containerStyle?: StyleProp<ViewStyle>;
   /** Read-only, greyed-out display — used when the value came from a trusted source (e.g. an existing DB venue) instead of manual pick. */
   disabled?: boolean;
+  /** Reserved for the theme migration (matches FormField/PasswordField/OtpInput).
+   * Not read yet — this component's styles still use the static `colors` palette
+   * until it's migrated to `useTheme()`. Accepted so call sites can pass it
+   * uniformly. */
   themeColors?: ThemeColors;
 }
 

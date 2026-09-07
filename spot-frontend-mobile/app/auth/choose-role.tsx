@@ -19,8 +19,9 @@ const DESTINATION: Record<Role, string> = {
  * - From app/auth/otp.tsx with an `email` param — a real, OTP-verified
  *   account exists, so Continue calls POST /auth/role for it. For a
  *   PENDING Owner/Referee the backend returns a session token +
- *   `nextStep: SUBMIT_VERIFICATION`, so we store it and go straight to the
- *   verification-document upload; a PLAYER just goes to login.
+ *   `nextStep: SUBMIT_VERIFICATION`, so we store it and continue into that
+ *   role's onboarding (Owner → welcome → venue form; Referee → doc upload);
+ *   a PLAYER just goes to login.
  * - From app/onboarding.tsx with no `email` — no account exists yet, so
  *   this falls back to the old placeholder navigation (DESTINATION) with
  *   no API call, same as before this fix.
@@ -63,8 +64,10 @@ export default function ChooseRoleRoute() {
     if (result.nextStep === 'SUBMIT_VERIFICATION' && result.accessToken) {
       await setToken(result.accessToken);
       if (result.refreshToken) await setRefreshToken(result.refreshToken);
+      // Owner goes through the welcome screen first (→ /owner/register);
+      // referee goes straight to the document upload.
       router.replace(
-        selectedRole === 'owner' ? ROUTES.OWNER_REGISTER : ROUTES.REFEREE_REGISTER
+        selectedRole === 'owner' ? ROUTES.OWNER_WELCOME : ROUTES.REFEREE_REGISTER
       );
       return;
     }
