@@ -5,7 +5,7 @@ import ScheduleScreen from '@/screens/schedule/ScheduleScreen';
 export default function ScheduleRoute() {
   const { reviewedBookingId } = useLocalSearchParams<{ reviewedBookingId?: string }>();
   return (
-    <AppShell activeTab="schedule">
+    <AppShell>
       <ScheduleScreen justReviewedBookingId={reviewedBookingId} />
     </AppShell>
   );

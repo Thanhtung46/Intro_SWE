@@ -86,6 +86,7 @@ export async function listActiveVenuesBySport(
     const endSlot = add(new Date(`${date}T${timeTo}:00+07:00`));
     const dateSlot = add(date);
     availabilityFilter = `
+         AND ${endSlot}::timestamptz > now()
          AND NOT EXISTS (
            SELECT 1 FROM schema_booking.bookings b
            WHERE b.field_id = f.field_id

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import AssistantScreen from '../src/screens/assistant/AssistantScreen';
+import { ThemeProvider } from '../src/context/ThemeContext';
 import * as assistantService from '../src/services/assistantService';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -36,7 +37,11 @@ beforeEach(() => {
 });
 
 async function renderReady() {
-  render(<AssistantScreen onBack={jest.fn()} />);
+  render(
+    <ThemeProvider>
+      <AssistantScreen onBack={jest.fn()} />
+    </ThemeProvider>,
+  );
   // Wait for the mount effect (getOrCreateConversationId -> getHistory) to
   // resolve before interacting, so `conversationId` state is set.
   await waitFor(() => expect(mockedGetHistory).toHaveBeenCalled());
@@ -108,7 +113,11 @@ describe('AssistantScreen — text flow (User Story 2)', () => {
       { role: 'assistant', text: 'Mình có thể giúp gì cho bạn?', timestamp: 't2' },
     ]);
 
-    render(<AssistantScreen onBack={jest.fn()} />);
+    render(
+      <ThemeProvider>
+        <AssistantScreen onBack={jest.fn()} />
+      </ThemeProvider>,
+    );
 
     await waitFor(() => expect(screen.getByText('Mình có thể giúp gì cho bạn?')).toBeTruthy());
   });

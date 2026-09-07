@@ -195,10 +195,12 @@ Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `
       "endsAt": "2026-08-20T12:00:00.000Z",
       "bookingDate": "2026-08-20",
       "status": "PAID",
+      "displayStatus": "UPCOMING",
       "venueName": "Smoke Venue",
       "fieldName": "Pitch A",
       "address": "123 Nguyen Trai, Dist 1, HCMC",
-      "sportType": "Football"
+      "sportType": "Football",
+      "hostName": null
     },
     {
       "type": "MATCH",
@@ -209,10 +211,12 @@ Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `
       "endsAt": "2026-08-20T12:00:00.000Z",
       "bookingDate": "2026-08-20",
       "status": "PAID",
+      "displayStatus": "UPCOMING",
       "venueName": "Smoke Venue",
       "fieldName": "Pitch A",
       "address": "123 Nguyen Trai, Dist 1, HCMC",
-      "sportType": "Football"
+      "sportType": "Football",
+      "hostName": "Nguyen Van A"
     }
   ],
   "timezone": "Asia/Bangkok"
@@ -220,6 +224,10 @@ Ngày `from`/`to` là ngày lịch Bangkok; server map sang nửa khoảng UTC `
 ```
 
 `bookingId` / `matchId` đủ để FE navigate detail / cancellation policy. Bỏ `CANCELLED`.
+
+`displayStatus` (`UPCOMING` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED`) là bucket tính theo thời gian thực trên server (`schedule.entity.js::computeDisplayStatus`) — FE **không** tự suy ra từ `startsAt`/`endsAt`, chỉ hiển thị field này. `NO_SHOW` map vào `CANCELLED`; `CANCELLED` thật đã bị loại khỏi query nên không bao giờ xuất hiện ở đây. Booking tự chuyển `PAID`/`CHECKED_IN` → `COMPLETED` nhờ `npm run worker:booking-completion` (poll ~60s, giống `worker:match-expiry`) — trước đây không có cơ chế này nên `status` không bao giờ tự đạt `COMPLETED`, khiến review (`POST /reviews`, yêu cầu `status = COMPLETED`) không thể thực hiện qua flow thật.
+
+`hostName` chỉ khác `null` khi `type: "MATCH"` (join `schema_auth.user_profiles` theo `host_user_id`); luôn `null` cho `BOOKING`.
 
 ```bash
 curl -s "http://localhost:3000/users/me/schedule?type=all" \

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 const DOT_COUNT = 3;
 const BOUNCE_HEIGHT = 4;
@@ -13,6 +14,8 @@ const CYCLE_MS = 900;
  * part of the conversation, not a separate status row).
  */
 export default function TypingIndicator() {
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
   const dotAnims = useRef([...Array(DOT_COUNT)].map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
@@ -70,29 +73,31 @@ export default function TypingIndicator() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    paddingHorizontal: 16,
-    marginVertical: 4,
-  },
-  bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 16,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.glassBackground,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.bodyText,
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      paddingHorizontal: 16,
+      marginVertical: 4,
+    },
+    bubble: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: 16,
+      borderBottomLeftRadius: 4,
+      borderWidth: 1,
+      borderColor: c.surfaceBorder,
+      backgroundColor: c.glassCardBg,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    dot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: c.textSecondary,
+    },
+  });
+}

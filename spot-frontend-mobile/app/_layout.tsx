@@ -5,7 +5,13 @@ import { UserProvider } from '@/context/UserContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 
-const TAB_ROUTES = new Set(['home/index', 'booking/index', 'matches/index', 'schedule/index', 'settings/index']);
+// The 5 bottom-nav tabs now live inside one `(tabs)` group with its own
+// nested `Tabs` navigator (specs/002-tab-navigation-performance) — tab-to-
+// tab switches happen entirely inside that nested navigator and never hit
+// this root Stack at all anymore. `(tabs)` itself is still a single root
+// Stack entry (e.g. arriving here from the login screen), so it keeps the
+// no-animation treatment for that one transition.
+const TAB_ROUTES = new Set(['(tabs)']);
 
 export default function RootLayout() {
   return (

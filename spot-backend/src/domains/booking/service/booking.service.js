@@ -69,10 +69,28 @@ export async function listMySchedule(userId, query) {
       rangeEnd,
       limit: query.limit,
     });
+    const now = Date.now();
     return {
-      items: rows.map(toPublicScheduleItem),
+      items: rows.map((row) => toPublicScheduleItem(row, now)),
       timezone: SCHEDULE_TIMEZONE,
     };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Poll-driven auto-completion for bookings whose end time has passed —
+ * mirrors matchmaking's processExpiredFullMatches (match.service.js).
+ * Run via `npm run worker:booking-completion`.
+ */
+export async function processExpiredBookings({ limit = 50 } = {}) {
+  const client = await pool.connect();
+  try {
+    const bookingIds = await bookingRepository.completeExpiredBookings(client, {
+      limit,
+    });
+    return { processed: bookingIds.length, bookingIds };
   } finally {
     client.release();
   }

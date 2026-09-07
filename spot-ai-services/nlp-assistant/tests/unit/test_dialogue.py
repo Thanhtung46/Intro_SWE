@@ -332,6 +332,66 @@ def test_venue_search_defaults_time_to_when_only_time_from_given():
     assert backend.search_venues_calls[0]["timeTo"] == "20:00"
 
 
+def test_venue_search_defaults_time_from_when_only_time_to_given():
+    """Regression test: "trước 7h tối nay" (before 7pm tonight) only gives
+    Gemini a timeTo, never a timeFrom. Without synthesizing a timeFrom,
+    spot-backend's hasAvailability gate (date+timeFrom+timeTo all required)
+    never activates and the venue search silently ignores the time
+    constraint entirely, returning unrelated venues regardless of the hour
+    asked for — this was a real bug."""
+    conversation = _conversation()
+    store = FakeStore(conversation)
+    backend = FakeBackend(venues=[])
+    llm = FakeLLM(
+        extraction={
+            "criteria_delta": {
+                "sport": "BADMINTON",
+                "searchKind": "venue",
+                "date": "2026-09-04",
+                "timeTo": "19:00",
+            },
+            "scope": "search",
+        }
+    )
+
+    asyncio.run(dialogue.handle_message(llm, backend, store, conversation, "Tìm sân trước 7h tối nay"))
+
+    assert len(backend.search_venues_calls) == 1
+    assert backend.search_venues_calls[0]["timeFrom"] == "18:00"
+    assert backend.search_venues_calls[0]["timeTo"] == "19:00"
+
+
+def test_venue_search_widens_zero_width_window_when_gemini_fills_both_bounds_equal():
+    """Regression test for a live production 500: for "trước 7h tối nay",
+    Gemini's extraction has been observed to fill BOTH timeFrom and timeTo
+    with the same normalized "19:00" (not just timeTo alone), producing a
+    zero-width window that spot-backend's DTO rejects with 400 ("timeTo
+    must be greater than timeFrom") — every message in that conversation
+    then failed with a 500. Equal bounds must be widened the same as a lone
+    timeTo, not forwarded as-is."""
+    conversation = _conversation()
+    store = FakeStore(conversation)
+    backend = FakeBackend(venues=[])
+    llm = FakeLLM(
+        extraction={
+            "criteria_delta": {
+                "sport": "BADMINTON",
+                "searchKind": "venue",
+                "date": "2026-09-07",
+                "timeFrom": "19:00",
+                "timeTo": "19:00",
+            },
+            "scope": "search",
+        }
+    )
+
+    asyncio.run(dialogue.handle_message(llm, backend, store, conversation, "Tìm sân trước 7h tối nay"))
+
+    assert len(backend.search_venues_calls) == 1
+    assert backend.search_venues_calls[0]["timeFrom"] == "18:00"
+    assert backend.search_venues_calls[0]["timeTo"] == "19:00"
+
+
 def test_zero_venue_results_returns_empty_list_not_none():
     conversation = _conversation()
     store = FakeStore(conversation)

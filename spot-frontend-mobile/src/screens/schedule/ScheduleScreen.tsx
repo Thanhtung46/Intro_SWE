@@ -1,9 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
+import { useScheduleCache } from '@/state/scheduleCache';
+import { useCancelledGuard } from '@/hooks/useCancelledGuard';
 import { ReviewModal } from '@/components/ReviewModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -17,14 +19,17 @@ import {
   WEEKDAYS_ABBR_VI,
 } from '@/i18n/translations';
 
-type ScheduleEvent = {
+export type ScheduleEvent = {
   id: string;
   date: Date;
   sportType: string;
   time: string;
   location: string;
   host?: string;
-  status: 'upcoming' | 'completed';
+  /** Player's own role on a MATCH item — always null for BOOKING. */
+  role: 'HOST' | 'PARTICIPANT' | null;
+  /** Server-computed time bucket (schedule.entity.js::computeDisplayStatus) — rendered as-is, never re-derived here. */
+  status: 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
   bookingId: number | null;
   itemType: 'BOOKING' | 'MATCH';
   matchId: number | null;
@@ -33,8 +38,15 @@ type ScheduleEvent = {
   fieldName: string;
   address: string;
   /** Raw backend booking status (PENDING_PAYMENT/PAID/CHECKED_IN/NO_SHOW/COMPLETED) —
-   * `status` above is only the upcoming/completed bucket used for card branching. */
+   * `status` above is the display bucket used for card branching. */
   rawStatus: string;
+};
+
+const DISPLAY_STATUS_MAP: Record<string, ScheduleEvent['status']> = {
+  UPCOMING: 'upcoming',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
 };
 
 function isSameDay(a: Date, b: Date) {
@@ -67,7 +79,9 @@ function mapItemsToEvents(items: ScheduleItem[]): ScheduleEvent[] {
     sportType: item.sportType,
     time: formatTimeRange(item.startsAt, item.endsAt),
     location: item.fieldName ? `${item.venueName} • ${item.fieldName}` : item.venueName,
-    status: item.status === 'COMPLETED' ? 'completed' : 'upcoming',
+    host: item.hostName ?? undefined,
+    role: item.role ?? null,
+    status: DISPLAY_STATUS_MAP[item.displayStatus] ?? 'upcoming',
     bookingId: item.bookingId,
     itemType: item.type,
     matchId: item.matchId,
@@ -148,8 +162,23 @@ export default function ScheduleScreen({
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
-  const [events, setEvents] = useState<ScheduleEvent[]>([]);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const cache = useScheduleCache();
+  const allEvents = cache.data ?? [];
+  const fetchError = cache.error;
+  /** Type filter (US3) — component-local, not persisted to device storage
+   * (research.md §5): survives month navigation and tab re-visits within
+   * the session since this screen stays mounted under the (tabs) group,
+   * but resets on a full app restart. */
+  const [selectedType, setSelectedType] = useState<'all' | 'BOOKING' | 'MATCH'>('all');
+  const events = useMemo(
+    () => (selectedType === 'all' ? allEvents : allEvents.filter((event) => event.itemType === selectedType)),
+    [allEvents, selectedType],
+  );
+  const createGuard = useCancelledGuard();
+  /** True only until the very first fetch (any month) resolves — later month
+   * navigation keeps showing the previous month's events while refetching,
+   * matching data-model.md rule 3 (never blank out last-known-good data). */
+  const [isFirstLoad, setIsFirstLoad] = useState(cache.data === null);
   const [reviewBookingId, setReviewBookingId] = useState<number | null>(null);
   const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<number>>(new Set());
 
@@ -188,22 +217,41 @@ export default function ScheduleScreen({
     });
   };
 
-  useEffect(() => {
+  /** ~30s TTL (research.md §3) — a focus revisit re-fetches the current
+   * month silently in the background once the cache is older than this. */
+  const STALE_TTL_MS = 30_000;
+
+  const fetchSchedule = useCallback(() => {
+    const guard = createGuard();
+    cache.setRefreshing(true);
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const from = toLocalDateString(new Date(year, month, 1));
     const to = toLocalDateString(new Date(year, month + 1, 0));
 
     getMySchedule({ from, to }).then((result) => {
+      if (guard.isCancelled()) return;
       if (result.success) {
-        setEvents(mapItemsToEvents(result.items ?? []));
-        setFetchError(null);
+        cache.applyResult(mapItemsToEvents(result.items ?? []));
       } else {
-        setEvents([]);
-        setFetchError(result.message ?? t('common.genericError'));
+        cache.applyError(result.message ?? t('common.genericError'));
       }
+      setIsFirstLoad(false);
     });
+    return guard.cancel;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cache/createGuard/t are stable
   }, [currentMonth]);
+
+  useEffect(() => fetchSchedule(), [fetchSchedule]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isFirstLoad && cache.isStale(STALE_TTL_MS)) {
+        fetchSchedule();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- cache is stable; isFirstLoad/fetchSchedule intentionally re-derive the callback
+    }, [fetchSchedule, isFirstLoad])
+  );
 
   const calendarRows = useMemo(() => chunk(buildCalendarGrid(currentMonth), 7), [currentMonth]);
 
@@ -226,6 +274,37 @@ export default function ScheduleScreen({
           <Text style={styles.title}>{t('schedule.title')}</Text>
           <Text style={styles.subtitle}>{t('schedule.subtitle')}</Text>
         </View>
+
+        <View style={styles.typeFilterRow}>
+          {(['all', 'BOOKING', 'MATCH'] as const).map((type) => {
+            const label =
+              type === 'all'
+                ? t('schedule.filterAll')
+                : type === 'BOOKING'
+                  ? t('schedule.filterBookings')
+                  : t('schedule.filterMatches');
+            const isActive = selectedType === type;
+            return (
+              <TouchableOpacity
+                key={type}
+                testID={`schedule-filter-${type}`}
+                style={[styles.typeFilterChip, isActive && styles.typeFilterChipActive]}
+                onPress={() => setSelectedType(type)}
+              >
+                <Text style={[styles.typeFilterChipText, isActive && styles.typeFilterChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Small, non-blocking background-revalidation indicator (T025) —
+            only once real content is already on screen, never during the
+            true-first-load state gated by isFirstLoad elsewhere below. */}
+        {cache.isRefreshing && !isFirstLoad ? (
+          <ActivityIndicator size="small" style={styles.refreshingIndicator} color={c.primary} />
+        ) : null}
 
         <View style={styles.calendarCard}>
           <View style={styles.calendarHeader}>
@@ -301,45 +380,76 @@ export default function ScheduleScreen({
               {t('schedule.matchesOnPrefix')}{MONTH_ABBR[selectedDate.getMonth()].toUpperCase()} {selectedDate.getDate()}
             </Text>
 
-            {eventsForSelectedDate.length === 0 ? (
+            {isFirstLoad ? (
+              <ActivityIndicator style={styles.emptyState} color={c.primary} />
+            ) : eventsForSelectedDate.length === 0 ? (
               <View style={styles.emptyState}>
                 <MaterialCommunityIcons name="calendar-remove-outline" size={28} color={c.textMuted} />
                 <Text style={styles.emptyStateText}>{t('schedule.emptyDay')}</Text>
               </View>
             ) : (
-              eventsForSelectedDate.map((event) =>
-                event.status === 'upcoming' ? (
-                  <View key={event.id} style={styles.upcomingCard}>
-                    <Text style={styles.cardStatusLabel}>{t('schedule.statusUpcoming')}</Text>
-                    <View style={styles.sportBadge}>
-                      <SportIcon type={event.sportType} color={c.primary} />
-                      <Text style={styles.sportBadgeText}>{event.sportType}</Text>
-                    </View>
+              eventsForSelectedDate.map((event) => {
+                const hostRow =
+                  event.itemType === 'MATCH' ? (
                     <View style={styles.detailRow}>
-                      <Ionicons name="time-outline" size={16} color={c.textSecondary} />
-                      <Text style={styles.detailText}>{event.time}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Ionicons name="location-outline" size={16} color={c.textSecondary} />
-                      <Text style={styles.detailText}>{event.location}</Text>
-                    </View>
-                    {event.host ? (
-                      <View style={styles.detailRow}>
-                        <Ionicons name="person-outline" size={16} color={c.textSecondary} />
-                        <Text style={styles.detailText}>{t('schedule.hostPrefix')}{event.host}</Text>
-                      </View>
-                    ) : null}
-                    <TouchableOpacity
-                      testID={`schedule-match-details-${event.id}`}
-                      style={styles.primaryButton}
-                      onPress={() => openEventDetails(event)}
-                    >
-                      <Text style={styles.primaryButtonText}>
-                        {t(event.itemType === 'MATCH' ? 'schedule.matchDetails' : 'schedule.details')}
+                      <Ionicons name="person-outline" size={16} color={c.textSecondary} />
+                      <Text style={styles.detailText}>
+                        {event.role === 'HOST'
+                          ? t('schedule.roleHost')
+                          : `${t('schedule.hostPrefix')}${event.host ?? t('schedule.hostUnavailable')}`}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
+                    </View>
+                  ) : null;
+
+                if (event.status === 'upcoming' || event.status === 'in_progress') {
+                  return (
+                    <View key={event.id} style={styles.upcomingCard}>
+                      <Text style={styles.cardStatusLabel}>
+                        {t(event.status === 'in_progress' ? 'schedule.statusInProgress' : 'schedule.statusUpcoming')}
+                      </Text>
+                      <View style={styles.sportBadge}>
+                        <SportIcon type={event.sportType} color={c.primary} />
+                        <Text style={styles.sportBadgeText}>{event.sportType}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Ionicons name="time-outline" size={16} color={c.textSecondary} />
+                        <Text style={styles.detailText}>{event.time}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Ionicons name="location-outline" size={16} color={c.textSecondary} />
+                        <Text style={styles.detailText}>{event.location}</Text>
+                      </View>
+                      {hostRow}
+                      <TouchableOpacity
+                        testID={`schedule-match-details-${event.id}`}
+                        style={styles.primaryButton}
+                        onPress={() => openEventDetails(event)}
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {t(event.itemType === 'MATCH' ? 'schedule.matchDetails' : 'schedule.details')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+
+                if (event.status === 'cancelled') {
+                  return (
+                    <View key={event.id} style={styles.completedCard}>
+                      <View style={styles.completedHeader}>
+                        <Text style={styles.cardStatusLabel}>{t('schedule.statusCancelled')}</Text>
+                      </View>
+                      <View style={styles.sportBadge}>
+                        <SportIcon type={event.sportType} color={c.primary} />
+                        <Text style={styles.sportBadgeText}>{event.sportType}</Text>
+                      </View>
+                      <Text style={styles.detailText}>{event.location}</Text>
+                      {hostRow}
+                    </View>
+                  );
+                }
+
+                return (
                   <View key={event.id} style={styles.completedCard}>
                     <View style={styles.completedHeader}>
                       <Text style={styles.cardStatusLabel}>{t('schedule.statusCompleted')}</Text>
@@ -355,6 +465,7 @@ export default function ScheduleScreen({
                         : `${MONTH_ABBR[event.date.getMonth()]} ${event.date.getDate()}, ${event.time.split(' - ')[0]}`}
                     </Text>
                     <Text style={styles.detailText}>{event.location}</Text>
+                    {hostRow}
                     <TouchableOpacity
                       testID={`schedule-match-details-${event.id}`}
                       style={styles.outlineButton}
@@ -378,8 +489,8 @@ export default function ScheduleScreen({
                       )
                     ) : null}
                   </View>
-                )
-              )
+                );
+              })
             )}
           </View>
         ) : null}
@@ -410,6 +521,31 @@ function getStyles(c: ThemeColors) {
     },
     header: {
       paddingTop: 48,
+    },
+    refreshingIndicator: {
+      marginTop: 8,
+    },
+    typeFilterRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 16,
+    },
+    typeFilterChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: c.tintedSurface,
+    },
+    typeFilterChipActive: {
+      backgroundColor: c.primary,
+    },
+    typeFilterChipText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.textSecondary,
+    },
+    typeFilterChipTextActive: {
+      color: c.white,
     },
     title: {
       fontSize: 28,

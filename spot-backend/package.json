@@ -41,6 +41,7 @@
     "smoke:owner-schedule": "node scripts/smoke-owner-schedule.js",
     "worker:reminders": "node scripts/reminder-worker.js",
     "worker:match-expiry": "node scripts/match-expiry-worker.js",
+    "worker:booking-completion": "node scripts/booking-completion-worker.js",
     "worker:tournament-lifecycle": "node scripts/tournament-lifecycle-worker.js",
     "fetch:vmito": "node scripts/fetch-vmito-listings.js",
     "fetch:vmito:50": "node scripts/fetch-vmito-listings.js --limit 50",

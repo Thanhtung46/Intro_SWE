@@ -31,6 +31,7 @@ Canonical chain. Apply with `npm run migrate` (skips filenames already in
 | `023_venue_search_indexes.sql` | GIN trgm on `venues.name` / `address` for `GET /referee/board?q=` | 004, 006 |
 | `024_notification_types_unified.sql` | Restore full `notifications.type` enum (018/020 had dropped match/group/tournament types) | 020, 013 |
 | `025_schema_owner_ops.sql` | peak/off-peak field pricing, maintenance notes, owner revenue/review indexes | 004, 005, 007 |
+| `030_schema_recommendation.sql` | `schema_recommendation` — impression/interaction outcome logging for `GET /recommendations` (training data for a future ML ranker) | 001, 004 |
 
 `schema_social.matches` (booking-linked) is **not** `schema_matchmaking.matches` (pickup kèo). Keep both.
 

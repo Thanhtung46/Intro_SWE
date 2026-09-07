@@ -85,6 +85,29 @@ export async function findBookingById(client, bookingId) {
   return rows[0] ?? null;
 }
 
+/**
+ * Auto-complete bookings whose scheduled end time has passed — mirrors
+ * match-expiry-worker.js's role for pickup kèo. Without this, a booking's
+ * `status` never leaves PAID/CHECKED_IN on its own, which silently blocks
+ * the review flow (review.service.js gates on status === 'COMPLETED').
+ */
+export async function completeExpiredBookings(client, { limit = 50 } = {}) {
+  const { rows } = await client.query(
+    `UPDATE schema_booking.bookings
+     SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+     WHERE booking_id IN (
+       SELECT booking_id
+       FROM schema_booking.bookings
+       WHERE status IN ('PAID', 'CHECKED_IN')
+         AND upper(booking_time_range) <= CURRENT_TIMESTAMP
+       LIMIT $1
+     )
+     RETURNING booking_id`,
+    [limit],
+  );
+  return rows.map((row) => row.booking_id);
+}
+
 export async function markBookingPaid(client, bookingId, playerId) {
   const { rows } = await client.query(
     `UPDATE schema_booking.bookings
