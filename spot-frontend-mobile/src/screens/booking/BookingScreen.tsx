@@ -15,7 +15,6 @@ import AppHeader from '@/components/layout/AppHeader';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
 import BottomNav from '@/components/navigation/BottomNav';
 import { listVenues, PublicVenue } from '@/services/venueService';
-import useUserLocation from '@/hooks/useUserLocation';
 import { EMPTY_VENUE_FILTERS, VenueFilters } from '@/types/venueFilters';
 
 // The photo comes from the venue's own uploaded cover image when the owner
@@ -75,7 +74,6 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
   const [venues, setVenues] = useState<BookingVenue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [venuesLoading, setVenuesLoading] = useState(true);
-  const userLocation = useUserLocation();
   const filtersActive =
     !!filters.date ||
     !!filters.timeFrom ||
@@ -91,6 +89,16 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
     // A typed search takes over entirely — backend rejects location together
     // with lat/long/radiusKm ("Use location or distance, not both"), so skip
     // GPS/province-city/distance opts whenever there's an applied search.
+    //
+    // Device GPS is intentionally NOT fetched/sent here by default: the
+    // backend treats any lat/long pair as an active distance filter and
+    // defaults radiusKm to 20 when omitted (list-venues.dto.js), so silently
+    // including it would narrow every browse to "within 20km of wherever the
+    // device currently is" even though the user never asked for that — on an
+    // emulator/device whose GPS doesn't match the seeded venues' real
+    // coordinates this hid every result (reported as "no venues found" after
+    // GPS had time to resolve). Only apply a distance filter when the user
+    // explicitly picked Distance mode in the filter sheet.
     const opts = appliedLocation
       ? { location: appliedLocation }
       : filters.province || (filters.radiusKm != null && filters.latitude != null)
@@ -101,9 +109,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
             province: filters.province,
             city: filters.city,
           }
-        : userLocation
-          ? { lat: userLocation.latitude, long: userLocation.longitude }
-          : undefined;
+        : undefined;
     listVenues(sport, {
       ...opts,
       priceMin: filters.priceMin,
@@ -121,7 +127,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       }
       setVenuesLoading(false);
     });
-  }, [sport, userLocation, filters, appliedLocation]);
+  }, [sport, filters, appliedLocation]);
 
   function submitSearch() {
     const trimmed = searchText.trim();

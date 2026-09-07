@@ -24,7 +24,6 @@ import { listVenues, PublicVenue } from '@/services/venueService';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 import { getRecommendations, RecommendationItem } from '@/services/recommendationService';
 import { venueDetailRoute } from '@/constants/routes';
-import useUserLocation from '@/hooks/useUserLocation';
 
 type Sport = 'football' | 'badminton';
 
@@ -106,15 +105,20 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
   const [upcomingBooking, setUpcomingBooking] = useState<ScheduleItem | null>(null);
   const [rawSuggestions, setRawSuggestions] = useState<RecommendationItem[]>([]);
   const [venueCoverById, setVenueCoverById] = useState<Record<number, string>>({});
-  const userLocation = useUserLocation();
 
   // Only used to cross-reference real cover photos onto "Suggested for you"
   // cards (mapRecommendationToCard below) — the plain venue browse grid this
   // used to feed was removed (duplicated "Suggested for you" with the same
   // handful of test venues); Booking screen is the real full venue list now.
+  // Deliberately not passing device GPS here: the backend treats any
+  // lat/long pair as an active 20km distance filter (defaulted when
+  // radiusKm is omitted — list-venues.dto.js), which would silently drop
+  // every venue whose seeded coordinates don't happen to be near wherever
+  // the device/emulator's GPS resolves to (see BookingScreen for the same
+  // fix — this was reported as "no venues found" after GPS had time to
+  // resolve).
   useEffect(() => {
-    const opts = userLocation ? { lat: userLocation.latitude, long: userLocation.longitude } : undefined;
-    listVenues(sport, opts).then((result) => {
+    listVenues(sport).then((result) => {
       if (!result.success) return;
       const list = result.venues ?? [];
       setVenueCoverById(
@@ -124,7 +128,7 @@ export default function HomeScreen({ onNavigateSchedule }: Props) {
         ),
       );
     });
-  }, [sport, userLocation]);
+  }, [sport]);
 
   useEffect(() => {
     // A failed/unavailable fetch just leaves this section empty — never a
