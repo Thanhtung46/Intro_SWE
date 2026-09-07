@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { ThemeColors } from '@/constants/theme';
@@ -16,6 +17,10 @@ type Props = {
   visible: boolean;
   venueId: number;
   pitches: Pitch[];
+  venueName: string;
+  venueAddress: string;
+  venueLatitude?: number | null;
+  venueLongitude?: number | null;
   /** Venue opening hours as 24h integers, e.g. 6 and 23 for "06:00 - 23:00". */
   openHour: number;
   closeHour: number;
@@ -61,10 +66,25 @@ function buildTimeSlots(openHour: number, closeHour: number): string[] {
 }
 
 /** Pitch & time-slot booking grid — Figma node 81:152 ("Booking field - Select Pitch & Time"). */
+/** Parses a "YYYY-MM-DD" string to a local midnight Date; null if
+ * missing/malformed so callers can fall back to today. */
+function parseInitialDate(value?: string): Date | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export default function SelectPitchTimeModal({
   visible,
   venueId,
   pitches,
+  venueName,
+  venueAddress,
+  venueLatitude,
+  venueLongitude,
   openHour,
   closeHour,
   onClose,
@@ -74,9 +94,37 @@ export default function SelectPitchTimeModal({
   themeColors,
 }: Props) {
   const { t } = useLanguage();
+  const router = useRouter();
   const timeSlots = useMemo(() => buildTimeSlots(openHour, closeHour), [openHour, closeHour]);
 
-  const [selectedDate, setSelectedDate] = useState<Date>(() => startOfToday());
+  const [selectedDate, setSelectedDate] = useState<Date>(
+    () => parseInitialDate(initialDate) ?? startOfToday(),
+  );
+
+  // Re-sync to the requested date each time the modal opens (e.g. the
+  // assistant hand-off — spec 007-assistant-venue-search P3) rather than
+  // only on first mount, since this component stays mounted across opens.
+  useEffect(() => {
+    if (visible) {
+      const parsed = parseInitialDate(initialDate);
+      if (parsed) setSelectedDate(parsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialDate]);
+
+  // Scroll the grid horizontally so the requested start time is in view
+  // when handed off from the assistant — the player still taps a cell
+  // themselves, nothing is pre-selected on their behalf.
+  const gridScrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!visible || !initialTimeFrom) return;
+    const timeIndex = timeSlots.indexOf(initialTimeFrom);
+    if (timeIndex === -1) return;
+    const id = setTimeout(() => {
+      gridScrollRef.current?.scrollTo({ x: Math.max(timeIndex * CELL_WIDTH - CELL_WIDTH, 0), animated: false });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [visible, initialTimeFrom, timeSlots]);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   // "pitchIndex-timeIndex" keys — supports picking several slots and/or
   // several pitches at once, all for the currently selected date.
@@ -279,7 +327,7 @@ export default function SelectPitchTimeModal({
             ))}
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView ref={gridScrollRef} horizontal showsHorizontalScrollIndicator={false}>
             <View>
               <View style={styles.timeHeaderRow}>
                 {timeSlots.map((time) => (

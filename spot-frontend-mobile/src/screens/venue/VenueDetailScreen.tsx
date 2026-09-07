@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ImageSourcePropType, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -202,10 +202,22 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         setImages([]);
         setImagesError(result.message ?? t('common.genericError'));
       }
+      setImagesLoading(false);
     });
   }, [numericVenueId, sport]);
 
   const parsedHours = parseHours(venue.hours);
+
+  // Assistant hand-off (spec 007-assistant-venue-search P3): open the
+  // slot picker automatically, already positioned at the requested
+  // date/time, instead of making the player tap "Book Now" again after
+  // the assistant already asked them to confirm this exact slot.
+  useEffect(() => {
+    if ((initialDate || initialTimeFrom) && parsedHours) {
+      setPitchTimeVisible(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDate, initialTimeFrom, Boolean(parsedHours)]);
   const hasCoords = venue.latitude != null && venue.longitude != null;
   const mapMarkers: AppMapMarker[] = hasCoords
     ? [{ id: 'venue', latitude: venue.latitude as number, longitude: venue.longitude as number, tintColor: colors.primaryDark, emoji: '📍' }]
@@ -565,6 +577,10 @@ export default function VenueDetailScreen({ venueId, sport, onBack }: Props) {
         visible={pitchTimeVisible}
         venueId={numericVenueId}
         pitches={venue.pitches}
+        venueName={venue.name}
+        venueAddress={venue.address}
+        venueLatitude={venue.latitude}
+        venueLongitude={venue.longitude}
         openHour={parsedHours[0]}
         closeHour={parsedHours[1]}
         hireReferee={refereeHired}
@@ -591,6 +607,11 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  heroImageLoading: {
+    backgroundColor: colors.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroActions: {
     position: 'absolute',

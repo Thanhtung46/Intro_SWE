@@ -2,12 +2,13 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { colors } from '@/constants/colors';
-import { MatchResult } from '@/services/assistantService';
+import { MatchResult, VenueResult } from '@/services/assistantService';
 import { ChatMessage } from '@/types/assistant';
 
 type Props = {
   message: ChatMessage;
   onResultPress?: (result: MatchResult) => void;
+  onVenuePress?: (venue: VenueResult) => void;
 };
 
 /**
@@ -15,7 +16,7 @@ type Props = {
  * "pendingAction" is rendered separately as a PendingActionCard by the
  * screen (User Story 3), not here.
  */
-export default function ChatMessageBubble({ message, onResultPress }: Props) {
+export default function ChatMessageBubble({ message, onResultPress, onVenuePress }: Props) {
   const isPlayer = message.role === 'player';
   const isError = message.kind === 'error';
 
@@ -44,6 +45,27 @@ export default function ChatMessageBubble({ message, onResultPress }: Props) {
                 <Text style={styles.resultTitle}>{result.title}</Text>
                 <Text style={styles.resultMeta}>
                   {result.venueName} · {result.spotsLeft} spots left
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
+        {message.kind === 'venueResults' && Array.isArray(message.payload) ? (
+          <View style={styles.resultsList}>
+            {(message.payload as VenueResult[]).map((venue) => (
+              <TouchableOpacity
+                key={venue.venueId}
+                style={styles.resultItem}
+                onPress={() => onVenuePress?.(venue)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resultTitle}>{venue.venueName}</Text>
+                <Text style={styles.resultMeta}>
+                  {venue.address}
+                  {venue.priceFromPerHour != null
+                    ? ` · từ ${venue.priceFromPerHour.toLocaleString('vi-VN')}đ/giờ`
+                    : ''}
                 </Text>
               </TouchableOpacity>
             ))}

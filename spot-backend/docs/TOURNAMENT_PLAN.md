@@ -352,7 +352,7 @@ Stop after each phase so Nguyễn can test.
 
 ### Phase T5 — Docs + smoke — **done**
 
-- Update [`API.md`](./API.md) §9, CLAUDE files
+- Update [`api/06-tournaments.md`](./api/06-tournaments.md), CLAUDE files
 - `npm run smoke:tournaments`
 
 ---
@@ -441,5 +441,5 @@ Detail tabs (all sports): **Overview | Matches | Standings | Players**. CTA: **J
 After **T0**: create + browse + join pending.  
 After **T1**: approve/reject + cancel + deadline worker + notifications.  
 After **T2**: matches + results.  
-After **T5**: `API.md` §9 + `npm run smoke:tournaments`. **MVP tournaments BE complete.**  
+After **T5**: `api/06-tournaments.md` + `npm run smoke:tournaments`. **MVP tournaments BE complete.**  
 After **T5**: `API.md` + `npm run smoke:tournaments`.

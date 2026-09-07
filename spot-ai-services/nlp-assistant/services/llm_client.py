@@ -28,6 +28,7 @@ merge step combines this with previously known criteria, so do not guess or
 carry over values yourself):
 
 {
+  "searchKind": "match" | "venue" | null,
   "sport": "BADMINTON" | "FOOTBALL" | null,
   "province": string | null,
   "city": string | null,
@@ -43,6 +44,13 @@ carry over values yourself):
 Extraction rules for each field — extract the RAW phrase as the player said
 it, do not reformat or convert it yourself (a separate deterministic step
 does that):
+- "searchKind": "match" means the player wants to JOIN an existing pickup
+  match/kèo someone else already hosts (words like "kèo", "tham gia",
+  "join"). "venue" means the player wants to BOOK/RENT an empty court
+  themselves (words like "đặt sân", "thuê sân", "book", "đăng ký sân").
+  Leave null when the message doesn't make this clear either way (e.g.
+  "tìm sân cầu lông ở Quận 7 tối nay" alone is ambiguous — a separate step
+  asks the player to clarify rather than you guessing).
 - "province"/"city": if the message names ANY place (a district/quận,
   ward/phường, city/thành phố, or province/tỉnh — e.g. "quận 7", "hà nội",
   "q1", "thủ đức"), you MUST fill the most specific one into "city" (and the
@@ -54,7 +62,8 @@ does that):
   "19h30", "sau 7 giờ tối") verbatim — do not convert to HH:mm yourself.
 
 Set "scope" to "off_topic" if the message is not about finding, joining, or
-hosting a pickup match/kèo (e.g. small talk, unrelated requests).
+hosting a pickup match/kèo, or booking a venue (e.g. small talk, unrelated
+requests).
 """
 
 _TRANSCRIPTION_INSTRUCTIONS = """
@@ -72,17 +81,21 @@ unintelligible recording).
 """
 
 _JOIN_INTENT_INSTRUCTIONS = """
-You are deciding whether the player's message expresses intent to join or
-host a specific kèo from the list already shown to them, or intent to
-confirm/cancel a pending action. Return ONLY a JSON object:
+You are deciding whether the player's message expresses intent to join a
+specific kèo from the list already shown to them, book a specific venue
+from a venue list already shown to them, or intent to confirm/cancel a
+pending action. Return ONLY a JSON object:
 
 {
-  "intent": "propose_join" | "confirm" | "cancel" | "other",
+  "intent": "propose_join" | "propose_book" | "confirm" | "cancel" | "other",
   "targetIndex": number | null
 }
 
-"targetIndex" is the 0-based index into the shown results the player is
-referring to (for "propose_join"), or null otherwise. Use "confirm" only for
+"targetIndex" is the 0-based index into whichever shown list is relevant
+(kèo results for "propose_join", venue results for "propose_book"), or null
+otherwise. Use "propose_book" only when venue results were shown and the
+player is asking to book/register/reserve one of them (e.g. "đăng ký sân
+đầu tiên", "đặt sân đó giúp mình") — never for a kèo. Use "confirm" only for
 a clear affirmative reply to a pending confirmation; use "cancel" for a
 clear negative/backing-out reply; use "other" for anything else (including a
 brand new search).
@@ -142,10 +155,12 @@ class LLMClient:
         results: list[dict[str, Any]],
         pending_action: Optional[dict[str, Any]],
         message_text: str,
+        venue_results: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         prompt = (
             _JOIN_INTENT_INSTRUCTIONS
-            + f"\nShown results: {json.dumps(results)}"
+            + f"\nShown kèo results: {json.dumps(results)}"
+            + f"\nShown venue results: {json.dumps(venue_results or [])}"
             + f"\nPending action: {json.dumps(pending_action)}"
             + f"\nPlayer's message: {message_text}"
         )

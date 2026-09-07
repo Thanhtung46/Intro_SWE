@@ -213,3 +213,74 @@ export async function sendNotificationEmail({ email, subject, text, html }) {
     throw new AppError('Failed to send notification email. Please try again.', 503);
   }
 }
+
+/**
+ * Sends payment invoice PDF as email attachment.
+ * In development without SMTP, logs instead of failing.
+ */
+export async function sendPaymentInvoiceEmail({
+  email,
+  invoiceNumber,
+  bookingCode,
+  pdfPath,
+}) {
+  const subject = `SPOT invoice ${invoiceNumber}`;
+  const text = [
+    `Your payment for booking ${bookingCode} was successful.`,
+    '',
+    `Invoice number: ${invoiceNumber}`,
+    '',
+    'Please find your receipt attached.',
+  ].join('\n');
+  const html = `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#111;">
+    <p>Your payment for booking <strong>${bookingCode}</strong> was successful.</p>
+    <p>Invoice number: <strong>${invoiceNumber}</strong></p>
+    <p>Please find your receipt attached.</p>
+  </body></html>`;
+
+  if (!isSmtpConfigured()) {
+    if (config.node_env === 'production') {
+      logger.warn('SMTP not configured — skipping invoice email', { email, invoiceNumber });
+      return { delivered: false, mode: 'skipped' };
+    }
+    logger.info('SMTP not configured — invoice email (dev only)', {
+      email,
+      invoiceNumber,
+      pdfPath,
+    });
+    return { delivered: false, mode: 'dev-log' };
+  }
+
+  try {
+    const tx = getTransporter();
+    if (!verified) {
+      await tx.verify();
+      verified = true;
+    }
+
+    const info = await tx.sendMail({
+      from: config.smtp.from,
+      to: email,
+      subject,
+      text,
+      html,
+      attachments: [{ filename: `${invoiceNumber}.pdf`, path: pdfPath }],
+    });
+
+    logger.info('Payment invoice email sent', {
+      email,
+      invoiceNumber,
+      messageId: info.messageId,
+    });
+
+    return { delivered: true, mode: 'smtp', messageId: info.messageId };
+  } catch (err) {
+    verified = false;
+    logger.error('Failed to send payment invoice email', {
+      email,
+      invoiceNumber,
+      error: err.message,
+    });
+    throw new AppError('Failed to send invoice email. Please try again.', 503);
+  }
+}

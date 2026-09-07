@@ -16,7 +16,6 @@ import { useRouter } from 'expo-router';
 
 import { colors } from '@/constants/colors';
 import { venueDetailRoute } from '@/constants/routes';
-import { comingSoon } from '@/utils/comingSoon';
 import ChatMessageBubble from '@/components/assistant/ChatMessageBubble';
 import PendingActionCard from '@/components/assistant/PendingActionCard';
 import TypingIndicator from '@/components/assistant/TypingIndicator';
@@ -55,6 +54,16 @@ function replyToChatMessage(reply: AssistantReply): ChatMessage {
       kind: 'results',
       text: reply.text,
       payload: reply.results,
+      timestamp: new Date().toISOString(),
+    };
+  }
+  if (reply.venueResults) {
+    return {
+      id: nextMessageId(),
+      role: 'assistant',
+      kind: 'venueResults',
+      text: reply.text,
+      payload: reply.venueResults,
       timestamp: new Date().toISOString(),
     };
   }
@@ -144,6 +153,14 @@ export default function AssistantScreen({ onBack }: Props) {
 
     if (result.outcome === 'ok') {
       appendMessage(replyToChatMessage(result.reply));
+      if (result.reply.bookingHandoff) {
+        // Hand-off only — no booking was created (spec
+        // 007-assistant-venue-search FR-010). The player still reviews
+        // and confirms in the venue's own booking screen, pre-filled with
+        // the date/time they asked for.
+        const { venueId, date, timeFrom } = result.reply.bookingHandoff;
+        router.push(venueDetailRoute(String(venueId), undefined, { date, timeFrom }));
+      }
     } else if (result.outcome === 'unavailable') {
       appendMessage({
         id: nextMessageId(),
@@ -167,10 +184,11 @@ export default function AssistantScreen({ onBack }: Props) {
   };
 
   const handleResultPress = (result: MatchResult) => {
-    // No match-detail screen exists in this app yet (only /venue/[id]) —
-    // matches the "coming soon" convention already used elsewhere for
-    // not-yet-built destinations (e.g. Home's "Find Match").
-    comingSoon(result.title);
+    router.push(`/matches/${result.matchId}`);
+  };
+
+  const handleVenuePress = (venue: VenueResult) => {
+    router.push(venueDetailRoute(String(venue.venueId)));
   };
 
   const handleConfirmAction = (actionText: string) => {
@@ -244,7 +262,12 @@ export default function AssistantScreen({ onBack }: Props) {
                   onCancel={() => handleConfirmAction('Thôi, hủy giúp mình')}
                 />
               ) : (
-                <ChatMessageBubble key={message.id} message={message} onResultPress={handleResultPress} />
+                <ChatMessageBubble
+                  key={message.id}
+                  message={message}
+                  onResultPress={handleResultPress}
+                  onVenuePress={handleVenuePress}
+                />
               ),
             )}
             {sending ? <TypingIndicator /> : null}

@@ -147,12 +147,7 @@ exists beyond what's listed above.
 
 ## Known Gotchas
 
-- **Plain `npm install` works now** — `react` is pinned to `19.2.8`
-  (matching what `react-test-renderer` wants transitively), so the
-  `ERESOLVE` conflict older notes describe is gone; verified with a fresh
-  `npm install --dry-run`. `npm install --legacy-peer-deps` still works
-  too and is harmless if you're used to typing it, but it's no longer
-  required.
+- Plain `npm install` works (`react` pinned to `19.2.8`, matching what `react-test-renderer` wants transitively) — no `--legacy-peer-deps` needed.
 - **`npm start` can silently no-op** if a stale `expo start` process from
   an earlier session is still holding port 8081 — in non-interactive
   contexts (scripts, agents) Expo prints "Skipping dev server" instead of
@@ -181,32 +176,15 @@ exists beyond what's listed above.
   If `npm start`/`npm run web` looks like it's serving fine but the app
   itself won't render, check for another route file pair like this before
   assuming it's a dependency or config problem.
-- **Version drift from the repo-root docs**: the root `CLAUDE.md` describes
-  this app as "Expo 49 / React Native 0.72". `package.json` actually pins
-  `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`). Trust
-  `package.json` over that prose.
-- **Jest config exists** (`"jest": {"preset": "jest-expo"}` in
-  `package.json`) — a prior version of this note claimed no config was
-  committed; that's no longer true. What *is* still broken in this
-  environment: `npm test` fails with "Cannot find module
-  'expo-modules-core'" because that package is missing from
-  `node_modules` — an install gap (`npm install` incomplete/stale), not a
-  missing-config problem. Re-run `npm install` before debugging further.
-- **No ESLint/Prettier config is committed** — style is enforced by hand,
-  not tooling (see Code Style & Conventions below).
+- `package.json` pins `expo@^57.0.12` and `react-native@^0.86.2` (React `19.2.8`) — trust `package.json` over any prose elsewhere that says otherwise.
+- Jest config exists (`"jest": {"preset": "jest-expo"}` in `package.json`). `npm test` fails today with "Cannot find module 'expo-modules-core'" — an install gap (re-run `npm install`), not a config gap.
+- **No ESLint/Prettier config is committed** — style is enforced by hand, not tooling (see Code Style & Conventions below).
 - **`.env.example` — mixed.** `EXPO_PUBLIC_GEOAPIFY_API_KEY` **is** wired:
   `src/config/env.ts` reads `process.env.EXPO_PUBLIC_*` (Metro inlines
   `EXPO_PUBLIC_`-prefixed vars at build time, SDK 49+). The rest
   (`API_URL`, `SOCKET_URL`, `ENV`) are still placeholders that nothing
-  reads — `API_URL` is actually derived at runtime in `env.ts`. The old
-  `GOOGLE_MAPS_KEY` line was removed (maps use Geoapify, not Google — see
-  the Maps section above).
-- **Two color-token files used to exist** (`src/constants/colors.ts` and
-  `src/theme/colors.ts`) with different values for the same semantic
-  colors (e.g. two different "primary blue"s). `src/theme/colors.ts` has
-  been merged into `src/constants/colors.ts` and deleted — every screen
-  now imports one `colors` object from `@/constants/colors`. If you see a
-  reference to `theme/colors` anywhere, it's stale.
+  reads — `API_URL` is actually derived at runtime in `env.ts`.
+- Single color-token source: `src/constants/colors.ts` — every screen imports `colors` from `@/constants/colors`.
 - **`spot-backend` is runnable** (tracked by the root repo) — see
   `../spot-backend/CLAUDE.md` + `docs/API.md`. Mobile UI can call real APIs
   when the backend is up; mock only when working offline.

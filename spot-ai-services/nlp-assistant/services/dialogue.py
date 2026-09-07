@@ -2,11 +2,12 @@
 
 `handle_message` is the single entry point the router calls for both text
 and (once transcribed) voice turns. It dispatches between running a search
-(`interpret_and_search`, US1), proposing a join/host action
-(`propose_action`), and confirming/cancelling a pending one
-(`confirm_action`, both US2), based on whether a `pendingAction` is
+(`interpret_and_search`, spec 003 US1 / spec 007 P2), proposing a join/host
+action (`propose_action`) or a venue booking hand-off
+(`propose_venue_booking`, spec 007 P3), and confirming/cancelling a pending
+kèo-join action (`confirm_action`), based on whether a `pendingAction` is
 currently awaiting confirmation and whether the player's message refers to
-one of the last shown results.
+one of the last shown kèo or venue results.
 """
 
 from typing import Any, Optional
@@ -20,12 +21,25 @@ from services.llm_client import LLMClient
 from services.time_parse import normalize_time
 
 OFF_TOPIC_REPLY = (
-    "Mình chỉ hỗ trợ tìm và tham gia kèo thôi. Bạn thử hỏi về sân bãi hoặc "
-    "lịch chơi xem sao nhé!"
+    "Mình chỉ hỗ trợ tìm/tham gia kèo hoặc tìm sân trống để đặt thôi. Bạn "
+    "thử hỏi về sân bãi hoặc lịch chơi xem sao nhé!"
 )
+
+# Results are capped this way for both kèo and venue replies (spec 007
+# FR-001/FR-007) — the player sees the 3 best options, in whatever
+# best-first order the underlying search already returns (research.md
+# decision 4 under specs/007-assistant-venue-search/), never more, never
+# padded when fewer exist.
+MAX_RESULTS_SHOWN = 3
+
+# Default session length (spec 007 research.md decision 2) applied when the
+# player only gave a starting time ("sau 7h") and never an end time — 1
+# hour matches the platform's own minimum kèo duration and slot size.
+DEFAULT_VENUE_SEARCH_WINDOW_HOURS = 1
 
 _CLARIFYING_QUESTIONS = {
     "sport": "Bạn muốn tìm sân cầu lông hay bóng đá vậy?",
+    "searchKind": "Bạn muốn tìm sân trống để đặt, hay tìm kèo có sẵn để tham gia?",
 }
 
 
@@ -77,7 +91,21 @@ def _search_params(interpreted_request: dict[str, Any]) -> dict[str, Any]:
     return {
         field: interpreted_request.get(field)
         for field in interpretation.CRITERIA_FIELDS
+        if field != "searchKind"  # spot-backend endpoints don't take this
     }
+
+
+def _venue_search_params(interpreted_request: dict[str, Any]) -> dict[str, Any]:
+    """Same criteria `_search_params()` sends, plus the timeTo default
+    `GET /venues` needs to actually activate its availability filter
+    (spec 007 research.md decision 2) — omitting timeTo while timeFrom is
+    set would silently disable that filter, not widen the window."""
+    params = _search_params(interpreted_request)
+    if params.get("timeFrom") and not params.get("timeTo"):
+        hour, minute = (int(part) for part in params["timeFrom"].split(":"))
+        end_hour = (hour + DEFAULT_VENUE_SEARCH_WINDOW_HOURS) % 24
+        params["timeTo"] = f"{end_hour:02d}:{minute:02d}"
+    return params
 
 
 def _to_match_result(item: dict[str, Any]) -> dict[str, Any]:
@@ -99,6 +127,24 @@ def _results_reply_text(results: list[dict[str, Any]]) -> str:
     return f"Mình tìm được {len(results)} kèo phù hợp."
 
 
+def _to_venue_result(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "venueId": item.get("venueId"),
+        "venueName": item.get("name"),
+        "address": item.get("address"),
+        "priceFromPerHour": item.get("priceFromPerHour"),
+    }
+
+
+def _venue_results_reply_text(venue_results: list[dict[str, Any]]) -> str:
+    if not venue_results:
+        return (
+            "Mình không tìm thấy sân trống phù hợp. Bạn thử nới lỏng khung "
+            "giờ hoặc khu vực xem sao nhé."
+        )
+    return f"Mình tìm được {len(venue_results)} sân còn trống."
+
+
 async def interpret_and_search(
     llm: LLMClient,
     backend: BackendClient,
@@ -106,15 +152,21 @@ async def interpret_and_search(
     conversation: dict[str, Any],
     message_text: str,
 ) -> dict[str, Any]:
-    """Runs the US1 flow: extract criteria, ask a clarifying question if
-    something required is still missing, otherwise search and return
-    results (spec FR-002/FR-003)."""
+    """Runs the search flow: extract criteria, ask a clarifying question if
+    something required is still missing (including which kind of search —
+    spec 007 FR-003), otherwise run a kèo or venue search and return up to
+    the 3 best results (spec 007 FR-001/FR-007)."""
     extraction = await llm.extract_message_criteria(
         conversation["messages"], message_text
     )
 
     if extraction["scope"] == "off_topic":
-        return {"text": OFF_TOPIC_REPLY, "results": None, "clarifyingQuestion": None}
+        return {
+            "text": OFF_TOPIC_REPLY,
+            "results": None,
+            "venueResults": None,
+            "clarifyingQuestion": None,
+        }
 
     interpreted_request = interpretation.build_interpreted_request(
         conversation.get("lastInterpretedRequest"), extraction["criteria_delta"]
@@ -123,20 +175,34 @@ async def interpret_and_search(
     await store.set_last_interpreted_request(conversation, interpreted_request)
 
     if interpreted_request["missingRequiredFields"]:
+        question = _clarifying_question(interpreted_request["missingRequiredFields"])
         return {
-            "text": _clarifying_question(interpreted_request["missingRequiredFields"]),
+            "text": question,
             "results": None,
-            "clarifyingQuestion": _clarifying_question(
-                interpreted_request["missingRequiredFields"]
-            ),
+            "venueResults": None,
+            "clarifyingQuestion": question,
+        }
+
+    if interpreted_request["searchKind"] == "venue":
+        venues = await backend.search_venues(_venue_search_params(interpreted_request))
+        venue_results = [_to_venue_result(item) for item in venues][:MAX_RESULTS_SHOWN]
+        await store.set_last_venue_results(conversation, venue_results)
+        await store.set_last_results(conversation, [])
+        return {
+            "text": _venue_results_reply_text(venue_results),
+            "results": None,
+            "venueResults": venue_results,
+            "clarifyingQuestion": None,
         }
 
     results = await backend.search_matches(_search_params(interpreted_request))
-    match_results = [_to_match_result(item) for item in results]
+    match_results = [_to_match_result(item) for item in results][:MAX_RESULTS_SHOWN]
     await store.set_last_results(conversation, match_results)
+    await store.set_last_venue_results(conversation, [])
     return {
         "text": _results_reply_text(match_results),
         "results": match_results,
+        "venueResults": None,
         "clarifyingQuestion": None,
     }
 
@@ -224,6 +290,70 @@ async def confirm_action(
     }
 
 
+def _booking_handoff_from_venue(
+    venue: dict[str, Any], interpreted_request: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "venueId": venue["venueId"],
+        "venueName": venue["venueName"],
+        "date": interpreted_request.get("date"),
+        "timeFrom": interpreted_request.get("timeFrom"),
+    }
+
+
+def _booking_confirm_text(
+    venue: dict[str, Any], interpreted_request: dict[str, Any]
+) -> str:
+    date = interpreted_request.get("date")
+    time_from = interpreted_request.get("timeFrom")
+    when = f" lúc {time_from} ngày {date}" if date and time_from else ""
+    return (
+        f"Mình sẽ đưa bạn tới trang đặt sân {venue['venueName']}{when} để bạn "
+        "xác nhận nhé."
+    )
+
+
+async def propose_venue_booking(
+    backend: BackendClient,
+    conversation: dict[str, Any],
+    venue: dict[str, Any],
+) -> dict[str, Any]:
+    """Confirms the player's intent to book a previously-shown venue result,
+    then hands off to the app's own booking screen — never creates a
+    booking itself (spec 007 FR-010). Re-checks availability first so a
+    slot someone else just booked in the meantime isn't handed off as if
+    still open (spec 007 FR-011, Acceptance Scenario 4)."""
+    interpreted_request = conversation.get("lastInterpretedRequest") or {}
+    still_open = True
+    if interpreted_request.get("date") and interpreted_request.get("timeFrom"):
+        current_venues = await backend.search_venues(
+            _venue_search_params(interpreted_request)
+        )
+        still_open = any(
+            item.get("venueId") == venue["venueId"] for item in current_venues
+        )
+
+    if not still_open:
+        return {
+            "text": (
+                f"Sân {venue['venueName']} vừa có người đặt mất khung giờ đó "
+                "rồi. Bạn thử tìm sân khác xem sao nhé."
+            ),
+            "results": None,
+            "venueResults": None,
+            "clarifyingQuestion": None,
+            "bookingHandoff": None,
+        }
+
+    return {
+        "text": _booking_confirm_text(venue, interpreted_request),
+        "results": None,
+        "venueResults": None,
+        "clarifyingQuestion": None,
+        "bookingHandoff": _booking_handoff_from_venue(venue, interpreted_request),
+    }
+
+
 async def handle_message(
     llm: LLMClient,
     backend: BackendClient,
@@ -232,12 +362,15 @@ async def handle_message(
     message_text: str,
 ) -> dict[str, Any]:
     """Entry point for a text turn: routes between confirming/cancelling a
-    pending action, proposing a new one against the last shown results, or
-    running a fresh search."""
+    pending action, proposing a kèo-join or venue-booking hand-off against
+    the last shown results, or running a fresh search."""
     pending_action = store.get_active_pending_action(conversation)
     if pending_action is not None:
         intent = await llm.detect_action_intent(
-            conversation.get("lastResults", []), pending_action, message_text
+            conversation.get("lastResults", []),
+            pending_action,
+            message_text,
+            venue_results=conversation.get("lastVenueResults", []),
         )
         if intent.get("intent") == "confirm":
             return await confirm_action(llm, backend, store, conversation, pending_action)
@@ -255,15 +388,27 @@ async def handle_message(
         await store.resolve_pending_action(conversation, "cancelled")
 
     last_results = conversation.get("lastResults") or []
-    if last_results:
-        intent = await llm.detect_action_intent(last_results, None, message_text)
+    last_venue_results = conversation.get("lastVenueResults") or []
+    if last_results or last_venue_results:
+        intent = await llm.detect_action_intent(
+            last_results, None, message_text, venue_results=last_venue_results
+        )
         target_index = intent.get("targetIndex")
         if (
             intent.get("intent") == "propose_join"
+            and last_results
             and target_index is not None
             and 0 <= target_index < len(last_results)
         ):
             match_id = last_results[target_index]["matchId"]
             return await propose_action(llm, backend, store, conversation, match_id)
+        if (
+            intent.get("intent") == "propose_book"
+            and last_venue_results
+            and target_index is not None
+            and 0 <= target_index < len(last_venue_results)
+        ):
+            venue = last_venue_results[target_index]
+            return await propose_venue_booking(backend, conversation, venue)
 
     return await interpret_and_search(llm, backend, store, conversation, message_text)

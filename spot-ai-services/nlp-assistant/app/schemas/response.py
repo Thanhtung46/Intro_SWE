@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 
 class InterpretedRequest(BaseModel):
+    searchKind: Optional[Literal["match", "venue"]] = None
     sport: Optional[str] = None
     province: Optional[str] = None
     city: Optional[str] = None
@@ -30,6 +31,20 @@ class MatchResult(BaseModel):
     spotsLeft: int
 
 
+class VenueResult(BaseModel):
+    venueId: int
+    venueName: str
+    address: str
+    priceFromPerHour: Optional[int] = None
+
+
+class BookingHandoff(BaseModel):
+    venueId: int
+    venueName: str
+    date: Optional[str] = None
+    timeFrom: Optional[str] = None
+
+
 class PendingAction(BaseModel):
     actionId: str
     type: Literal["JOIN_MATCH", "HOST_MATCH"]
@@ -45,8 +60,10 @@ class AssistantReply(BaseModel):
     text: str
     transcript: Optional[str] = None
     results: Optional[List[MatchResult]] = None
+    venueResults: Optional[List[VenueResult]] = None
     pendingAction: Optional[PendingAction] = None
     clarifyingQuestion: Optional[str] = None
+    bookingHandoff: Optional[BookingHandoff] = None
 
 
 class MessageResponse(BaseModel):

@@ -1,209 +1,26 @@
 # SPOT Backend — API Reference
 
+<<<<<<< HEAD
 Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**.  
-Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups (G0–G5)**, **tournaments (T0–T5)**, **notifications**, **reviews**, **schedule read**. Booking CRUD / payment chưa có API đầy đủ.
+Endpoint đã implement: **auth**, **profile**, **matchmaking (kèo)**, **groups (G0–G5)**, **tournaments (T0–T5)**, **notifications**, **reviews**, **schedule read**, **booking create**, **payment (stub gateway)**. Player cancel booking / real VNPay-MoMo sandbox chưa có.
+=======
+Tài liệu dành cho **Frontend** (web / mobile / admin) và **Tester**. Toàn bộ nội dung chi tiết (request/response/lỗi/curl) đã được tách theo domain trong [`api/`](./api/) — mỗi file ≤300 dòng. File này chỉ là mục lục + quy ước chung.
+>>>>>>> e96bd898ba8e4cf14f33ad0b4c1a509dcb24e1b7
 
 | | |
 | :--- | :--- |
 | Base URL (local) | `http://localhost:3000` |
 | Content-Type | `application/json` |
 | Auth hiện tại | Access JWT trên protected routes (`Authorization: Bearer …`); refresh qua `POST /auth/refresh` |
-| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/matches`↔`/api/matches`, `/groups`↔`/api/groups`, `/tournaments`↔`/api/tournaments`, `/geo`↔`/api/geo`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews` |
+| Alias | `/auth`↔`/api/auth`, `/users`↔`/api/users`, `/matches`↔`/api/matches`, `/groups`↔`/api/groups`, `/tournaments`↔`/api/tournaments`, `/geo`↔`/api/geo`, `/notifications`↔`/api/notifications`, `/reviews`↔`/api/reviews`, `/venues`↔`/api/venues`, `/bookings`↔`/api/bookings`, `/referee`↔`/api/referee`, `/owner`↔`/api/owner`, `/admin`↔`/api/admin` |
 
 **Khuyến nghị FE:** dùng prefix `/api/…`.
 
-### Changelog bảo trì (Aug 2026 — Manage Matches P0–P3 + Groups G0–G5)
-
-| Batch | API / hành vi | Migration / worker |
-| :--- | :--- | :--- |
-| **P0 Lifecycle** | Tab Completed chỉ kèo đủ người + hết giờ; `outcome`/`outcomeMessage`; notify `MATCH_CANCELLED` / `MATCH_EXPIRED_UNDERFILLED`; browse/join chặn sau `endsAt` | `008`, `npm run worker:match-expiry`, dev `POST /matches/dev/process-expired` |
-| **P1 Manage Squad** | `GET /matches/:id/requests` + `participants[]`: `avatarUrl`, `skill`, `shareAmount`, `paymentStatus`, phones; `DELETE /matches/:id/join` | — |
-| **P2 Requests badge** | `GET /matches/my-join-requests`: `pendingCount`, `?status=PENDING\|REJECTED`, `match.hostAvatarUrl`; host `skill` trong squad | — |
-| **P3 Review host** | `POST /matches/:id/review`; `GET /matches/:id` → `summary`; `GET /reviews/hosts/:userId/reviews`; `joinedMatches` + live `rating`/`reviewCount` trên profile | `009_schema_match_host_reviews.sql` |
-| **Groups G0–G1** | `POST/GET /groups`, detail, join/cancel, mine/favorites, kick/transfer/leave/delete | `010_schema_groups.sql` |
-| **Groups G2–G3** | `PATCH /groups/:id` (+ courts replace, `joinMode`→`AUTO` flush); members, schedule matrix, gallery CRUD | — |
-| **Groups G4** | Docs + `npm run smoke:groups` | — |
-| **Groups G5** | Inbox: `GROUP_JOIN_REQUEST`, `GROUP_APPROVED`, `GROUP_REJECTED`, `GROUP_KICKED`, `GROUP_ADMIN_TRANSFERRED` | `011_notification_group_types.sql` |
-| **Referee** — Job Board, invitations Plan A, hire-referee fan-out, rating, **board filter + favourite** | Done (`015`–`022`) — [`REFEREE_PLAN.md`](./REFEREE_PLAN.md) |
-| **Tournaments T0–T5** | Full giải đấu: create/browse/join/manage/matches/standings/PATCH/complete | `012`–`014`, `npm run worker:tournament-lifecycle`, `npm run smoke:tournaments` |
-
-Chi tiết agent: [`CLAUDE.md`](./CLAUDE.md) mục **Changelog bảo trì** + **Groups (hội)** + **Tournaments (giải đấu)**. Figma kèo: Manage `101:98`. Figma groups: Manage `101:2`, detail `810:*`. Figma tournaments: browse `880:404`, detail `880:282`.
-
----
-
 ## Mục lục
 
-1. [Quick start](#1-quick-start)
-2. [Quy ước chung](#2-quy-ước-chung)
-3. [Enums & rules](#3-enums--rules)
-4. [Luồng nghiệp vụ](#4-luồng-nghiệp-vụ)
-5. [System endpoints](#5-system-endpoints)
-6. [Auth endpoints](#6-auth-endpoints)
-7. [Matchmaking endpoints](#7-matchmaking-endpoints)
-8. [Groups endpoints](#8-groups-endpoints)
-9. [Tournaments endpoints](#9-tournaments-endpoints)
-10. [Users / Profile endpoints](#10-users--profile-endpoints)
-11. [Notifications endpoints](#11-notifications-endpoints)
-12. [Reviews endpoints](#12-reviews-endpoints)
-13. [JWT & FE integration](#13-jwt--fe-integration)
-14. [Checklist test](#14-checklist-test)
-15. [Smoke scripts](#15-smoke-scripts)
-16. [Chưa có / sắp làm](#16-chưa-có--sắp-làm)
-17. [Admin Console endpoints](#17-admin-console-endpoints)
-18. [Venues & Booking endpoints](#18-venues--booking-endpoints)
-19. [Referee endpoints](#19-referee-endpoints)
-
----
-
-## 1. Quick start
-
-```bash
-cd spot-backend
-npm install
-cp .env.example .env   # điền DB_*, SMTP_*, JWT_SECRET, Redis
-npm run migrate
-npm run dev            # http://localhost:3000
-```
-
-Kiểm tra server:
-
-```bash
-curl -s http://localhost:3000/health
-```
-
-**OTP khi test local:** set `OTP_DEBUG=true` trong `.env` (không phải production).  
-Các response tạo OTP có thể kèm `debugOtp` (6 số) — dùng ngay trong Postman/curl, không cần mở email.
-
----
-
-## 2. Quy ước chung
-
-### Request
-
-- Method: `GET` / `POST` / `PATCH` / `DELETE`.
-- Body: JSON object (trừ upload avatar: multipart).
-- Public auth (register, login, OTP, forgot/reset): không cần `Authorization`.
-- `GET` / `PATCH /auth/me` và mọi `/matches/*`, `/users/*`, `/geo/*`: `Authorization: Bearer <accessToken>`.
-
-### Success
-
-Body là JSON object (field tùy endpoint). Không bọc trong `{ data: ... }`.
-
-### Lỗi validation (Zod) — `400`
-
-```json
-{
-  "message": "Validation failed",
-  "errors": [
-    { "field": "email", "message": "Email is invalid" }
-  ]
-}
-```
-
-### Lỗi nghiệp vụ (`AppError`)
-
-```json
-{
-  "message": "Invalid OTP",
-  "details": { "attemptsRemaining": 3 }
-}
-```
-
-`details` chỉ có khi backend gắn thêm (không phải mọi lỗi đều có).
-
-### HTTP status thường gặp
-
-| Status | Ý nghĩa |
-| :--- | :--- |
-| `200` / `201` | Thành công |
-| `400` | Validation / OTP sai / JSON invalid |
-| `401` | Sai email/password (login) / thiếu hoặc JWT invalid |
-| `403` | Không đủ điều kiện login (chưa verify, PENDING, lockout, …) |
-| `404` | User không tồn tại |
-| `409` | Conflict (email/phone trùng, role đã chọn) |
-| `429` | Rate limit / OTP attempts / resend cooldown |
-| `500` | Lỗi server |
-| `503` | `JWT_SECRET` chưa cấu hình đúng (khi login) |
-
-### Rate limit
-
-Một số route có `express-rate-limit` (OTP / login / forgot / reset).  
-Khi bị chặn: `429`. Response có thể theo format của `express-rate-limit` (không phải `AppError`).
-
----
-
-## 3. Enums & rules
-
-### Gender (`register`)
-
-`male` | `female` 
-
-Fee / guest trên kèo chỉ `male` | `female`.
-
-### Sports & skill levels
-
-Hai skill **độc lập** (một per sport). Unset = `null`. API lưu `code`. Cập nhật kèo: `PATCH /auth/me`.
-
-**Badminton** (`skills.badminton`): `BEGINNER_MINUS` … `FAIR`, `SEMI_PRO`, `PROFESSIONAL` (10 bậc).  
-**Football** (`skills.football`): `LEARNING`, `REC_BASIC`, `REC_ADVANCED`, `SEMI_PRO`, `PROFESSIONAL`, `ELITE`.  
-`SEMI_PRO` / `PROFESSIONAL` scoped theo sport. `badminton: "ELITE"` → `400`.
-
-### Match format / fee / join / status
-
-| Field | Values |
-| :--- | :--- |
-| `BADMINTON` format | `SINGLES` \| `DOUBLES` |
-| `FOOTBALL` format | `FIVE_A_SIDE` \| `SEVEN_A_SIDE` \| `ELEVEN_A_SIDE` |
-| `feeType` | `GENDER_RANGE` \| `SPLIT_EVENLY` |
-| `joinMode` | `AUTO` \| `APPROVAL` |
-| Match `status` | `OPEN` \| `FULL` \| `COMPLETED` \| `CANCELLED` |
-| Join request | `PENDING` \| `ACCEPTED` \| `REJECTED` \| `KICKED` |
-| `paymentStatus` | `SUCCESS` (stub) |
-| `outcome` (ended kèo) | `COMPLETED` \| `CANCELLED` + `outcomeMessage` |
-
-Host chiếm **1 slot** lúc tạo. Join: `filledCount += 1 + guests.length` (AUTO ngay; APPROVAL khi accept).  
-**`yourShare`**: preview runtime trên match (`ceil(priceMin / maxPlayers)` cho `SPLIT_EVENLY`). **`shareAmount`**: số tiền chốt trên join request / participant (joiner + guests).  
-Pitch global: cùng `venueName` + `venueAddress` + tên court + giờ chồng → `409`.
-
-### Role (chọn ở Step 2)
-
-| API value | UI gợi ý | `status` sau khi chọn | Login được? |
-| :--- | :--- | :--- | :--- |
-| `PLAYER` | Player | `ACTIVE` | Có (sau verify OTP) |
-| `OWNER` | Venue Owner | `PENDING` | **Không** — chờ admin duyệt |
-| `REFEREE` | Referee | `PENDING` | **Không** — chờ admin duyệt |
-
-Role chỉ chọn **một lần**. `ADMIN` không chọn được qua API này.
-
-### User status
-
-`ACTIVE` | `PENDING` | `LOCKED`
-
-### OTP purpose
-
-| Value | Dùng cho |
-| :--- | :--- |
-| `REGISTER` | Đăng ký / verify email (`/otp/verify`, `/otp/resend`) |
-| `FORGOT_PASSWORD` | Quên mật khẩu — **chỉ** qua `/forgot-password` + `/reset-password` |
-
-> **Quan trọng:** Không dùng `/otp/verify` hay `/otp/resend` cho quên mật khẩu.  
-> Hai route đó gắn với `email_verified_at` (đăng ký).
-
-### Password
-
-- Tối thiểu 8 ký tự
-- Có chữ thường, chữ hoa, số, **và ký tự đặc biệt** (vd. `!@#$%...`)
-- `confirmPassword` phải khớp password tương ứng
-
-Ví dụ hợp lệ: `Secret123!`
-
-### Phone
-
-Số Việt Nam **10 chữ số**, bắt đầu bằng `02` / `03` / `05` / `07` / `08` / `09`
-(`/^0(2|3|5|7|8|9)[0-9]{8}$/`), không dấu `+`.
-
-| Đầu số | Loại | Ví dụ OK |
+| # | Domain | File |
 | :--- | :--- | :--- |
+<<<<<<< HEAD
 | `03`, `05`, `07`, `08`, `09` | Di động | `0901234567` |
 | `02` | Cố định (máy bàn) | `0241234567`, `0281234567` |
 
@@ -230,10 +47,9 @@ Từ chối: `1234567890`, `0123456789`, `+84901234567`.
 ```
 POST /auth/register
      → nextStep: SELECT_ROLE
-POST /auth/otp/verify    { email, otp }
-     → email verified (không token)
 POST /auth/role          { email, role: "PLAYER" }
-     → nextStep: LOGIN  (email đã verify)
+     → nextStep: VERIFY_OTP  (nếu chưa verify)
+POST /auth/otp/verify    { email, otp }
 POST /auth/login         { email, password }
      → accessToken + refreshToken + user
 GET  /auth/me            Header: Authorization: Bearer <accessToken>
@@ -241,17 +57,10 @@ PATCH /auth/me           { skills: { badminton?, football? }, avatarUrl? }
 POST /auth/refresh       { refreshToken }  (khi access hết hạn)
 ```
 
-> Thứ tự chuẩn là **Register → OTP → Role**. `POST /auth/role` vẫn chấp nhận
-> khi gọi **trước** `POST /auth/otp/verify` (backward-compat) → khi đó
-> `nextStep: VERIFY_OTP`.
-
 ### B. Đăng ký OWNER / REFEREE
 
-Giống trên tới `POST /auth/role` với `OWNER` hoặc `REFEREE` → `status: PENDING`.
-Vì email đã verify ở bước OTP, `POST /auth/role` trả luôn `accessToken` +
-`refreshToken` + `nextStep: SUBMIT_VERIFICATION` để nộp giấy tờ
-(`POST /users/me/verification-requests/batch`). **Login sẽ trả 403** cho đến
-khi admin duyệt.
+Giống trên tới `POST /auth/role` với `OWNER` hoặc `REFEREE` → `status: PENDING`.  
+Sau verify OTP, **login sẽ trả 403** cho đến khi admin duyệt (API duyệt chưa có).
 
 ### C. Quên mật khẩu
 
@@ -446,8 +255,7 @@ curl -s -X POST http://localhost:3000/auth/register \
 
 ### 6.2 `POST /auth/role`
 
-Register Step 3 (sau OTP) — chọn role một lần. Vẫn gọi được trước OTP
-(backward-compat) → khi đó chưa cấp token, `nextStep: VERIFY_OTP`.
+Register Step 2 — chọn role một lần.
 
 **Body**
 
@@ -480,29 +288,10 @@ Register Step 3 (sau OTP) — chọn role một lần. Vẫn gọi được trư
 
 Nếu `OWNER` / `REFEREE`: `message` ≈ *"Role selected. Account is pending approval."*, `user.status` = `PENDING`.
 
-**Nếu email đã verify (flow chuẩn Register → OTP → Role) + role `OWNER` / `REFEREE`:**
-response kèm session token để nộp giấy tờ ngay:
-
-```json
-{
-  "message": "Role selected. Account is pending approval.",
-  "nextStep": "SUBMIT_VERIFICATION",
-  "user": { "...": "..." },
-  "accessToken": "<jwt>",
-  "refreshToken": "<jwt>",
-  "tokenType": "Bearer",
-  "expiresIn": 900
-}
-```
-
-FE lưu token rồi vào màn upload (`POST /users/me/verification-requests/batch`).
-`PLAYER` đã verify → chỉ `nextStep: LOGIN`, không token.
-
 `nextStep`:
 
-- `SUBMIT_VERIFICATION` — email đã verify + `OWNER`/`REFEREE` (kèm token)
-- `LOGIN` — email đã verify + `PLAYER`
-- `VERIFY_OTP` — chưa verify email (role chọn trước OTP)
+- `VERIFY_OTP` — chưa verify email
+- `LOGIN` — đã verify (hiếm khi xảy ra ở flow chuẩn)
 
 **Errors**
 
@@ -629,22 +418,8 @@ curl -s -X POST http://localhost:3000/auth/otp/resend \
 1. Email + password đúng  
 2. Email đã verify  
 3. Đã chọn role (`role_selected_at`)  
-4. `status` không phải `LOCKED`; nếu `PENDING` xem **PENDING REFEREE** dưới  
+4. `status` không phải `LOCKED` / `PENDING`  
 5. Không trong `lockout_until`
-
-**PENDING REFEREE — resume token**
-
-Một `REFEREE` `PENDING` **chưa có bộ hồ sơ nào đang chờ duyệt** (chưa nộp,
-hoặc mọi giấy tờ đã bị REJECTED) → login (đúng password) trả **`200`** kèm
-`accessToken` / `refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` để quay
-lại màn nộp giấy tờ từ thiết bị bất kỳ (giống `POST /auth/role` +
-`POST /auth/otp/verify`).
-
-`REFEREE` đã nộp & đang chờ admin duyệt, **và mọi `OWNER` `PENDING`** →
-vẫn `403` + `details.nextStep: "SUBMIT_VERIFICATION"`.
-
-Kiểm tra password **trước** khi phân biệt PENDING → sai password luôn trả
-`401` chung, không lộ trạng thái account.
 
 **Body**
 
@@ -686,7 +461,7 @@ Kiểm tra password **trước** khi phân biệt PENDING → sai password luôn
 | :--- | :--- | :--- |
 | `401` | Invalid email or password | `attemptsRemaining` (khi password sai, chưa lock) |
 | `403` | Account is locked. Please contact support. | |
-| `403` | Account is pending approval and cannot log in yet. | `nextStep: "SUBMIT_VERIFICATION"` — OWNER pending, hoặc REFEREE đã nộp/đang chờ duyệt (REFEREE chưa nộp → `200` + token, xem trên) |
+| `403` | Account is pending approval and cannot log in yet. | |
 | `403` | Account temporarily locked. Try again later. | `lockoutUntil` |
 | `403` | Email is not verified. Please verify OTP first. | |
 | `403` | Please select your role to continue. | `nextStep: "SELECT_ROLE"` |
@@ -1015,7 +790,7 @@ Dropdown 2 cấp pre-2025 (63 tỉnh + 705 quận/huyện). JSON tĩnh, Bearer. 
 
 ### 7.2 `GET /matches`
 
-Browse: `OPEN`, còn slot, `startsAt > now`. `FULL` **ẩn** trên homepage; vẫn thấy qua `?hostUserId=` (OPEN/FULL còn hạn đến `endsAt`).
+Browse: `OPEN`, còn slot, `endsAt > now`. `FULL` **ẩn** trên homepage; vẫn thấy qua `?hostUserId=` (OPEN/FULL còn hạn).
 
 **Ẩn khỏi browse mặc định** (không khi `hostUserId=`): kèo caller đang host; join `PENDING`/`ACCEPTED`/`KICKED`. **`REJECTED` hiện lại**.
 
@@ -1034,7 +809,7 @@ Chi tiết (kể cả đã qua giờ / cancelled).
 Đánh giá host: `POST /matches/:id/review` (xem 7.4c). `host.rating` / `host.reviewCount` trên card lấy từ aggregate review pickup kèo.
 
 `hostPhoneNumber` **chỉ** khi caller là host hoặc `yourRequest.status === ACCEPTED`. `yourRequest` = `PENDING`/`ACCEPTED`/`KICKED` (hoặc `null` nếu chưa join / `REJECTED`); gồm `avatarUrl`, `skill` (sport của kèo).  
-`canJoin` = không phải host, `OPEN`, còn slot, chưa request active, **`startsAt > now`**, không bị kick.
+`canJoin` = không phải host, `OPEN`, còn slot, chưa request active, **`endsAt > now`**, không bị kick.
 
 `participants[]`: HOST + joiners `ACCEPTED`. HOST và player gồm `skill` (sport kèo). Player thêm `shareAmount`, `paymentStatus`, `avatarUrl`, `phoneNumber` (host hoặc chính mình).
 
@@ -2214,7 +1989,7 @@ npm test
 | Logout | Chưa |
 | Avatar file upload (S3) | Chưa (URL + local `POST /users/me/avatar` đã có) |
 | FCM / device tokens | Chưa |
-| Booking create/pay/cancel, payment gateway | Chưa (schedule read + reviews only) |
+| Booking create/pay/cancel, payment gateway | **Payment stub done** (§18.1); real VNPay/MoMo sandbox phase 2 |
 | **Groups G0–G5** — full groups + inbox notifications | Done (`010`, `011`) — [`GROUP_PLAN.md`](./GROUP_PLAN.md) |
 | **Referee** — Job Board, invitations Plan A, hire-referee fan-out, rating, **board filter + favourite** | Done (`015`–`022`) — [`REFEREE_PLAN.md`](./REFEREE_PLAN.md) |
 | **Tournaments T0–T5** — full giải đấu + inbox notifications | Done (`012`–`014`, `013`) — [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md) |
@@ -2237,16 +2012,8 @@ Sau `POST /auth/otp/verify`, user `PENDING` + `OWNER`/`REFEREE` nhận thêm `ac
 | :--- | :--- | :--- | :--- |
 | `POST` | `/users/me/verification-documents` | multipart `document` (PDF/JPG/PNG, max 5MB) | `{ documentUrl }` |
 | `POST` | `/users/me/verification-requests` | `{ documentUrl, requestType: OWNER_LICENSE \| REFEREE_CREDENTIAL }` | `201` `{ request }` |
-| `POST` | `/users/me/verification-requests/batch` | `{ documents: [{ documentKind: ID_FRONT\|ID_BACK\|VFF_LICENSE, documentUrl }] }` | `201` `{ requests: [] }` |
-| `GET` | `/users/me/verification-requests` | — | `200` `{ requests: [{ verificationReqId, requestType, documentKind, documentUrl, status, adminNotes, reviewedAt, createdAt }] }` — **auth only** (đọc được khi còn `PENDING`); `ORDER BY createdAt DESC`; `401` |
 
 Reject → user vẫn `PENDING`; gửi lại document → reset request `REJECTED` → `PENDING`.
-
-**`POST /auth/login` khi `PENDING`:**
-
-- **REFEREE chưa có hồ sơ chờ duyệt** (chưa nộp / mọi doc REJECTED) → `200` + `accessToken`/`refreshToken` + `nextStep: "SUBMIT_VERIFICATION"` (quay lại màn nộp giấy tờ từ thiết bị bất kỳ).
-- **REFEREE đã nộp & đang chờ duyệt**, và **mọi OWNER `PENDING`** → `403 "Account is pending approval and cannot log in yet."` + `details.nextStep: "SUBMIT_VERIFICATION"`, không token.
-- Password verify chạy **trước** nhánh PENDING → sai password luôn `401` chung (không lộ trạng thái account).
 
 ### Dashboard (Figma `224:3615` / TC_ADMIN_01)
 
@@ -2367,7 +2134,7 @@ Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
 | Refresh token rotate / Redis blacklist | Chưa |
 | Admin duyệt `OWNER` / `REFEREE` (`PENDING` → `ACTIVE`) | Done — `/admin/approvals/*`, `/users/me/verification-requests` |
 | Logout | Chưa |
-| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; payment vẫn chưa có |
+| `GET /venues` list/detail/availability + `POST /bookings` | Done — SPOT `001-home-booking-api`; **payment stub** §18.1 |
 | Matchmaking host / list / detail | Done — `POST/GET /matches`, `GET /matches/:id` |
 | Join / guests / approve / kick | Done — Phase 3 |
 | Host mine / edit / cancel | Done — Phase 4 |
@@ -2385,7 +2152,7 @@ Smoke: `npm run smoke:owner-ops` (cần migration 009 + seed admin).
 | Logout | Chưa |
 | Avatar file upload (S3) / stats | Chưa |
 | FCM / device tokens | Chưa |
-| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; pay/cancel, matchmaking lobby, payment gateway vẫn chưa có |
+| `POST /bookings` (create) | Done — SPOT `001-home-booking-api`; **pay via `/payments/*`** §18.1; cancel/player UI chưa |
 
 Khi thêm endpoint mới, cập nhật file này (request / response / lỗi / curl / checklist).
 
@@ -2528,10 +2295,6 @@ curl -s "http://localhost:3000/venues/12/images" \
 
 ### `POST /bookings`
 
-Yêu cầu Bearer access + `status = ACTIVE` (PLAYER luôn ACTIVE; user
-`PENDING`/`LOCKED` → `403 "Account is not active"`). Áp dụng cho
-`POST /bookings`, `POST /bookings/bulk`, và `POST /bookings/:id/dev/mark-paid`.
-
 **Body**
 
 ```json
@@ -2622,6 +2385,141 @@ curl -s -X POST http://localhost:3000/bookings/bulk \
 
 ---
 
+## 18.1 Payment endpoints (Figma 102-5 / 102-121)
+
+Prefix `/payments` + `/api/payments`. Player Bearer required (except webhooks).
+
+**Env (dev stub):** `PAYMENT_DEBUG=true` — **ấn Pay = xác nhận ngay** (không redirect VNPay/MoMo). `POST /payments/dev/confirm` vẫn có để test tay nhưng FE **không cần** gọi.
+
+**Luồng FE (stub):** `POST /bookings` → `GET .../summary` → user ấn Pay → `POST /payments/create` → response `status: SUCCESS` + `bookingCode` → navigate Success screen.
+
+### `GET /payments/bookings/:bookingId/summary`
+
+Summary cho màn Payment (102-5): venue/field, slot, `totalAmount`, `depositAmount`, `payableAmountVnd` (= deposit + `refereeFeeVnd` nếu `hireReferee`), gateways enabled.
+
+**Success `200`**
+
+```json
+{
+  "summary": {
+    "bookingId": 501,
+    "bookingCode": null,
+    "status": "PENDING_PAYMENT",
+    "bookingDate": "2026-08-20",
+    "startTime": "19:00",
+    "endTime": "20:00",
+    "venue": { "venueId": 12, "name": "Saigon Sports Hub", "address": "123 Nguyen Van Linh" },
+    "field": { "fieldId": 45, "name": "Court A", "sportType": "football" },
+    "totalAmount": 250000,
+    "depositAmount": 75000,
+    "hireReferee": false,
+    "refereeFeeVnd": null,
+    "payableAmountVnd": 75000,
+    "paymentExpiresAt": null,
+    "gateways": { "momo": { "enabled": false }, "vnpay": { "enabled": true } }
+  }
+}
+```
+
+**Errors:** `404` · `409` booking không còn `PENDING_PAYMENT`
+
+---
+
+### `POST /payments/create`
+
+Tạo transaction và **xác nhận ngay** khi `PAYMENT_DEBUG=true` (stub — một bước duy nhất cho nút Pay).
+
+**Body:** `{ "bookingId": 501, "provider": "VNPAY" | "MOMO" }`
+
+**Success `200` (stub — instant confirm)**
+
+```json
+{
+  "message": "Payment confirmed",
+  "transaction": {
+    "transactionId": 88,
+    "bookingId": 501,
+    "provider": "VNPAY",
+    "amountVnd": 75000,
+    "status": "SUCCESS",
+    "bookingCode": "SPOT-000501",
+    "invoiceNumber": "INV-20260820-000501",
+    "paidAt": "2026-08-20T12:05:00.000Z"
+  },
+  "booking": {
+    "bookingId": 501,
+    "bookingCode": "SPOT-000501",
+    "status": "PAID"
+  }
+}
+```
+
+**Success `201` (prod gateway — chưa implement):** trả `PENDING` + `paymentUrl` redirect.
+
+**Errors:** `404` · `409` đã paid · `503` gateway disabled (prod) · `410` session expired (confirm path)
+
+---
+
+### `GET /payments/transactions/:transactionId`
+
+Poll cho màn Payment Success (102-121) — `status`, `bookingCode`, `invoiceNumber`.
+
+**Success `200`**
+
+```json
+{
+  "transaction": {
+    "transactionId": 88,
+    "bookingId": 501,
+    "provider": "VNPAY",
+    "amountVnd": 75000,
+    "status": "SUCCESS",
+    "bookingCode": "SPOT-000501",
+    "invoiceNumber": "INV-20260820-000501",
+    "bookingStatus": "PAID",
+    "paidAt": "2026-08-20T12:05:00.000Z",
+    "summary": {
+      "venueName": "Saigon Sports Hub",
+      "fieldName": "Court A",
+      "bookingDate": "2026-08-20",
+      "startTime": "19:00",
+      "endTime": "20:00"
+    }
+  }
+}
+```
+
+---
+
+### `POST /payments/dev/confirm` (non-prod, `PAYMENT_DEBUG=true`)
+
+Mock gateway success. Body: `{ "transactionId": 88 }`. Idempotent — gọi lại trả `duplicate: true`.
+
+Side effects: booking → `PAID` + `bookingCode`, invoice PDF (`uploads/invoices/`), email attachment (nếu SMTP), inbox `BOOKING_PAYMENT_SUCCESS`, referee fan-out nếu `hireReferee`.
+
+---
+
+### Webhooks (stub structure — phase 2: VNPay/MoMo sandbox)
+
+| Method | Path | Notes |
+| :--- | :--- | :--- |
+| `POST` | `/payments/webhooks/vnpay` | Public; idempotent via `provider_ref` |
+| `POST` | `/payments/webhooks/momo` | Public |
+
+Stub payload success: `{ "providerRef": "<ref from create>", "status": "SUCCESS" }`.
+
+---
+
+### Worker
+
+`npm run worker:payment-expiry` — expire transaction `PENDING` quá TTL → booking `CANCELLED`, giải phóng slot.
+
+**Smoke:** `npm run smoke:payment` (cần `OTP_DEBUG=true`, `PAYMENT_DEBUG=true`, server up).
+
+**Legacy dev:** `POST /bookings/:id/dev/mark-paid` vẫn hoạt động (bypass payment domain).
+
+---
+
 ## 19. Referee endpoints
 
 Base: `/referee` hoặc `/api/referee`.  
@@ -2682,7 +2580,6 @@ Profile trọng tài + chứng chỉ admin đã gán.
     "totalMatchesOfficiated": 12,
     "avgRating": 4.5,
     "ratingCount": 8,
-    "activationAcknowledged": false,
     "createdAt": "2026-08-01T10:00:00.000Z",
     "updatedAt": "2026-08-20T08:00:00.000Z"
   }
@@ -2695,29 +2592,6 @@ Profile trọng tài + chứng chỉ admin đã gán.
 
 - Dùng `certifiedSportTypes` render **sport tabs** trên Job Board — chỉ hiện môn được cert.
 - `avgRating` / `ratingCount` = aggregate từ player reviews (`POST /reviews/referee`).
-- `activationAcknowledged` `false` ở lần login đầu → FE hiện màn **"Account Activated!"**.
-  Sau khi FE gọi `POST /referee/me/activation-ack` (§19.1b) thì `true` **vĩnh viễn,
-  cross-device** — thay cho cờ AsyncStorage device-local cũ.
-
----
-
-### 19.1b `POST /referee/me/activation-ack`
-
-Đánh dấu đã xem màn "Account Activated" một lần (server-side). **Idempotent** —
-gọi lại nhiều lần vẫn `200`, không đổi timestamp lần đầu. Body rỗng.
-
-**Headers:** `Authorization: Bearer <accessToken>`
-
-**Success `200`**
-
-```json
-{ "activationAcknowledged": true }
-```
-
-**Errors:** `401` · `403` (không phải REFEREE / không ACTIVE) · `404` Referee profile not found
-
-**FE notes** — gọi **fire-and-forget** khi bấm "Go to Job Board" (đừng await; POST lỗi
-mạng không được kẹt user — lần mở app sau `GET /referee/me` vẫn `false` → hiện lại → thử lại).
 
 ---
 
@@ -3251,45 +3125,11 @@ Tổng thu nhập tháng + chart points (data thật từ assignment `COMPLETED`
 
 ---
 
-### 19.14b `GET /referee/earnings/monthly`
-
-Monthly totals for the Performance Growth "Month" chart mode — one bucket per
-month with earnings, over a trailing window. Same source as `earnings`
-(assignment `COMPLETED`, bucketed by `completed_at` in Asia/Bangkok).
-
-**Query:**
-
-| Param | Default | Notes |
-| :--- | :--- | :--- |
-| `anchor` | current month (Bangkok) | `YYYY-MM` — the newest month in the window |
-| `months` | `6` | `2`–`12`; window = `months` back through `anchor` |
-
-**Success `200`** (sparse — months with no earnings are omitted; FE zero-fills):
-
-```json
-{
-  "anchor": "2026-09",
-  "months": 6,
-  "currency": "VND",
-  "buckets": [
-    { "key": "2026-07", "amountVnd": 450000, "matchCount": 3 },
-    { "key": "2026-09", "amountVnd": 300000, "matchCount": 2 }
-  ]
-}
-```
-
-`months` outside `2`–`12` → `400 Validation failed`.
-
----
-
 ### 19.15 `GET /referee/earnings/history`
 
-Lịch sử paginated. Optional `month` scopes it to matches completed in that month
-(Asia/Bangkok) — the FE "Match History" card uses this so it tracks the month picker.
+Lịch sử paginated.
 
-**Query:** `month=YYYY-MM` (optional), `limit` (default 20, max 50), `offset` (default 0).
-
-`month` echoed back on the response as `"month"` (`null` when omitted).
+**Query:** `limit` (default 20, max 50), `offset` (default 0).
 
 **Success `200`**
 
@@ -3378,8 +3218,32 @@ Chi tiết: [§12 — `POST /reviews/referee`](#92-post-reviewsreferee-player--t
 **Smoke:** `npm run smoke:referee` — full flow onboarding → board filter/favourite → apply → hire → accept.
 
 ---
+=======
+| 1 | Quick start, quy ước chung, enums & rules, system endpoints | [`api/00-conventions.md`](./api/00-conventions.md) |
+| 2 | Luồng nghiệp vụ (đăng ký/đăng nhập, host/join kèo, groups, tournaments) | [`api/01-business-flows.md`](./api/01-business-flows.md) |
+| 3 | Auth — register / role / OTP | [`api/02-auth-register.md`](./api/02-auth-register.md) |
+| 4 | Auth — login / refresh / me / forgot-reset password | [`api/03-auth-login.md`](./api/03-auth-login.md) |
+| 5 | Matchmaking (kèo) | [`api/04-matchmaking.md`](./api/04-matchmaking.md) |
+| 6 | Groups (hội) | [`api/05-groups.md`](./api/05-groups.md) |
+| 7 | Tournaments (giải đấu) | [`api/06-tournaments.md`](./api/06-tournaments.md) |
+| 8 | Users / Profile (public + own) | [`api/07-users-profile.md`](./api/07-users-profile.md) |
+| 9 | Notifications | [`api/08-notifications.md`](./api/08-notifications.md) |
+| 10 | Reviews | [`api/09-reviews.md`](./api/09-reviews.md) |
+| 11 | JWT & FE integration | [`api/10-fe-integration.md`](./api/10-fe-integration.md) |
+| 12 | Testing — checklist + smoke scripts | [`api/11-testing.md`](./api/11-testing.md) |
+| 13 | Admin Console endpoints | [`api/12-admin-console.md`](./api/12-admin-console.md) |
+| 14 | Owner Console endpoints (Venue Owner) | [`api/13-owner-console.md`](./api/13-owner-console.md) |
+| 15 | Venues & Booking | [`api/14-venues-booking.md`](./api/14-venues-booking.md) |
+| 16 | Referee — onboarding, certifications, Job Board | [`api/15-referee-onboarding.md`](./api/15-referee-onboarding.md) |
+| 17 | Referee — venue pool registration | [`api/16-referee-venue-registration.md`](./api/16-referee-venue-registration.md) |
+| 18 | Referee — assignments, schedule, earnings, booking integration | [`api/17-referee-assignments.md`](./api/17-referee-assignments.md) |
+| 19 | Chưa có / sắp làm | [`api/18-roadmap.md`](./api/18-roadmap.md) |
+
+Khi thêm endpoint mới: cập nhật file domain tương ứng ở trên (request / response / lỗi / curl / checklist), không thêm nội dung chi tiết vào file này.
+>>>>>>> e96bd898ba8e4cf14f33ad0b4c1a509dcb24e1b7
 
 ## Liên kết
 
 - Setup & Docker: [`README.md`](../README.md)
 - Ghi chú agent / schema: [`CLAUDE.md`](../CLAUDE.md)
+- Product locks: [`MATCHMAKING_PLAN.md`](./MATCHMAKING_PLAN.md), [`GROUP_PLAN.md`](./GROUP_PLAN.md), [`TOURNAMENT_PLAN.md`](./TOURNAMENT_PLAN.md), [`REFEREE_PLAN.md`](./REFEREE_PLAN.md)

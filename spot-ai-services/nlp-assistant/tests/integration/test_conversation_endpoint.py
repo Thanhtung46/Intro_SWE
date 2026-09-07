@@ -29,7 +29,7 @@ class FakeLLM:
             raise response
         return response
 
-    async def detect_action_intent(self, results, pending_action, text):
+    async def detect_action_intent(self, results, pending_action, text, venue_results=None):
         return self._intent_responses.pop(0)
 
     async def transcribe(self, audio_bytes, mime_type):
@@ -39,13 +39,17 @@ class FakeLLM:
 
 
 class FakeBackend:
-    def __init__(self, items=None, match=None, join_exception=None):
+    def __init__(self, items=None, match=None, join_exception=None, venues=None):
         self._items = items if items is not None else []
         self._match = match or {}
         self._join_exception = join_exception
+        self._venues = venues if venues is not None else []
 
     async def search_matches(self, criteria):
         return self._items
+
+    async def search_venues(self, criteria):
+        return self._venues
 
     async def get_match(self, match_id):
         return self._match
@@ -85,6 +89,7 @@ def _patch(
     match=None,
     join_exception=None,
     transcribe_response=None,
+    venues=None,
 ):
     monkeypatch.setattr(conversation_module, "get_store", lambda: fake_store)
     monkeypatch.setattr(
@@ -95,7 +100,7 @@ def _patch(
     monkeypatch.setattr(
         conversation_module,
         "BackendClient",
-        lambda token: FakeBackend(backend_items, match, join_exception),
+        lambda token: FakeBackend(backend_items, match, join_exception, venues),
     )
 
 
@@ -103,7 +108,7 @@ def test_well_formed_request_returns_results(monkeypatch, fake_store, player_acc
     _patch(
         monkeypatch,
         fake_store,
-        [{"criteria_delta": {"sport": "BADMINTON"}, "scope": "search"}],
+        [{"criteria_delta": {"sport": "BADMINTON", "searchKind": "match"}, "scope": "search"}],
         backend_items=[
             {
                 "matchId": 101,
@@ -164,7 +169,7 @@ def test_zero_results_explains_and_suggests_loosening(
     _patch(
         monkeypatch,
         fake_store,
-        [{"criteria_delta": {"sport": "FOOTBALL"}, "scope": "search"}],
+        [{"criteria_delta": {"sport": "FOOTBALL", "searchKind": "match"}, "scope": "search"}],
         backend_items=[],
     )
 
@@ -179,6 +184,121 @@ def test_zero_results_explains_and_suggests_loosening(
     body = response.json()
     assert body["reply"]["results"] == []
     assert "không tìm thấy" in body["reply"]["text"]
+
+
+def test_ambiguous_search_kind_returns_clarifying_question_no_backend_call(
+    monkeypatch, fake_store, player_access_token
+):
+    _patch(
+        monkeypatch,
+        fake_store,
+        [{"criteria_delta": {"sport": "BADMINTON"}, "scope": "search"}],
+    )
+
+    conversation_id = str(uuid.uuid4())
+    response = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"inputMode": "text", "text": "Tìm sân cầu lông ở Quận 7 tối nay"},
+        headers=_headers(player_access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reply"]["clarifyingQuestion"] is not None
+    assert body["reply"]["results"] is None
+    assert body["reply"]["venueResults"] is None
+
+
+def test_venue_search_returns_venue_results(monkeypatch, fake_store, player_access_token):
+    _patch(
+        monkeypatch,
+        fake_store,
+        [{"criteria_delta": {"sport": "BADMINTON", "searchKind": "venue"}, "scope": "search"}],
+        venues=[
+            {"venueId": 42, "name": "Sân ABC", "address": "123 Nguyễn Văn Linh", "priceFromPerHour": 150000},
+        ],
+    )
+
+    conversation_id = str(uuid.uuid4())
+    response = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"inputMode": "text", "text": "Tìm sân trống để đặt"},
+        headers=_headers(player_access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reply"]["results"] is None
+    assert body["reply"]["venueResults"] == [
+        {"venueId": 42, "venueName": "Sân ABC", "address": "123 Nguyễn Văn Linh", "priceFromPerHour": 150000},
+    ]
+
+
+def test_venue_search_zero_results_returns_empty_list(
+    monkeypatch, fake_store, player_access_token
+):
+    _patch(
+        monkeypatch,
+        fake_store,
+        [{"criteria_delta": {"sport": "BADMINTON", "searchKind": "venue"}, "scope": "search"}],
+        venues=[],
+    )
+
+    conversation_id = str(uuid.uuid4())
+    response = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"inputMode": "text", "text": "Tìm sân trống để đặt"},
+        headers=_headers(player_access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["reply"]["venueResults"] == []
+
+
+def test_book_this_venue_returns_booking_handoff(monkeypatch, fake_store, player_access_token):
+    conversation_id = str(uuid.uuid4())
+
+    # Turn 1: venue search populates lastVenueResults.
+    _patch(
+        monkeypatch,
+        fake_store,
+        llm_responses=[
+            {
+                "criteria_delta": {
+                    "sport": "BADMINTON",
+                    "searchKind": "venue",
+                    "date": "2026-09-04",
+                    "timeFrom": "19:00",
+                },
+                "scope": "search",
+            }
+        ],
+        venues=[{"venueId": 42, "name": "Sân ABC", "address": "…", "priceFromPerHour": 150000}],
+    )
+    client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"inputMode": "text", "text": "Tìm sân cầu lông tối nay sau 7h"},
+        headers=_headers(player_access_token),
+    )
+
+    # Turn 2: book the first venue result.
+    _patch(
+        monkeypatch,
+        fake_store,
+        intent_responses=[{"intent": "propose_book", "targetIndex": 0}],
+        venues=[{"venueId": 42, "name": "Sân ABC", "address": "…", "priceFromPerHour": 150000}],
+    )
+    response = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"inputMode": "text", "text": "Đăng ký sân đó giúp mình"},
+        headers=_headers(player_access_token),
+    )
+
+    assert response.status_code == 200
+    handoff = response.json()["reply"]["bookingHandoff"]
+    assert handoff["venueId"] == 42
+    assert handoff["date"] == "2026-09-04"
+    assert handoff["timeFrom"] == "19:00"
 
 
 def test_off_topic_message_declines_gracefully(
@@ -253,7 +373,7 @@ def test_propose_then_confirm_join_succeeds(
     _patch(
         monkeypatch,
         fake_store,
-        llm_responses=[{"criteria_delta": {"sport": "BADMINTON"}, "scope": "search"}],
+        llm_responses=[{"criteria_delta": {"sport": "BADMINTON", "searchKind": "match"}, "scope": "search"}],
         backend_items=[
             {
                 "matchId": 101,
@@ -396,7 +516,7 @@ def test_voice_message_high_confidence_matches_equivalent_text_flow(
     _patch(
         monkeypatch,
         fake_store,
-        llm_responses=[{"criteria_delta": {"sport": "BADMINTON"}, "scope": "search"}],
+        llm_responses=[{"criteria_delta": {"sport": "BADMINTON", "searchKind": "match"}, "scope": "search"}],
         backend_items=[
             {
                 "matchId": 101,
