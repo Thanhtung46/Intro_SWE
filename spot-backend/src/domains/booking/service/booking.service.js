@@ -56,7 +56,13 @@ export function bangkokRangeToUtc(fromDate, toDate) {
 function resolveDateWindow(query) {
   const from = query.from ?? todayInBangkok();
   const to = query.to ?? addCalendarDays(from, SCHEDULE_DEFAULT_DAYS);
-  return bangkokRangeToUtc(from, to);
+  const { rangeStart, rangeEnd } = bangkokRangeToUtc(from, to);
+  // When the caller didn't pin an explicit `from` (e.g. Home's single
+  // "upcoming match" card, vs. Schedule's calendar which always passes the
+  // viewed month), start-of-today would still include a booking/match
+  // earlier today that has already ended — `now()` is the correct lower
+  // bound for "what's upcoming", not "what's today".
+  return { rangeStart: query.from ? rangeStart : new Date(), rangeEnd };
 }
 
 export async function listMySchedule(userId, query) {
