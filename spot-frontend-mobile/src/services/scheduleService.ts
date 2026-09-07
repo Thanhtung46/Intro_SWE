@@ -9,11 +9,17 @@ export interface ScheduleItem {
   endsAt: string;
   bookingDate: string;
   status: string;
+  /** Server-computed time bucket — render as-is, never re-derive from startsAt/endsAt on the client. */
+  displayStatus: 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   venueName: string;
   fieldName: string;
   address: string;
   sportType: string;
-  role?: 'HOST' | 'PARTICIPANT';
+  role?: 'HOST' | 'PARTICIPANT' | null;
+  /** Only non-null for type: 'MATCH'. */
+  hostName?: string | null;
+  /** Server-sourced (schema_review.reviews) — true only for BOOKING items with an existing review. Survives refetch/remount, unlike a purely local "just submitted" flag. */
+  alreadyReviewed?: boolean;
   totalAmountVnd: number | null;
 }
 

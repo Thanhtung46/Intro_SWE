@@ -7,11 +7,14 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import JoinMatchSheet from '@/components/matches/JoinMatchSheet';
 import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/MatchCoverImage';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { cancelJoinRequest, cancelMatch, getErrorMessage, getMatchDetail } from '@/services/matchService';
 import type { Guest, MatchDetail, Participant, Sport } from '@/types/match';
+import type { TranslationKey } from '@/i18n/translations';
 import { formatMatchWhenParts, formatVnd } from '@/utils/format';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -64,7 +67,7 @@ function buildSquadMembers(participants: Participant[]): SquadMember[] {
   return members;
 }
 
-function showGuestInfo(sport: Sport, guest: Guest) {
+function showGuestInfo(sport: Sport, guest: Guest, t: (key: TranslationKey) => string) {
   const skill = skillLabel(sport, guest.skill) || guest.skill;
   const gender = guest.gender === 'female' ? 'F' : guest.gender === 'male' ? 'M' : null;
   const lines = [
@@ -73,7 +76,7 @@ function showGuestInfo(sport: Sport, guest: Guest) {
   ].filter(Boolean);
   Alert.alert(
     guest.name,
-    lines.length ? lines.join('\n') : 'Guest brought by a player — no SPOT account.',
+    lines.length ? lines.join('\n') : t('matches.detail.guestNoAccount'),
   );
 }
 
@@ -94,6 +97,9 @@ export default function MatchDetailScreen({
   onManageSquad,
   onEditMatch,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -135,7 +141,7 @@ export default function MatchDetailScreen({
       await cancelJoinRequest(detail.match.matchId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('matches.detail.somethingWrongTitle'), getErrorMessage(err));
     } finally {
       setIsCancelling(false);
     }
@@ -149,7 +155,7 @@ export default function MatchDetailScreen({
       await cancelMatch(detail.match.matchId);
       onBack();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('matches.detail.somethingWrongTitle'), getErrorMessage(err));
     } finally {
       setIsCancellingMatch(false);
     }
@@ -166,7 +172,7 @@ export default function MatchDetailScreen({
   if (status === 'error' || !detail) {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={errorMessage || 'Match not found.'} onRetry={fetchDetail} />
+        <ErrorBanner message={errorMessage || t('matches.detail.notFound')} onRetry={fetchDetail} />
       </SafeAreaView>
     );
   }
@@ -193,7 +199,7 @@ export default function MatchDetailScreen({
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <View style={styles.sportBadge}>
-              <Text style={styles.sportBadgeText}>{match.sport} · {match.format.replace(/_/g, ' ')}</Text>
+              <Text style={styles.sportBadgeText}>{match.sport === 'FOOTBALL' ? t('common.sportFootball') : t('common.sportBadminton')} · {match.format.replace(/_/g, ' ')}</Text>
             </View>
             <Text style={styles.heroTitle} numberOfLines={2} ellipsizeMode="tail">
               {match.title}
@@ -203,13 +209,15 @@ export default function MatchDetailScreen({
 
         <View style={styles.infoStrip}>
           <InfoStripItem
+            colors={colors}
+            styles={styles}
             icon="calendar-outline"
-            label="Time"
+            label={t('matches.detail.time')}
             value={whenParts.dayLabel}
             valueSecondary={whenParts.timeRange}
           />
-          <InfoStripItem icon="stats-chart-outline" label="Skill" value={minLabel && maxLabel ? (minLabel === maxLabel ? minLabel : `${minLabel} → ${maxLabel}`) : 'All levels'} />
-          <InfoStripItem icon="cash-outline" label="Price" value={formatVnd(match.priceMin)} valueColor={colors.priceText} />
+          <InfoStripItem colors={colors} styles={styles} icon="stats-chart-outline" label={t('matches.detail.skill')} value={minLabel && maxLabel ? (minLabel === maxLabel ? minLabel : `${minLabel} → ${maxLabel}`) : t('matches.browse.allLevels')} />
+          <InfoStripItem colors={colors} styles={styles} icon="cash-outline" label={t('matches.detail.price')} value={formatVnd(match.priceMin)} valueColor={colors.matchPriceValueText} />
         </View>
 
         <View style={styles.body}>
@@ -227,7 +235,7 @@ export default function MatchDetailScreen({
             activeOpacity={0.85}
           >
             <View style={styles.locationIconWrap}>
-              <Ionicons name="location-outline" size={20} color={colors.primaryDark} />
+              <Ionicons name="location-outline" size={20} color={colors.primary} />
             </View>
             <View style={styles.locationTextWrap}>
               <Text style={styles.locationName} numberOfLines={1} ellipsizeMode="tail">
@@ -238,16 +246,16 @@ export default function MatchDetailScreen({
               </Text>
             </View>
             <View style={styles.mapButton}>
-              <Text style={styles.mapButtonText}>Map</Text>
+              <Text style={styles.mapButtonText}>{t('matches.detail.map')}</Text>
             </View>
           </TouchableOpacity>
 
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Squad ({match.filledCount}/{match.maxPlayers})</Text>
+              <Text style={styles.sectionTitle}>{t('matches.detail.squad')} ({match.filledCount}/{match.maxPlayers})</Text>
               <View style={styles.spotsLeftPill}>
                 <Text style={styles.spotsLeftPillText}>
-                  {match.spotsLeft > 0 ? `${match.spotsLeft} spots left!` : 'Full'}
+                  {match.spotsLeft > 0 ? `${match.spotsLeft} ${t('matches.detail.spotsLeftExcl')}` : t('matches.actions.full')}
                 </Text>
               </View>
             </View>
@@ -268,7 +276,7 @@ export default function MatchDetailScreen({
                       {host.fullName}
                     </Text>
                     <View style={styles.hostBadge}>
-                      <Text style={styles.hostBadgeText}>MATCH HOST</Text>
+                      <Text style={styles.hostBadgeText}>{t('matches.detail.matchHost')}</Text>
                     </View>
                   </View>
                   {host.phoneNumber ? (
@@ -294,7 +302,7 @@ export default function MatchDetailScreen({
                     <Text style={styles.squadName} numberOfLines={1}>
                       {member.name}
                     </Text>
-                    {member.guest ? <Text style={styles.squadGuestLabel}>Guest</Text> : null}
+                    {member.guest ? <Text style={styles.squadGuestLabel}>{t('matches.detail.guest')}</Text> : null}
                   </>
                 );
                 if (member.userId != null) {
@@ -316,7 +324,7 @@ export default function MatchDetailScreen({
                       key={member.key}
                       testID={`match-detail-guest-${member.guest.guestId}`}
                       style={styles.squadCell}
-                      onPress={() => showGuestInfo(match.sport, member.guest!)}
+                      onPress={() => showGuestInfo(match.sport, member.guest!, t)}
                       activeOpacity={0.85}
                     >
                       {cell}
@@ -334,7 +342,7 @@ export default function MatchDetailScreen({
                   <View style={styles.squadAvatarOpen}>
                     <Ionicons name="add" size={14} color={colors.primary} />
                   </View>
-                  <Text style={styles.squadOpenText}>Open</Text>
+                  <Text style={styles.squadOpenText}>{t('matches.detail.open')}</Text>
                 </View>
               ))}
             </View>
@@ -342,9 +350,9 @@ export default function MatchDetailScreen({
 
           {match.notes ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Match Notes</Text>
+              <Text style={styles.sectionTitle}>{t('matches.detail.matchNotes')}</Text>
               <View style={styles.notesCard}>
-                <Ionicons name="information-circle-outline" size={20} color={colors.bodyText} />
+                <Ionicons name="information-circle-outline" size={20} color={colors.textSecondaryAlt} />
                 <Text style={styles.notesText}>{match.notes}</Text>
               </View>
             </View>
@@ -365,13 +373,13 @@ export default function MatchDetailScreen({
           <View style={styles.hostActionBar}>
             <View style={styles.actionBar}>
               <View>
-                <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
+                <Text style={styles.actionBarLabel}>{t('matches.detail.yourShare')}</Text>
                 <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
               </View>
               {onManageSquad ? (
                 <TouchableOpacity testID="match-detail-manage-squad" style={styles.joinButton} onPress={onManageSquad}>
                   <Text style={styles.joinButtonText}>
-                    {match.joinMode === 'APPROVAL' && (match.pendingRequestCount ?? 0) > 0 ? 'Manage Squad' : 'View Squad'}
+                    {match.joinMode === 'APPROVAL' && (match.pendingRequestCount ?? 0) > 0 ? t('matches.actions.manageSquad') : t('matches.actions.viewSquad')}
                   </Text>
                   <Ionicons name="people-outline" size={16} color={colors.white} />
                 </TouchableOpacity>
@@ -381,8 +389,8 @@ export default function MatchDetailScreen({
               <View style={styles.hostSecondaryRow}>
                 {onEditMatch ? (
                   <TouchableOpacity testID="match-detail-edit" style={styles.secondaryButton} onPress={onEditMatch}>
-                    <Ionicons name="create-outline" size={16} color={colors.primaryDark} />
-                    <Text style={styles.secondaryButtonText}>Edit</Text>
+                    <Ionicons name="create-outline" size={16} color={colors.primary} />
+                    <Text style={styles.secondaryButtonText}>{t('matches.actions.edit')}</Text>
                   </TouchableOpacity>
                 ) : null}
                 <TouchableOpacity
@@ -391,8 +399,8 @@ export default function MatchDetailScreen({
                   onPress={() => setCancelMatchDialogVisible(true)}
                   disabled={isCancellingMatch}
                 >
-                  <Ionicons name="trash-outline" size={16} color={colors.error} />
-                  <Text style={styles.secondaryButtonDangerText}>{isCancellingMatch ? 'Cancelling...' : 'Cancel Match'}</Text>
+                  <Ionicons name="trash-outline" size={16} color={colors.roleErrorText} />
+                  <Text style={styles.secondaryButtonDangerText}>{isCancellingMatch ? t('matches.detail.cancelling') : t('matches.actions.cancelMatch')}</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -400,7 +408,7 @@ export default function MatchDetailScreen({
         ) : (
           <View style={styles.actionBar}>
             <View>
-              <Text style={styles.actionBarLabel}>YOUR SHARE</Text>
+              <Text style={styles.actionBarLabel}>{t('matches.detail.yourShare')}</Text>
               <Text style={styles.actionBarValue}>{formatVnd(match.yourShare)}</Text>
             </View>
             {isPending ? (
@@ -410,7 +418,7 @@ export default function MatchDetailScreen({
                 onPress={() => setCancelDialogVisible(true)}
                 disabled={isCancelling}
               >
-                <Text style={styles.cancelRequestButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel Request'}</Text>
+                <Text style={styles.cancelRequestButtonText}>{isCancelling ? t('matches.detail.cancelling') : t('matches.actions.cancelRequest')}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -419,7 +427,7 @@ export default function MatchDetailScreen({
                 onPress={() => setJoinSheetVisible(true)}
                 disabled={!canJoin}
               >
-                <Text style={styles.joinButtonText}>{canJoin ? 'Join Match' : match.spotsLeft < 1 ? 'Full' : 'Requested'}</Text>
+                <Text style={styles.joinButtonText}>{canJoin ? t('matches.actions.joinMatch') : match.spotsLeft < 1 ? t('matches.actions.full') : t('matches.detail.requested')}</Text>
                 {canJoin && <Ionicons name="flash" size={16} color={colors.white} />}
               </TouchableOpacity>
             )}
@@ -445,20 +453,20 @@ export default function MatchDetailScreen({
 
       <ConfirmDialog
         visible={cancelDialogVisible}
-        title="Cancel request?"
-        message="You'll be removed from the waiting list — you can join again later."
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Request"
+        title={t('matches.detail.cancelRequestTitle')}
+        message={t('matches.detail.cancelRequestMessage')}
+        confirmLabel={t('matches.actions.cancelRequest')}
+        cancelLabel={t('matches.detail.keepRequest')}
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelDialogVisible(false)}
       />
 
       <ConfirmDialog
         visible={cancelMatchDialogVisible}
-        title="Cancel this match?"
-        message="Joiners will be notified. Pending requests are rejected. This cannot be undone."
-        confirmLabel="Cancel Match"
-        cancelLabel="Keep Match"
+        title={t('matches.detail.cancelMatchTitle')}
+        message={t('matches.detail.cancelMatchMessage')}
+        confirmLabel={t('matches.actions.cancelMatch')}
+        cancelLabel={t('matches.detail.keepMatch')}
         onConfirm={handleConfirmCancelMatch}
         onCancel={() => setCancelMatchDialogVisible(false)}
       />
@@ -472,6 +480,8 @@ function InfoStripItem({
   value,
   valueSecondary,
   valueColor,
+  colors,
+  styles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -479,10 +489,12 @@ function InfoStripItem({
   /** Optional second line (e.g. Time: "Tomorrow" then "16:00 - 18:00"). */
   valueSecondary?: string;
   valueColor?: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.infoStripItem}>
-      <Ionicons name={icon} size={18} color={colors.bodyText} />
+      <Ionicons name={icon} size={18} color={colors.textSecondaryAlt} />
       <Text style={styles.infoStripLabel}>{label}</Text>
       <Text style={[styles.infoStripValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
       {valueSecondary ? (
@@ -492,9 +504,9 @@ function InfoStripItem({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackgroundAlt },
   scrollContent: { paddingBottom: 140 },
 
   hero: {
@@ -511,7 +523,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     zIndex: 1,
-    backgroundColor: colors.heroScrim,
+    backgroundColor: colors.groupImageScrim,
   },
   heroContent: {
     position: 'absolute',
@@ -532,7 +544,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.stickyIconButtonBackground,
+    backgroundColor: colors.matchIconGlassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -542,22 +554,22 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     // Sit fully below the hero — no negative margin over the cover.
     marginTop: spacing.md,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.roleCardBg,
     borderRadius: 16,
     padding: spacing.md,
     gap: spacing.sm,
   },
   infoStripItem: { flex: 1, alignItems: 'center', gap: spacing.xxs },
-  infoStripLabel: { fontSize: 10, fontWeight: '700', color: colors.bodyText, textTransform: 'uppercase' },
-  infoStripValue: { fontSize: 12, fontWeight: '800', color: colors.headingText, textAlign: 'center' },
-  infoStripValueSecondary: { fontSize: 11, fontWeight: '700', color: colors.headingText, textAlign: 'center' },
+  infoStripLabel: { fontSize: 10, fontWeight: '700', color: colors.textSecondaryAlt, textTransform: 'uppercase' },
+  infoStripValue: { fontSize: 12, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
+  infoStripValueSecondary: { fontSize: 11, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
 
   body: { padding: spacing.md, gap: spacing.lg },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.roleCardBg,
     borderRadius: 16,
     padding: spacing.md,
   },
@@ -565,44 +577,44 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   locationTextWrap: { flex: 1 },
-  locationName: { fontSize: 15, fontWeight: '700', color: colors.headingText },
-  locationAddress: { fontSize: 13, color: colors.bodyText },
-  mapButton: { backgroundColor: colors.selectedBackground, borderRadius: 8, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  mapButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  locationName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  locationAddress: { fontSize: 13, color: colors.textSecondaryAlt },
+  mapButton: { backgroundColor: colors.roleCardSelectedBg, borderRadius: 8, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  mapButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   section: { gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  spotsLeftPill: { backgroundColor: colors.selectedBackground, borderRadius: 6, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs },
-  spotsLeftPillText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  spotsLeftPill: { backgroundColor: colors.roleCardSelectedBg, borderRadius: 6, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs },
+  spotsLeftPillText: { fontSize: 12, fontWeight: '700', color: colors.primary },
 
   hostCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.roleCardBg,
     borderRadius: 16,
     padding: spacing.md,
   },
-  hostAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.iconBackground, alignItems: 'center', justifyContent: 'center' },
-  hostAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
+  hostAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.roleCardSelectedBg, alignItems: 'center', justifyContent: 'center' },
+  hostAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primary },
   hostInfo: { flex: 1, gap: spacing.xxs },
   hostNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  hostName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.headingText },
+  hostName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   hostBadge: {
     flexShrink: 0,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 4,
     paddingHorizontal: spacing.xs,
     paddingVertical: 1,
   },
   hostBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primary },
-  hostPhone: { fontSize: 12, color: colors.bodyText },
+  hostPhone: { fontSize: 12, color: colors.textSecondaryAlt },
 
   squadGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   squadCell: { width: '22%', alignItems: 'center', gap: spacing.xxs },
@@ -610,37 +622,37 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   squadAvatarImage: { width: '100%', height: '100%' },
-  squadAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
-  squadName: { fontSize: 10, color: colors.bodyText, maxWidth: 64 },
+  squadAvatarText: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  squadName: { fontSize: 10, color: colors.textSecondaryAlt, maxWidth: 64 },
   squadAvatarGuest: {
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: colors.outline,
-    backgroundColor: colors.screenBackground,
+    borderColor: colors.outlineMuted,
+    backgroundColor: colors.screenBackgroundAlt,
   },
-  squadGuestLabel: { fontSize: 9, fontWeight: '700', color: colors.outline },
+  squadGuestLabel: { fontSize: 9, fontWeight: '700', color: colors.outlineMuted },
   squadAvatarOpen: {
     width: 52,
     height: 52,
     borderRadius: 26,
     borderWidth: 2,
-    borderColor: colors.primaryDisabled,
+    borderColor: colors.primaryDisabledBg,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  squadOpenText: { fontSize: 10, color: colors.primaryDisabled },
+  squadOpenText: { fontSize: 10, color: colors.primaryDisabledBg },
 
-  notesCard: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.cardBackground, borderRadius: 16, padding: spacing.md },
-  notesText: { flex: 1, fontSize: 13, color: colors.bodyText, lineHeight: 20 },
+  notesCard: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.roleCardBg, borderRadius: 16, padding: spacing.md },
+  notesText: { flex: 1, fontSize: 13, color: colors.textSecondaryAlt, lineHeight: 20 },
 
-  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white },
+  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface },
   hostActionBar: {},
   actionBar: {
     flexDirection: 'row',
@@ -648,7 +660,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.roleCardSelectedBg,
   },
   hostSecondaryRow: {
     flexDirection: 'row',
@@ -664,15 +676,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 14,
     paddingVertical: spacing.sm,
   },
-  secondaryButtonText: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
-  secondaryButtonDanger: { borderColor: colors.error },
-  secondaryButtonDangerText: { fontSize: 14, fontWeight: '700', color: colors.error },
-  actionBarLabel: { fontSize: 11, fontWeight: '800', color: colors.bodyText, letterSpacing: 0.5 },
-  actionBarValue: { fontSize: 22, fontWeight: '800', color: colors.headingText },
+  secondaryButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  secondaryButtonDanger: { borderColor: colors.roleErrorText },
+  secondaryButtonDangerText: { fontSize: 14, fontWeight: '700', color: colors.roleErrorText },
+  actionBarLabel: { fontSize: 11, fontWeight: '800', color: colors.textSecondaryAlt, letterSpacing: 0.5 },
+  actionBarValue: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
   joinButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -682,15 +694,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  joinButtonDisabled: { backgroundColor: colors.outline },
+  joinButtonDisabled: { backgroundColor: colors.outlineMuted },
   joinButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
 
   cancelRequestButton: {
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: colors.roleErrorText,
     borderRadius: 16,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  cancelRequestButtonText: { fontSize: 16, fontWeight: '700', color: colors.error },
+  cancelRequestButtonText: { fontSize: 16, fontWeight: '700', color: colors.roleErrorText },
 });

@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import { parseIsoDate, toIsoDate } from '@/utils/dateTime';
 
@@ -14,15 +16,18 @@ type Props = {
   onSelectDate: (isoDate: string) => void;
 };
 
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; // Mon-first to match ISO dayOfWeek
+const WEEKDAYS = {
+  en: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+  vi: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+};
 
 function isoDayOfWeek(date: Date): number {
   const js = date.getDay(); // 0=Sun … 6=Sat
   return js === 0 ? 7 : js;
 }
 
-function monthLabel(year: number, monthIndex: number): string {
-  return new Date(year, monthIndex, 1).toLocaleString('en-US', {
+function monthLabel(year: number, monthIndex: number, language: 'en' | 'vi'): string {
+  return new Date(year, monthIndex, 1).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US', {
     month: 'long',
     year: 'numeric',
   });
@@ -37,6 +42,9 @@ export default function GroupScheduleCalendar({
   activeDayOfWeeks,
   onSelectDate,
 }: Props) {
+  const { colors } = useTheme();
+  const { language, t } = useLanguage();
+  const styles = createStyles(colors);
   const selected = parseIsoDate(selectedDate);
   const [cursor, setCursor] = useState(() => ({
     year: selected.getFullYear(),
@@ -82,23 +90,23 @@ export default function GroupScheduleCalendar({
           testID="group-schedule-calendar-prev"
           style={styles.navButton}
           onPress={() => shiftMonth(-1)}
-          accessibilityLabel="Previous month"
+          accessibilityLabel={t('groups.schedule.previousMonth')}
         >
-          <Ionicons name="chevron-back" size={18} color={colors.headingText} />
+          <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.monthTitle}>{monthLabel(cursor.year, cursor.month)}</Text>
+        <Text style={styles.monthTitle}>{monthLabel(cursor.year, cursor.month, language)}</Text>
         <TouchableOpacity
           testID="group-schedule-calendar-next"
           style={styles.navButton}
           onPress={() => shiftMonth(1)}
-          accessibilityLabel="Next month"
+          accessibilityLabel={t('groups.schedule.nextMonth')}
         >
-          <Ionicons name="chevron-forward" size={18} color={colors.headingText} />
+          <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.weekRow}>
-        {WEEKDAYS.map((label, index) => (
+        {WEEKDAYS[language].map((label, index) => (
           <Text key={`${label}-${index}`} style={styles.weekday}>
             {label}
           </Text>
@@ -132,21 +140,21 @@ export default function GroupScheduleCalendar({
       {activeDayOfWeeks.length > 0 ? (
         <View style={styles.legend}>
           <View style={styles.legendDot} />
-          <Text style={styles.legendText}>Group play day (recurring schedule)</Text>
+          <Text style={styles.legendText}>{t('groups.schedule.playDay')}</Text>
         </View>
       ) : (
-        <Text style={styles.legendText}>No recurring slots yet — ask the admin to add a schedule.</Text>
+        <Text style={styles.legendText}>{t('groups.schedule.noRecurring')}</Text>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -159,18 +167,18 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monthTitle: { fontSize: 15, fontWeight: '800', color: colors.headingText },
+  monthTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   weekRow: { flexDirection: 'row' },
   weekday: {
     flex: 1,
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '700',
-    color: colors.outline,
+    color: colors.textMuted,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: {
@@ -186,15 +194,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayBubbleSelected: { backgroundColor: colors.primaryDark },
-  dayText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  dayBubbleSelected: { backgroundColor: colors.primary },
+  dayText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   dayTextSelected: { color: colors.white },
   sessionDot: {
     marginTop: 2,
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.success,
+    backgroundColor: colors.successText,
   },
   sessionDotSpacer: { marginTop: 2, width: 6, height: 6 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
@@ -202,7 +210,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.success,
+    backgroundColor: colors.successText,
   },
-  legendText: { fontSize: 12, color: colors.outline, flex: 1 },
+  legendText: { fontSize: 12, color: colors.textMuted, flex: 1 },
 });

@@ -8,9 +8,13 @@ import SubmitButton from '@/components/common/SubmitButton';
 import PinDropModal from '@/components/matches/PinDropModal';
 import CreateGroupSchedulePicker, { type RecurringSlotField } from '@/components/groups/CreateGroupSchedulePicker';
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
-import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
+import { groupSkillTier } from '@/components/groups/groupPresentation';
+import { groupSkillLabel } from '@/components/groups/groupPresentation';
 import { getVnAdminTree, getVenueSuggestions } from '@/services/matchService';
 import { getMe } from '@/services/authService';
 import { createGroup, updateGroup } from '@/services/groupService';
@@ -47,21 +51,6 @@ const FIELD_ORDER = [
   'coverUrl',
 ] as const;
 
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Group Name',
-  title: 'Title',
-  venueName: 'Venue Name',
-  venueAddress: 'Address',
-  province: 'Province',
-  city: 'Ward/commune',
-  skillCodes: 'Skill Level',
-  courts: 'Courts',
-  recurringSlots: 'Recurring Schedule',
-  zaloUrl: 'Zalo Link',
-  logoUrl: 'Logo URL',
-  coverUrl: 'Cover Image URL',
-};
-
 const VENUE_FIELD_KEYS = new Set(['venueName', 'venueAddress', 'province', 'city']);
 
 let courtKeySeq = 0;
@@ -87,6 +76,15 @@ function nextCourtKey(): string {
  * "resend courts if resending recurringSlots" whole-collection-replace rule.
  */
 export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, onBack, onSaved }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
+  const fieldLabels: Record<string, string> = {
+    name: t('groups.form.groupName'), title: t('groups.form.title'), venueName: t('groups.form.venueName'),
+    venueAddress: t('groups.form.address'), province: t('groups.form.province'), city: t('groups.form.ward'),
+    skillCodes: t('groups.skill.title'), courts: t('groups.form.courts'), recurringSlots: t('groups.form.recurring'),
+    zaloUrl: t('groups.form.zaloLink'), logoUrl: t('groups.form.logoUrl'), coverUrl: t('groups.form.coverUrl'),
+  };
   const [name, setName] = useState(initialGroup?.name ?? '');
   const [title, setTitle] = useState(initialGroup?.title ?? '');
   const [description, setDescription] = useState(initialGroup?.description ?? '');
@@ -251,8 +249,8 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
 
   const courtDuplicateWarning = useMemo(() => {
     const names = courts.map((c) => c.name.trim().toLowerCase()).filter(Boolean);
-    return new Set(names).size !== names.length ? 'Court names must be unique' : null;
-  }, [courts]);
+    return new Set(names).size !== names.length ? t('groups.validation.courtUnique') : null;
+  }, [courts, t]);
 
   function addSlot(slot: RecurringSlotField) {
     setRecurringSlots((prev) => [...prev, slot]);
@@ -304,9 +302,9 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
       ];
       const summary = orderedKeys
         .slice(0, 3)
-        .map((key) => `${FIELD_LABELS[key] ?? key}: ${errors[key]}`)
+        .map((key) => `${fieldLabels[key] ?? key}: ${errors[key]}`)
         .join('\n');
-      setSubmitError(summary || 'Please fix the highlighted fields.');
+      setSubmitError(summary || t('groups.validation.fixFields'));
       // Wait a tick if Home Venue must expand before measuring layout.
       setTimeout(() => scrollToFirstError(errors), needsVenueOpen ? 80 : 0);
       return;
@@ -357,10 +355,10 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="create-group-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="create-group-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('groups.actions.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{mode === 'edit' ? 'Edit Group' : 'Create Group'}</Text>
+        <Text style={styles.headerTitle}>{mode === 'edit' ? t('groups.form.editTitle') : t('groups.form.createTitle')}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
@@ -372,46 +370,46 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
         <View ref={contentRef} collapsable={false}>
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
-        <Section title="General Information" icon="information-circle-outline">
-          <Field label="Group Name" error={fieldErrors.name} fieldKey="name" setFieldRef={setFieldRef}>
+        <Section title={t('groups.form.general')} icon="information-circle-outline">
+          <Field label={t('groups.form.groupName')} error={fieldErrors.name} fieldKey="name" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-name"
               style={styles.input}
-              placeholder="e.g., Saturday Badminton Club"
-              placeholderTextColor={colors.outline}
+              placeholder={t('groups.form.groupNamePlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={name}
               onChangeText={setName}
             />
           </Field>
-          <Field label="Group Admin">
+          <Field label={t('groups.form.groupAdmin')}>
             <View style={styles.adminField}>
               <View style={styles.adminAvatar}>
-                <Ionicons name="person" size={14} color={colors.primaryDark} />
+                <Ionicons name="person" size={14} color={colors.primary} />
               </View>
               <Text style={styles.adminName} numberOfLines={1}>
-                {adminName || 'You'}
+                {adminName || t('groups.you')}
               </Text>
               <View style={styles.adminBadge}>
-                <Text style={styles.adminBadgeText}>YOU</Text>
+                <Text style={styles.adminBadgeText}>{t('groups.you')}</Text>
               </View>
             </View>
           </Field>
-          <Field label="Title" error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef}>
+          <Field label={t('groups.form.title')} error={fieldErrors.title} fieldKey="title" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-title"
               style={styles.input}
-              placeholder="Shown on group cards"
-              placeholderTextColor={colors.outline}
+              placeholder={t('groups.form.titlePlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={title}
               onChangeText={setTitle}
             />
           </Field>
-          <Field label="Description">
+          <Field label={t('groups.form.description')}>
             <TextInput
               testID="create-group-description"
               style={[styles.input, styles.multilineInput]}
-              placeholder="Tell players what this group is about..."
-              placeholderTextColor={colors.outline}
+              placeholder={t('groups.form.descriptionPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={description}
               onChangeText={setDescription}
               multiline
@@ -420,44 +418,44 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           </Field>
         </Section>
 
-        <Section title="Home Venue" icon="location-outline">
+        <Section title={t('groups.form.homeVenue')} icon="location-outline">
           <View ref={setFieldRef('venueName')} collapsable={false}>
           {!venueEditing && venueName ? (
             <TouchableOpacity testID="create-group-add-venue" style={styles.venueSummaryCard} onPress={() => setVenueEditing(true)}>
               <View style={styles.venueSummaryIcon}>
-                <Ionicons name="location" size={16} color={colors.primaryDark} />
+                <Ionicons name="location" size={16} color={colors.primary} />
               </View>
               <View style={styles.flexShrink}>
                 <Text style={styles.venueSummaryName} numberOfLines={1}>{venueName}</Text>
                 <Text style={styles.venueSummaryAddress} numberOfLines={1}>{venueAddress}</Text>
               </View>
-              <Ionicons name="pencil" size={15} color={colors.outline} />
+              <Ionicons name="pencil" size={15} color={colors.textMuted} />
             </TouchableOpacity>
           ) : !venueEditing ? (
             <View style={styles.emptyVenueCard}>
               <View style={styles.emptyVenueIcon}>
-                <Ionicons name="location" size={22} color={colors.primaryDark} />
+                <Ionicons name="location" size={22} color={colors.primary} />
               </View>
-              <Text style={styles.emptyVenueTitle}>No active venue yet</Text>
-              <Text style={styles.emptyVenueSubtitle}>Add a primary location where your group usually meets.</Text>
+              <Text style={styles.emptyVenueTitle}>{t('groups.form.noVenue')}</Text>
+              <Text style={styles.emptyVenueSubtitle}>{t('groups.form.noVenueHelp')}</Text>
               <TouchableOpacity testID="create-group-add-venue" style={styles.emptyVenueButton} onPress={() => setVenueEditing(true)}>
                 <Ionicons name="add" size={16} color={colors.white} />
-                <Text style={styles.emptyVenueButtonText}>Add Venue</Text>
+                <Text style={styles.emptyVenueButtonText}>{t('groups.actions.addVenue')}</Text>
               </TouchableOpacity>
               {fieldErrors.venueName || fieldErrors.venueAddress || fieldErrors.province || fieldErrors.city ? (
-                <Text style={styles.fieldError}>Add a venue with province and ward to continue.</Text>
+                <Text style={styles.fieldError}>{t('groups.form.venueRequired')}</Text>
               ) : null}
             </View>
           ) : (
             <>
-              <Field label="Venue Name" error={fieldErrors.venueName}>
+              <Field label={t('groups.form.venueName')} error={fieldErrors.venueName}>
                 <View style={styles.locationFieldWrap}>
                   <View style={styles.pickerField}>
                     <TextInput
                       testID="create-group-venue-name"
                       style={styles.locationInput}
-                      placeholder="Search or enter venue name"
-                      placeholderTextColor={colors.outline}
+                      placeholder={t('groups.form.venueNamePlaceholder')}
+                      placeholderTextColor={colors.textMuted}
                       value={venueName}
                       onChangeText={(t) => {
                         setVenueName(t);
@@ -466,8 +464,8 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                       }}
                       onFocus={() => setVenueSuggestionsVisible(true)}
                     />
-                    <TouchableOpacity testID="create-group-open-map-picker" onPress={() => setPinPickerVisible(true)}>
-                      <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                    <TouchableOpacity testID="create-group-open-map-picker" onPress={() => setPinPickerVisible(true)} accessibilityLabel={t('groups.actions.addVenue')}>
+                      <Ionicons name="map-outline" size={18} color={colors.primary} />
                     </TouchableOpacity>
                   </View>
                   {venueSuggestionsVisible && venueName.trim().length > 0 && (
@@ -483,7 +481,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                               style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
                               onPress={() => applyVenueSuggestion(s)}
                             >
-                              <Ionicons name="location-outline" size={14} color={colors.outline} />
+                              <Ionicons name="location-outline" size={14} color={colors.textMuted} />
                               <View style={styles.flexShrink}>
                                 <Text style={styles.suggestionText} numberOfLines={1}>
                                   {s.venueName}
@@ -496,18 +494,18 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                           ))}
                         </ScrollView>
                       ) : (
-                        <Text style={styles.suggestionsEmpty}>No saved venues match. Keep typing or pick on the map.</Text>
+                        <Text style={styles.suggestionsEmpty}>{t('groups.form.noVenueMatches')}</Text>
                       )}
                     </View>
                   )}
                 </View>
               </Field>
-              <Field label="Address" error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef}>
+              <Field label={t('groups.form.address')} error={fieldErrors.venueAddress} fieldKey="venueAddress" setFieldRef={setFieldRef}>
                 <TextInput
                   testID="create-group-venue-address"
                   style={styles.input}
-                  placeholder="Street address"
-                  placeholderTextColor={colors.outline}
+                  placeholder={t('groups.form.addressPlaceholder')}
+                  placeholderTextColor={colors.textMuted}
                   value={venueAddress}
                   onChangeText={setVenueAddress}
                 />
@@ -515,8 +513,9 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               <View style={styles.row}>
                 <View ref={setFieldRef('province')} collapsable={false} style={styles.rowItem}>
                   <SelectField
-                    label="Province/City"
-                    placeholder="Select province"
+                    themeColors={colors}
+                    label={t('groups.form.province')}
+                    placeholder={t('groups.form.selectProvince')}
                     value={province}
                     onChange={(v) => {
                       setProvince(v);
@@ -529,8 +528,9 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                 </View>
                 <View ref={setFieldRef('city')} collapsable={false} style={styles.rowItem}>
                   <SelectField
-                    label="Ward/Commune"
-                    placeholder={province ? 'Select ward' : 'Pick province'}
+                    themeColors={colors}
+                    label={t('groups.form.ward')}
+                    placeholder={province ? t('groups.form.selectWard') : t('groups.form.pickProvince')}
                     value={city}
                     onChange={setCity}
                     options={cityOptions}
@@ -545,23 +545,23 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                 onPress={() => setVenueEditing(false)}
                 disabled={!venueName || !venueAddress}
               >
-                <Text style={styles.doneButtonText}>Done</Text>
+                <Text style={styles.doneButtonText}>{t('groups.actions.done')}</Text>
               </TouchableOpacity>
             </>
           )}
           </View>
         </Section>
 
-        <Section title="Skill Level" icon="stats-chart-outline">
+        <Section title={t('groups.skill.title')} icon="stats-chart-outline">
           <View ref={setFieldRef('skillCodes')} collapsable={false}>
           <TouchableOpacity
             testID="create-group-all-levels"
             style={[styles.allLevelsBanner, allLevels && styles.allLevelsBannerActive]}
             onPress={() => setAllLevels((v) => !v)}
           >
-            {allLevels && <Ionicons name="checkmark-circle" size={16} color={colors.success} />}
+            {allLevels && <Ionicons name="checkmark-circle" size={16} color={colors.successText} />}
             <Text style={[styles.allLevelsLabel, allLevels && styles.allLevelsLabelActive]}>
-              {allLevels ? 'All Levels Welcome' : 'All Levels'}
+              {t('groups.skill.allLevels')}
             </Text>
           </TouchableOpacity>
           {!allLevels && (
@@ -569,7 +569,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               <View style={styles.skillGrid}>
                 {skillsForSport(sport).map((skill) => {
                   const selected = skillCodes.includes(skill.code);
-                  const tier = skillTierColor(sport, skill.code);
+                  const tier = groupSkillTier(colors, sport, skill.code);
                   return (
                     <TouchableOpacity
                       key={skill.code}
@@ -577,7 +577,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                       style={[styles.tierChip, { backgroundColor: selected ? tier.text : tier.bg, borderColor: tier.border }]}
                       onPress={() => toggleSkill(skill.code)}
                     >
-                      <Text style={[styles.tierChipText, { color: selected ? colors.white : tier.text }]}>{skill.label}</Text>
+                      <Text style={[styles.tierChipText, { color: selected ? colors.white : tier.text }]}>{groupSkillLabel(t, skill.code)}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -588,8 +588,8 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           </View>
         </Section>
 
-        <Section title="Join Mode" icon="shield-checkmark-outline">
-          <Text style={styles.helperText}>Choose how players join this group.</Text>
+        <Section title={t('groups.form.joinMode')} icon="shield-checkmark-outline">
+          <Text style={styles.helperText}>{t('groups.form.joinModeHelp')}</Text>
           <View style={styles.row}>
             <TouchableOpacity
               testID="create-group-join-auto"
@@ -597,10 +597,10 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               onPress={() => setJoinMode('AUTO')}
             >
               <View style={styles.joinModeCardHeader}>
-                <Text style={[styles.joinModeTitle, joinMode === 'AUTO' && styles.joinModeTitleSelected]}>Auto-Approval</Text>
-                {joinMode === 'AUTO' && <Ionicons name="checkmark-circle" size={16} color={colors.primaryDark} />}
+                <Text style={[styles.joinModeTitle, joinMode === 'AUTO' && styles.joinModeTitleSelected]}>{t('groups.form.autoApproval')}</Text>
+                {joinMode === 'AUTO' && <Ionicons name="checkmark-circle" size={16} color={colors.primary} />}
               </View>
-              <Text style={styles.joinModeSubtext}>Players join instantly.</Text>
+              <Text style={styles.joinModeSubtext}>{t('groups.form.autoApprovalHelp')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="create-group-join-approval"
@@ -608,15 +608,15 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               onPress={() => setJoinMode('APPROVAL')}
             >
               <View style={styles.joinModeCardHeader}>
-                <Text style={[styles.joinModeTitle, joinMode === 'APPROVAL' && styles.joinModeTitleSelected]}>Admin Review</Text>
-                {joinMode === 'APPROVAL' && <Ionicons name="checkmark-circle" size={16} color={colors.primaryDark} />}
+                <Text style={[styles.joinModeTitle, joinMode === 'APPROVAL' && styles.joinModeTitleSelected]}>{t('groups.form.adminReview')}</Text>
+                {joinMode === 'APPROVAL' && <Ionicons name="checkmark-circle" size={16} color={colors.primary} />}
               </View>
-              <Text style={styles.joinModeSubtext}>Requests need admin approval.</Text>
+              <Text style={styles.joinModeSubtext}>{t('groups.form.adminReviewHelp')}</Text>
             </TouchableOpacity>
           </View>
         </Section>
 
-        <Section title="Court Configuration" icon="grid-outline">
+        <Section title={t('groups.form.courts')} icon="grid-outline">
           <View ref={setFieldRef('courts')} collapsable={false} style={styles.courtList}>
             {courts.map((court, index) => {
               const normalized = court.name.trim().toLowerCase();
@@ -629,8 +629,8 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                   <TextInput
                     testID={`create-group-court-${index}`}
                     style={[styles.input, styles.courtInput, isDuplicate && styles.courtInputDuplicate]}
-                    placeholder={index === 0 ? 'e.g. Court A / Sân 1' : `Court ${index + 1} name`}
-                    placeholderTextColor={colors.outline}
+                    placeholder={index === 0 ? t('groups.form.courtPlaceholder') : t('groups.form.courtNamePlaceholder').replace('{n}', String(index + 1))}
+                    placeholderTextColor={colors.textMuted}
                     value={court.name}
                     onChangeText={(t) => updateCourtName(court.key, t)}
                   />
@@ -654,15 +654,15 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
               <Text style={styles.fieldError}>{fieldErrors.courts}</Text>
             ) : null}
             <TouchableOpacity testID="create-group-add-court" style={styles.addCourtButton} onPress={addCourt}>
-              <Ionicons name="add" size={16} color={colors.primaryDark} />
-              <Text style={styles.addCourtText}>Add Court</Text>
+              <Ionicons name="add" size={16} color={colors.primary} />
+              <Text style={styles.addCourtText}>{t('groups.actions.addCourt')}</Text>
             </TouchableOpacity>
           </View>
         </Section>
 
-        <Section title="Recurring Schedule" icon="repeat-outline">
+        <Section title={t('groups.form.recurring')} icon="repeat-outline">
           <View ref={setFieldRef('recurringSlots')} collapsable={false}>
-          <Text style={styles.helperText}>Add the weekly time slots this group plays at.</Text>
+          <Text style={styles.helperText}>{t('groups.form.recurringHelp')}</Text>
           <CreateGroupSchedulePicker
             courtNames={courtNames}
             slots={recurringSlots}
@@ -673,13 +673,13 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           </View>
         </Section>
 
-        <Section title="Contact & Media" icon="link-outline">
-          <Field label="Zalo Link (Optional)" error={fieldErrors.zaloUrl} fieldKey="zaloUrl" setFieldRef={setFieldRef}>
+        <Section title={t('groups.form.contactMedia')} icon="link-outline">
+          <Field label={t('groups.form.zaloLink')} error={fieldErrors.zaloUrl} fieldKey="zaloUrl" setFieldRef={setFieldRef}>
             <TextInput
               testID="create-group-zalo-url"
               style={styles.input}
               placeholder="https://zalo.me/..."
-              placeholderTextColor={colors.outline}
+              placeholderTextColor={colors.textMuted}
               value={zaloUrl}
               onChangeText={setZaloUrl}
               autoCapitalize="none"
@@ -687,7 +687,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           </Field>
           <View style={styles.mediaRow}>
             <View style={styles.mediaLogoCol}>
-              <Text style={styles.mediaLabel}>LOGO</Text>
+              <Text style={styles.mediaLabel}>{t('groups.form.logo')}</Text>
               <TouchableOpacity
                 style={styles.mediaTileLogo}
                 activeOpacity={0.8}
@@ -697,14 +697,14 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                   <Image source={{ uri: logoUrl }} style={styles.mediaPreviewLogo} />
                 ) : (
                   <>
-                    <Ionicons name="camera-outline" size={22} color={colors.primaryDark} />
+                    <Ionicons name="camera-outline" size={22} color={colors.primary} />
                     <Text style={styles.mediaTileHint}>1:1</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
             <View style={styles.mediaCoverCol}>
-              <Text style={styles.mediaLabel}>COVER PHOTO</Text>
+              <Text style={styles.mediaLabel}>{t('groups.form.coverPhoto')}</Text>
               <TouchableOpacity
                 style={styles.mediaTileCover}
                 activeOpacity={0.8}
@@ -714,32 +714,32 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
                   <Image source={{ uri: coverUrl }} style={styles.mediaPreviewCover} />
                 ) : (
                   <>
-                    <Ionicons name="cloud-upload-outline" size={24} color={colors.primaryDark} />
-                    <Text style={styles.mediaTileCta}>Upload Cover</Text>
+                    <Ionicons name="cloud-upload-outline" size={24} color={colors.primary} />
+                    <Text style={styles.mediaTileCta}>{t('groups.actions.uploadCover')}</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
           </View>
-          <Field label="Logo URL (Optional)" error={fieldErrors.logoUrl} fieldKey="logoUrl" setFieldRef={setFieldRef}>
+          <Field label={t('groups.form.logoUrl')} error={fieldErrors.logoUrl} fieldKey="logoUrl" setFieldRef={setFieldRef}>
             <TextInput
               ref={logoInputRef}
               testID="create-group-logo-url"
               style={styles.input}
               placeholder="https://..."
-              placeholderTextColor={colors.outline}
+              placeholderTextColor={colors.textMuted}
               value={logoUrl}
               onChangeText={setLogoUrl}
               autoCapitalize="none"
             />
           </Field>
-          <Field label="Cover Image URL (Optional)" error={fieldErrors.coverUrl} fieldKey="coverUrl" setFieldRef={setFieldRef}>
+          <Field label={t('groups.form.coverUrl')} error={fieldErrors.coverUrl} fieldKey="coverUrl" setFieldRef={setFieldRef}>
             <TextInput
               ref={coverInputRef}
               testID="create-group-cover-url"
               style={styles.input}
               placeholder="https://..."
-              placeholderTextColor={colors.outline}
+              placeholderTextColor={colors.textMuted}
               value={coverUrl}
               onChangeText={setCoverUrl}
               autoCapitalize="none"
@@ -747,7 +747,7 @@ export default function CreateGroupScreen({ sport, mode, groupId, initialGroup, 
           </Field>
         </Section>
 
-        <SubmitButton label={mode === 'edit' ? 'Save Changes' : 'Create Group'} loading={isSubmitting} onPress={handleSubmit} />
+        <SubmitButton label={mode === 'edit' ? t('groups.actions.save') : t('groups.actions.createShort')} loading={isSubmitting} onPress={handleSubmit} />
         </View>
       </ScrollView>
 
@@ -786,11 +786,13 @@ function Section({
   icon: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionIconCircle}>
-          <Ionicons name={icon} size={16} color={colors.primaryDark} />
+          <Ionicons name={icon} size={16} color={colors.primary} />
         </View>
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
@@ -812,6 +814,8 @@ function Field({
   setFieldRef?: (key: string) => (node: View | null) => void;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View
       style={styles.field}
@@ -825,73 +829,73 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
     gap: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.iconBackground,
+    borderBottomColor: colors.tintedSurface,
   },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.headingText },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.textPrimary },
 
   content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing.xl },
 
-  section: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder, padding: spacing.md, gap: spacing.sm },
+  section: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceBorder, padding: spacing.md, gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sectionIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.headingText },
+  sectionTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   sectionBody: { gap: spacing.sm },
 
   field: { gap: spacing.xxs },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   fieldError: { fontSize: 12, color: colors.error },
-  helperText: { fontSize: 12, color: colors.outline },
+  helperText: { fontSize: 12, color: colors.textMuted },
 
   input: {
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
   multilineInput: { height: 80, textAlignVertical: 'top', paddingTop: spacing.sm },
-  readOnlyInput: { backgroundColor: colors.iconBackground, color: colors.bodyText },
-  locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  readOnlyInput: { backgroundColor: colors.tintedSurface, color: colors.textSecondary },
+  locationInput: { flex: 1, fontSize: 14, color: colors.textPrimary, paddingVertical: 0 },
   locationFieldWrap: { gap: spacing.xxs },
   suggestionsBox: {
     maxHeight: 200,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.divider,
     borderRadius: 10,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   suggestionsSpinner: { paddingVertical: spacing.md },
   suggestionsEmpty: {
     fontSize: 12,
-    color: colors.outline,
+    color: colors.textMuted,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
@@ -902,9 +906,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
-  suggestionSubtext: { fontSize: 11, color: colors.outline },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: colors.textMuted },
 
   // Group Media tiles — mirror the Pencil "Section - Group Media Card" frame
   // (camera / cloud-upload icon tiles). The pasted-URL TextInputs below stay
@@ -913,13 +917,13 @@ const styles = StyleSheet.create({
   mediaRow: { flexDirection: 'row', gap: spacing.md },
   mediaLogoCol: { width: 92, gap: spacing.xs },
   mediaCoverCol: { flex: 1, gap: spacing.xs },
-  mediaLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, color: colors.outline },
+  mediaLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, color: colors.textMuted },
   mediaTileLogo: {
     height: 92,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: colors.ringBorder,
-    backgroundColor: colors.selectedBackground,
+    borderColor: colors.glassRingBorder,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
@@ -929,15 +933,15 @@ const styles = StyleSheet.create({
     height: 92,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: colors.ringBorder,
-    backgroundColor: colors.selectedBackground,
+    borderColor: colors.glassRingBorder,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
     overflow: 'hidden',
   },
-  mediaTileHint: { fontSize: 10, fontWeight: '600', color: colors.primaryDark },
-  mediaTileCta: { fontSize: 12, fontWeight: '600', color: colors.primaryDark },
+  mediaTileHint: { fontSize: 10, fontWeight: '600', color: colors.primary },
+  mediaTileCta: { fontSize: 12, fontWeight: '600', color: colors.primary },
   mediaPreviewLogo: { width: '100%', height: '100%' },
   mediaPreviewCover: { width: '100%', height: '100%' },
 
@@ -950,29 +954,29 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.ringBorder,
+    borderColor: colors.glassRingBorder,
     borderRadius: 14,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
   emptyVenueIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xxs,
   },
-  emptyVenueTitle: { fontSize: 16, fontWeight: '800', color: colors.headingText },
-  emptyVenueSubtitle: { fontSize: 12, color: colors.outline, textAlign: 'center' },
+  emptyVenueTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  emptyVenueSubtitle: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
   emptyVenueButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.xs,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
@@ -983,65 +987,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 12,
     padding: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
   venueSummaryIcon: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  venueSummaryName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  venueSummaryAddress: { fontSize: 12, color: colors.bodyText },
+  venueSummaryName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  venueSummaryAddress: { fontSize: 12, color: colors.textSecondary },
 
   adminField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
   },
   adminAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adminName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.headingText },
-  adminBadge: { backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: spacing.xs, paddingVertical: 2 },
-  adminBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primaryDark, letterSpacing: 0.5 },
+  adminName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  adminBadge: { backgroundColor: colors.tintedSurface, borderRadius: 8, paddingHorizontal: spacing.xs, paddingVertical: 2 },
+  adminBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 },
 
   pickerField: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
 
   doneButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  doneButtonDisabled: { backgroundColor: colors.primaryDisabled },
+  doneButtonDisabled: { backgroundColor: colors.primaryDisabledBg },
   doneButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
 
   allLevelsBanner: {
@@ -1050,25 +1054,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 12,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  allLevelsBannerActive: { backgroundColor: colors.skillTierGreenBg, borderColor: colors.skillTierGreenBorder },
-  allLevelsLabel: { fontSize: 14, fontWeight: '600', color: colors.headingText },
-  allLevelsLabelActive: { color: colors.skillTierGreenText, fontWeight: '700' },
+  allLevelsBannerActive: { backgroundColor: colors.successSurface, borderColor: colors.successBorder },
+  allLevelsLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  allLevelsLabelActive: { color: colors.successText, fontWeight: '700' },
 
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   tierChip: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   tierChipText: { fontSize: 13, fontWeight: '700' },
 
-  joinModeCard: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 12, padding: spacing.sm, gap: spacing.xxs, backgroundColor: colors.white },
-  joinModeCardSelected: { borderColor: colors.primaryDark, backgroundColor: colors.selectedBackground },
+  joinModeCard: { borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 12, padding: spacing.sm, gap: spacing.xxs, backgroundColor: colors.surface },
+  joinModeCardSelected: { borderColor: colors.primary, backgroundColor: colors.roleCardSelectedBg },
   joinModeCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  joinModeTitle: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  joinModeTitleSelected: { color: colors.primaryDark },
-  joinModeSubtext: { fontSize: 11, color: colors.outline },
+  joinModeTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  joinModeTitleSelected: { color: colors.primary },
+  joinModeSubtext: { fontSize: 11, color: colors.textMuted },
 
   courtList: { gap: spacing.sm },
   courtRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
@@ -1076,21 +1080,21 @@ const styles = StyleSheet.create({
     width: 22,
     fontSize: 13,
     fontWeight: '700',
-    color: colors.outline,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   courtInput: { flex: 1 },
   courtInputDuplicate: { borderColor: colors.error },
-  removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.errorBackground, alignItems: 'center', justifyContent: 'center' },
+  removeCourtButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.dangerSurface, alignItems: 'center', justifyContent: 'center' },
   addCourtButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xxs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  addCourtText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  addCourtText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 });

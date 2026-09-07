@@ -1,7 +1,8 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 type Props = {
   label: string;
@@ -16,6 +17,8 @@ type Props = {
  * (see .claude/rules/api-conventions.md).
  */
 export default function SubmitButton({ label, loading, disabled, onPress }: Props) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const isDisabled = loading || disabled;
   return (
     <TouchableOpacity
@@ -32,7 +35,7 @@ export default function SubmitButton({ label, loading, disabled, onPress }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   button: {
     width: '100%',
     height: 56,
@@ -40,14 +43,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
-    shadowColor: colors.buttonShadow,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 1,
     shadowRadius: 12.5,
     elevation: 8,
   },
   buttonDisabled: {
-    backgroundColor: colors.primaryDisabled,
+    backgroundColor: colors.primaryDisabledBg,
   },
   text: {
     fontSize: 16,

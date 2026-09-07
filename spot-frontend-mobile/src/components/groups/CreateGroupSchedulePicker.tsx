@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import { toHm, parseHm } from '@/utils/dateTime';
 
@@ -26,15 +28,7 @@ type Props = {
 // Labelled Mon-Sun but stored as ISO 1-7 — matches spot-backend's
 // dayOfWeek convention for group recurring slots (opposite of
 // HostMatchScreen's JS Date.getDay() weekday chips, which are 0=Sun).
-const WEEKDAYS: { isoDay: number; label: string }[] = [
-  { isoDay: 1, label: 'Mon' },
-  { isoDay: 2, label: 'Tue' },
-  { isoDay: 3, label: 'Wed' },
-  { isoDay: 4, label: 'Thu' },
-  { isoDay: 5, label: 'Fri' },
-  { isoDay: 6, label: 'Sat' },
-  { isoDay: 7, label: 'Sun' },
-];
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -42,8 +36,9 @@ const DURATION_STEP = 30;
 const DURATION_MIN = 30;
 const DURATION_MAX = 240;
 
-function weekdayLabel(isoDay: number): string {
-  return WEEKDAYS.find((w) => w.isoDay === isoDay)?.label ?? '?';
+function weekdayLabel(isoDay: number, language: 'en' | 'vi'): string {
+  const labels = language === 'vi' ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return labels[isoDay - 1] ?? '?';
 }
 
 /**
@@ -55,6 +50,9 @@ function weekdayLabel(isoDay: number): string {
  * section for that different feature).
  */
 export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot, onRemoveSlot, error }: Props) {
+  const { colors } = useTheme();
+  const { language, t } = useLanguage();
+  const styles = createStyles(colors);
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [courtName, setCourtName] = useState('');
   const [startsAt, setStartsAt] = useState('18:00');
@@ -80,15 +78,16 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
       <View style={styles.row}>
         <View style={styles.rowItem}>
           <SelectField
-            label="Court"
-            placeholder={courtNames.length ? 'Select court' : 'Add a court above first'}
+                    themeColors={colors}
+            label={t('groups.schedule.court')}
+            placeholder={courtNames.length ? t('groups.schedule.selectCourt') : t('groups.schedule.addCourtFirst')}
             value={courtName}
             onChange={setCourtName}
             options={courtNames.map((name) => ({ label: name, value: name }))}
           />
         </View>
         <View style={styles.rowItem}>
-          <Text style={styles.fieldLabel}>Start Time</Text>
+          <Text style={styles.fieldLabel}>{t('groups.schedule.startTime')}</Text>
           {IS_WEB ? (
             // @react-native-community/datetimepicker has no web build — fall back
             // to the browser's native time input. `startsAt` holds 'HH:mm', which
@@ -109,12 +108,12 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
                 style={{
                   borderWidth: 1,
                   borderStyle: 'solid',
-                  borderColor: colors.cardBorder,
+                  borderColor: colors.surfaceBorder,
                   borderRadius: 10,
                   padding: spacing.sm,
                   fontSize: 14,
-                  color: colors.headingText,
-                  backgroundColor: colors.white,
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
                   width: '100%',
                   boxSizing: 'border-box',
                 }}
@@ -123,7 +122,7 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
           ) : (
             <TouchableOpacity testID="group-schedule-start-time" style={styles.pickerField} onPress={() => setShowTimePicker(true)}>
               <Text style={styles.pickerValue}>{startsAt}</Text>
-              <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+              <Ionicons name="time-outline" size={18} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -138,45 +137,45 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
         />
       )}
 
-      <Text style={styles.fieldLabel}>Weekday</Text>
+      <Text style={styles.fieldLabel}>{t('groups.schedule.weekday')}</Text>
       <View style={styles.weekdayGrid}>
-        {WEEKDAYS.map((w) => {
-          const selected = dayOfWeek === w.isoDay;
+        {WEEKDAYS.map((isoDay) => {
+          const selected = dayOfWeek === isoDay;
           return (
             <TouchableOpacity
-              key={w.isoDay}
-              testID={`group-schedule-weekday-${w.isoDay}`}
+              key={isoDay}
+              testID={`group-schedule-weekday-${isoDay}`}
               style={[styles.weekdayChip, selected && styles.weekdayChipSelected]}
-              onPress={() => setDayOfWeek(w.isoDay)}
+              onPress={() => setDayOfWeek(isoDay)}
             >
-              <Text style={[styles.weekdayChipText, selected && styles.weekdayChipTextSelected]}>{w.label}</Text>
+              <Text style={[styles.weekdayChipText, selected && styles.weekdayChipTextSelected]}>{weekdayLabel(isoDay, language)}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      <Text style={styles.fieldLabel}>Duration</Text>
+      <Text style={styles.fieldLabel}>{t('groups.schedule.duration')}</Text>
       <View style={styles.durationRow}>
         <TouchableOpacity
           testID="group-schedule-duration-minus"
           style={styles.stepperButton}
           onPress={() => setDurationMinutes((d) => Math.max(DURATION_MIN, d - DURATION_STEP))}
         >
-          <Ionicons name="remove" size={16} color={colors.primaryDark} />
+          <Ionicons name="remove" size={16} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.durationText}>{durationMinutes} min</Text>
+        <Text style={styles.durationText}>{durationMinutes} {t('groups.schedule.minutes')}</Text>
         <TouchableOpacity
           testID="group-schedule-duration-plus"
           style={styles.stepperButton}
           onPress={() => setDurationMinutes((d) => Math.min(DURATION_MAX, d + DURATION_STEP))}
         >
-          <Ionicons name="add" size={16} color={colors.primaryDark} />
+          <Ionicons name="add" size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity testID="group-schedule-add-slot" style={styles.addButton} onPress={handleAdd} disabled={!courtName}>
-        <Ionicons name="add-circle-outline" size={16} color={colors.primaryDark} />
-        <Text style={styles.addButtonText}>Add Slot</Text>
+        <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+        <Text style={styles.addButtonText}>{t('groups.actions.addSlot')}</Text>
       </TouchableOpacity>
 
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
@@ -184,7 +183,7 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
       {slots.map((slot, index) => (
         <View key={index} style={styles.slotRow}>
           <Text style={styles.slotText}>
-            {weekdayLabel(slot.dayOfWeek)} · {slot.startsAt} · {slot.durationMinutes}min · {slot.courtName}
+            {weekdayLabel(slot.dayOfWeek, language)} · {slot.startsAt} · {slot.durationMinutes} {t('groups.schedule.minutes')} · {slot.courtName}
           </Text>
           <TouchableOpacity testID={`group-schedule-remove-${index}`} onPress={() => onRemoveSlot(index)}>
             <Ionicons name="close-circle-outline" size={18} color={colors.error} />
@@ -195,11 +194,11 @@ export default function CreateGroupSchedulePicker({ courtNames, slots, onAddSlot
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { gap: spacing.sm },
   row: { flexDirection: 'row', gap: spacing.sm },
   rowItem: { flex: 1, gap: spacing.xxs },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   fieldError: { fontSize: 12, color: colors.error },
 
   pickerField: {
@@ -207,25 +206,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  pickerValue: { fontSize: 14, color: colors.headingText },
+  pickerValue: { fontSize: 14, color: colors.textPrimary },
 
   weekdayGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   weekdayChip: {
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 9999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  weekdayChipSelected: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
-  weekdayChipText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  weekdayChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  weekdayChipText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   weekdayChipTextSelected: { color: colors.white },
 
   durationRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -234,12 +233,12 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  durationText: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  durationText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
 
   addButton: {
     flexDirection: 'row',
@@ -247,20 +246,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xxs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   slotRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  slotText: { flex: 1, fontSize: 12, color: colors.headingText },
+  slotText: { flex: 1, fontSize: 12, color: colors.textPrimary },
 });

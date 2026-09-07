@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 
-import { colors } from '@/constants/colors';
+import { ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
 
 type Props = {
   /** Called with the recognized text once the player finishes speaking. */
@@ -24,6 +25,8 @@ type Props = {
  * change.
  */
 export default function VoiceRecorderButton({ onTranscribed, onFailed }: Props) {
+  const { colors: themeColors } = useTheme();
+  const styles = useMemo(() => getStyles(themeColors), [themeColors]);
   const [isRecording, setIsRecording] = useState(false);
 
   useSpeechRecognitionEvent('result', (event) => {
@@ -82,7 +85,7 @@ export default function VoiceRecorderButton({ onTranscribed, onFailed }: Props) 
         <Ionicons
           name={isRecording ? 'stop' : 'mic-outline'}
           size={18}
-          color={isRecording ? colors.white : colors.primaryDark}
+          color={isRecording ? themeColors.white : themeColors.accentText}
         />
       </TouchableOpacity>
       {isRecording ? <Text style={styles.recordingLabel}>Đang nghe... bấm để dừng</Text> : null}
@@ -90,32 +93,34 @@ export default function VoiceRecorderButton({ onTranscribed, onFailed }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.glassBackground,
-  },
-  buttonRecording: {
-    backgroundColor: colors.error,
-    borderColor: colors.error,
-  },
-  recordingWrap: {
-    position: 'relative',
-  },
-  recordingLabel: {
-    position: 'absolute',
-    top: -18,
-    left: -20,
-    width: 76,
-    fontSize: 9,
-    color: colors.error,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-});
+function getStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    button: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: c.glassRingBorder,
+      backgroundColor: c.glassButtonBg,
+    },
+    buttonRecording: {
+      backgroundColor: c.error,
+      borderColor: c.error,
+    },
+    recordingWrap: {
+      position: 'relative',
+    },
+    recordingLabel: {
+      position: 'absolute',
+      top: -18,
+      left: -20,
+      width: 76,
+      fontSize: 9,
+      color: c.error,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+  });
+}

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { rosterSizeFor } from '@/constants/tournamentFormats';
+import type { TranslationKey } from '@/i18n/translations';
 import type { Sport } from '@/types/match';
 import type { TournamentFormat } from '@/types/tournament';
 
@@ -12,32 +13,30 @@ import type { TournamentFormat } from '@/types/tournament';
 // as a string in the form and validated/parsed here; JoinTournamentScreen maps
 // the parsed values into JoinTournamentPayload (dropping jersey for badminton).
 
-const rosterRowSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Player name is required')
-    .max(120, 'Player name must be at most 120 characters'),
-  jerseyNumber: z.string().trim(),
-});
+export type JoinRosterRow = { name: string; jerseyNumber: string };
+type Translate = (key: TranslationKey) => string;
 
-export type JoinRosterRow = z.infer<typeof rosterRowSchema>;
-
-export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat) {
+export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat, t: Translate) {
   const maxSize = rosterSizeFor(sport, format);
   const isFootball = sport === 'FOOTBALL';
+  const rosterRowSchema = z.object({
+    name: z.string().trim()
+      .min(1, t('tournaments.join.validation.playerNameRequired'))
+      .max(120, t('tournaments.join.validation.playerNameTooLong')),
+    jerseyNumber: z.string().trim(),
+  });
 
   return z
     .object({
       teamName: z
         .string()
         .trim()
-        .min(1, 'Team name is required')
-        .max(150, 'Team name must be at most 150 characters'),
+        .min(1, t('tournaments.join.validation.teamNameRequired'))
+        .max(150, t('tournaments.join.validation.teamNameTooLong')),
       teamLogoUrl: z
         .string()
         .trim()
-        .url('Team logo must be a valid URL'),
+        .url(t('tournaments.join.validation.logoUrlInvalid')),
       roster: z.array(rosterRowSchema),
     })
     .superRefine((data, ctx) => {
@@ -46,7 +45,7 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['roster'],
-            message: `Squad must have 1–${maxSize} players`,
+            message: t('tournaments.join.validation.rosterRange').replace('{max}', String(maxSize)),
           });
         }
         // Compare numerically — the payload sends Number(jerseyNumber), so "7"
@@ -58,7 +57,7 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['roster', index, 'jerseyNumber'],
-              message: 'Enter a jersey number (0–999)',
+              message: t('tournaments.join.validation.jerseyInvalid'),
             });
             return;
           }
@@ -67,7 +66,7 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['roster', index, 'jerseyNumber'],
-              message: 'Jersey numbers must be unique',
+              message: t('tournaments.join.validation.jerseyDuplicate'),
             });
           }
           seen.add(num);
@@ -76,7 +75,7 @@ export function makeJoinTournamentSchema(sport: Sport, format: TournamentFormat)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['roster'],
-          message: `This category needs exactly ${maxSize} player${maxSize > 1 ? 's' : ''}`,
+          message: t('tournaments.join.validation.rosterExact').replace('{count}', String(maxSize)),
         });
       }
     });

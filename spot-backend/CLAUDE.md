@@ -142,6 +142,41 @@ Migrations by domain: matchmaking `001`–`009` (`009` = host reviews); Groups `
 | Kick / member leave | `-1` | |
 | Transfer admin | không đổi | Chỉ đổi role + `admin_user_id` |
 
+<<<<<<< HEAD
+**Files touched (Groups):**
+
+| Layer | Path |
+| :--- | :--- |
+| Domain | `src/domains/groups/{routes,controller,service,entity,dto,repository}/` |
+| Notifications | `src/domains/groups/service/group-notification.service.js` |
+| Constants | `src/shared/constants/groups.js` |
+| Migrations | `migrations/010_schema_groups.sql`, `011_notification_group_types.sql` |
+| Tests | `tests/unit/groups/*.test.js`, `tests/unit/notification/notification-types.test.js` |
+| Smoke | `scripts/smoke-groups.js` (`npm run smoke:groups`) |
+| Docs | `docs/GROUP_PLAN.md`, `docs/API.md` §8, `API.md` (root copy), `CLAUDE.md` |
+
+**Aug 2026 — Tournaments T0–T5 (implemented):**
+
+Full contract: [`docs/TOURNAMENT_PLAN.md`](./docs/TOURNAMENT_PLAN.md) + **Tournaments (giải đấu)** below + root [`CLAUDE.md`](../CLAUDE.md). Key locks: 1 giải = 1 format (**immutable after create**); join captain + team name/logo + roster; APPROVAL-only; auto-cancel at `registrationDeadline` if not FULL; create gate 80 completed host kèo + rating ≥ 4.5; football single-leg goals; badminton BO3×15; VND display-only; no Groups link.
+
+**Other implemented (non-group):**
+
+| Area | Notes |
+| :--- | :--- |
+| Auth | register → role → OTP → login/refresh; forgot/reset password |
+| Profile | `GET/PATCH /users/me`, Main Profile stats, preferences, password change, avatar upload |
+| Contact change | OTP email/phone under `/users/me/email\|phone/...` |
+| Schedule | `GET /users/me/schedule` + dev seed |
+| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`); match cancel/expiry; **group join types (G5)** |
+| Reviews | venue booking reviews + pickup kèo host reviews |
+| Notifications | inbox + T-24h/T-2h reminders (`worker:reminders`) |
+| Reviews | create + owner reply; venue rating cache |
+| Owner console | `/owner/dashboard/summary` + `/owner/facilities/*`, `/owner/revenue/*`, `/owner/reviews/*` (OWNER + ACTIVE) — Figma 224-6044/2414/2648/2893/4521 |
+
+**Not yet:** refresh-token rotate / JWT blacklist; real VNPay/MoMo sandbox keys; player cancel unpaid booking API. **Payment (BE):** `/payments/*` stub gateway + PDF invoice (migration `029`, Figma 102-5/102-121) — `PAYMENT_DEBUG=true` for dev confirm.
+
+=======
+>>>>>>> e96bd898ba8e4cf14f33ad0b4c1a509dcb24e1b7
 Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`aws-0-<region>.pooler.supabase.com`).
 
 **Admin console (BE):** `/admin` + `/api/admin` — dashboard, approvals, users, settings, audit log. Applicant docs: `POST /users/me/verification-requests`. OTP verify issues JWT for pending Owner/Referee (`nextStep: SUBMIT_VERIFICATION`).
@@ -149,7 +184,41 @@ Default DB is **Supabase** (not compose postgres). Prefer Session pooler IPv4 (`
 **Owner console (BE):** `/owner` + `/api/owner` — dashboard KPI, facility CRUD, revenue report/export, customer reviews inbox (migration `009`), booking schedule timeline + owner-created walk-in bookings (migration `010`, spec `006-owner-booking-web`). Frontend lives in `spot-admin-console` (`src/pages/Owner*Page.tsx`).
 
 
+<<<<<<< HEAD
+```bash
+npm install
+cp .env.example .env   # then fill Supabase DB_* + SMTP_* + JWT_SECRET
+npm run migrate        # apply pending SQL under migrations/
+npm run reset:matches  # TRUNCATE schema_matchmaking.matches CASCADE (keeps users)
+npm run dev            # http://localhost:3000
+npm test               # node:test unit tests (DTO schemas)
+npm start              # production entry (no --watch)
+node scripts/check-db.js
+node scripts/smoke-register.js
+npm run smoke:otp      # register → verify (needs server + OTP_DEBUG=true)
+npm run smoke:login    # register → role → verify → login JWT
+npm run smoke:profile  # GET/PATCH /users/me + preferences
+npm run smoke:matches  # 2 PLAYERs → host / join / approve / kick / mine / cancel / GET /users/:id
+npm run smoke:groups   # create / join / PATCH flush / members / schedule / gallery / kick / transfer / delete
+npm run smoke:tournaments  # eligibility seed / create / join / match / standings / PATCH / complete
+npm run seed:admin     # upsert System Administrator (ADMIN_SEED_* env)
+npm run smoke:admin-approvals  # owner pending → verify → submit doc → admin approve → suspend
+npm run smoke:owner-ops        # owner facility + revenue + reviews (needs 009)
+npm run smoke:owner-schedule   # owner schedule GET + manual booking + 409/422 (needs 010)
+npm run smoke:payment          # booking → payment create → dev confirm → invoice (PAYMENT_DEBUG)
+npm run apply:homepage-card  # live DB: avatar_url, cover_url, match_favorites
+npm run apply:match-search   # re-apply fold + GIN (scripts/sql, 006 already migrated)
+npm run apply:match-admin    # re-apply province/city (scripts/sql, 006 already migrated)
+node scripts/smoke-forgot-password.js  # register → role → verify → forgot → reset → login
+npm run smoke:schedule|notifications|reviews
+npm run worker:reminders
+npm run worker:match-expiry   # auto COMPLETED (full) / CANCELLED (underfilled) + notify
+npm run worker:payment-expiry # expire PENDING payment + cancel unpaid bookings
+npm run migrate:reset                # DESTRUCTIVE: drop schemas + re-apply
+```
+=======
 ## Agent notes index
+>>>>>>> e96bd898ba8e4cf14f33ad0b4c1a509dcb24e1b7
 
 Detailed, per-domain agent notes live under [`docs/agent/`](./docs/agent/) (kept ≤300 lines/file):
 

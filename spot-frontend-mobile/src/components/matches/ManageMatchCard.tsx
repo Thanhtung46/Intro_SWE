@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { Match } from '@/types/match';
 import { formatMatchWhen } from '@/utils/format';
 
@@ -31,12 +33,15 @@ export default function ManageMatchCard({
   onEditMatch,
   onCancelMatch,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const isCompleted = variant === 'completed';
   const isHost = !isCompleted && match.myRole === 'HOST';
   const isParticipant = !isCompleted && match.myRole === 'PARTICIPANT';
   const isFull = match.status === 'FULL';
   const isHostReview = isHost && (match.pendingRequestCount ?? 0) > 0 && match.joinMode === 'APPROVAL';
-  const sportLabel = match.sport === 'FOOTBALL' ? 'Football' : 'Badminton';
+  const sportLabel = match.sport === 'FOOTBALL' ? t('common.sportFootball') : t('common.sportBadminton');
 
   const cardBody = (
     <>
@@ -46,19 +51,19 @@ export default function ManageMatchCard({
         </View>
         {isCompleted && (
           <View style={styles.completedChip}>
-            <Text style={styles.completedChipText}>COMPLETED</Text>
+            <Text style={styles.completedChipText}>{t('matches.status.completed')}</Text>
           </View>
         )}
         {isHost && (
           <View style={[styles.roleChip, isHostReview && styles.roleChipReview]}>
             <Text style={[styles.roleChipText, isHostReview && styles.roleChipTextReview]}>
-              {isHostReview ? 'HOST REVIEW' : 'HOST'}
+              {isHostReview ? t('matches.status.hostReview') : t('matches.status.host')}
             </Text>
           </View>
         )}
         {isFull && (
           <View style={styles.fullChip}>
-            <Text style={styles.fullChipText}>Đủ người</Text>
+            <Text style={styles.fullChipText}>{t('matches.status.full')}</Text>
           </View>
         )}
       </View>
@@ -77,7 +82,7 @@ export default function ManageMatchCard({
             )}
           </View>
           <Text style={styles.hostName} numberOfLines={1} ellipsizeMode="tail">
-            {isCompleted ? 'HOST' : `Hosted by ${match.hostFullName}`}
+            {isCompleted ? t('matches.status.host') : `${t('matches.browse.hostedByPrefix')} ${match.hostFullName}`}
           </Text>
           {isCompleted && (
             <Text style={styles.hostFullName} numberOfLines={1} ellipsizeMode="tail">
@@ -89,11 +94,11 @@ export default function ManageMatchCard({
 
       <View style={styles.metaBlock}>
         <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={14} color={colors.bodyText} />
+          <Ionicons name="calendar-outline" size={14} color={colors.textSecondaryAlt} />
           <Text style={styles.metaText}>{formatMatchWhen(match.startsAt, match.endsAt)}</Text>
         </View>
         <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={14} color={colors.bodyText} />
+          <Ionicons name="location-outline" size={14} color={colors.textSecondaryAlt} />
           <Text style={styles.metaText} numberOfLines={1}>
             {match.venueName}
           </Text>
@@ -108,9 +113,9 @@ export default function ManageMatchCard({
             ))}
           </View>
           <Text style={styles.progressText}>
-            {match.filledCount}/{match.maxPlayers} Joined
+            {match.filledCount}/{match.maxPlayers} {t('matches.status.joinedSuffix')}
           </Text>
-          <Text style={styles.spotsLeftText}>{match.spotsLeft} Spots Left</Text>
+          <Text style={styles.spotsLeftText}>{match.spotsLeft} {t('matches.status.spotsLeftSuffix')}</Text>
         </View>
       )}
     </>
@@ -130,26 +135,26 @@ export default function ManageMatchCard({
         <>
           {isHostReview ? (
             <View style={styles.pendingBanner}>
-              <Text style={styles.pendingBannerText}>{match.pendingRequestCount} pending requests</Text>
+              <Text style={styles.pendingBannerText}>{match.pendingRequestCount} {t('matches.status.pendingRequestsSuffix')}</Text>
               <TouchableOpacity testID={`manage-squad-${match.matchId}`} style={styles.manageSquadButton} onPress={onManageSquad}>
-                <Text style={styles.manageSquadButtonText}>Manage Squad</Text>
+                <Text style={styles.manageSquadButtonText}>{t('matches.actions.manageSquad')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity testID={`manage-squad-${match.matchId}`} style={styles.outlineButton} onPress={onManageSquad}>
-              <Text style={styles.outlineButtonText}>View Squad</Text>
+              <Text style={styles.outlineButtonText}>{t('matches.actions.viewSquad')}</Text>
             </TouchableOpacity>
           )}
           {(onEditMatch || onCancelMatch) && (
             <View style={styles.hostActionsRow}>
               {onEditMatch ? (
                 <TouchableOpacity testID={`manage-edit-${match.matchId}`} style={styles.outlineButtonFlex} onPress={onEditMatch}>
-                  <Text style={styles.outlineButtonText}>Edit</Text>
+                  <Text style={styles.outlineButtonText}>{t('matches.actions.edit')}</Text>
                 </TouchableOpacity>
               ) : null}
               {onCancelMatch ? (
                 <TouchableOpacity testID={`manage-cancel-${match.matchId}`} style={styles.dangerButtonFlex} onPress={onCancelMatch}>
-                  <Text style={styles.dangerButtonText}>Cancel Match</Text>
+                  <Text style={styles.dangerButtonText}>{t('matches.actions.cancelMatch')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -159,60 +164,60 @@ export default function ManageMatchCard({
 
       {isParticipant && (
         <TouchableOpacity testID={`view-details-${match.matchId}`} style={styles.outlineButton} onPress={onViewDetails}>
-          <Text style={styles.outlineButtonText}>View Details</Text>
+          <Text style={styles.outlineButtonText}>{t('matches.actions.viewDetails')}</Text>
         </TouchableOpacity>
       )}
 
       {isCompleted && (
         <TouchableOpacity testID={`view-summary-${match.matchId}`} style={styles.filledButton} onPress={onViewDetails}>
-          <Text style={styles.filledButtonText}>View Summary</Text>
+          <Text style={styles.filledButtonText}>{t('matches.actions.viewSummary')}</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     padding: spacing.md,
     gap: spacing.xs,
   },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  sportChip: { backgroundColor: colors.iconBackground, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
-  sportChipText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
-  completedChip: { backgroundColor: colors.iconBackground, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
-  completedChipText: { fontSize: 11, fontWeight: '700', color: colors.outline },
-  roleChip: { backgroundColor: colors.primaryDark, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  sportChip: { backgroundColor: colors.roleCardSelectedBg, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  sportChipText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  completedChip: { backgroundColor: colors.roleCardSelectedBg, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  completedChipText: { fontSize: 11, fontWeight: '700', color: colors.outlineMuted },
+  roleChip: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   roleChipText: { fontSize: 11, fontWeight: '700', color: colors.white },
-  roleChipReview: { backgroundColor: colors.orangeSoft },
-  roleChipTextReview: { color: colors.orange },
-  fullChip: { backgroundColor: colors.errorBackground, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
-  fullChipText: { fontSize: 11, fontWeight: '700', color: colors.error },
+  roleChipReview: { backgroundColor: colors.warningSurface },
+  roleChipTextReview: { color: colors.warningText },
+  fullChip: { backgroundColor: colors.dangerSurface, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  fullChipText: { fontSize: 11, fontWeight: '700', color: colors.roleErrorText },
 
-  title: { fontSize: 17, fontWeight: '800', color: colors.headingText },
+  title: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
 
   hostRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hostAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   hostAvatarImage: { width: '100%', height: '100%' },
-  hostAvatarText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
-  hostName: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.outline },
-  hostFullName: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.headingText },
+  hostAvatarText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  hostName: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.outlineMuted },
+  hostFullName: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.textPrimary },
 
   metaBlock: { gap: spacing.xxs },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  metaText: { fontSize: 13, color: colors.bodyText, flexShrink: 1 },
+  metaText: { fontSize: 13, color: colors.textSecondaryAlt, flexShrink: 1 },
 
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   participantsRow: { flexDirection: 'row' },
@@ -222,39 +227,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: colors.white,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
   },
   participantAvatarOverlap: { marginLeft: -8 },
-  progressText: { fontSize: 12, fontWeight: '700', color: colors.headingText },
-  spotsLeftText: { flex: 1, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.error },
+  progressText: { fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  spotsLeftText: { flex: 1, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.roleErrorText },
 
   pendingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.orangeSoft,
+    backgroundColor: colors.warningSurface,
     borderRadius: 12,
     padding: spacing.sm,
     marginTop: spacing.xs,
   },
-  pendingBannerText: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.orange },
-  manageSquadButton: { backgroundColor: colors.primaryDark, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  pendingBannerText: { flex: 1, fontSize: 12, fontWeight: '700', color: colors.warningText },
+  manageSquadButton: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   manageSquadButtonText: { fontSize: 12, fontWeight: '700', color: colors.white },
 
   outlineButton: {
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginTop: spacing.xs,
   },
-  outlineButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  outlineButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   hostActionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   outlineButtonFlex: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     alignItems: 'center',
@@ -262,14 +267,14 @@ const styles = StyleSheet.create({
   dangerButtonFlex: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: colors.roleErrorText,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     alignItems: 'center',
   },
-  dangerButtonText: { fontSize: 13, fontWeight: '700', color: colors.error },
+  dangerButtonText: { fontSize: 13, fontWeight: '700', color: colors.roleErrorText },
   filledButton: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
     alignItems: 'center',

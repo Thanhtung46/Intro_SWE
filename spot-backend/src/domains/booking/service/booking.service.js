@@ -56,7 +56,13 @@ export function bangkokRangeToUtc(fromDate, toDate) {
 function resolveDateWindow(query) {
   const from = query.from ?? todayInBangkok();
   const to = query.to ?? addCalendarDays(from, SCHEDULE_DEFAULT_DAYS);
-  return bangkokRangeToUtc(from, to);
+  const { rangeStart, rangeEnd } = bangkokRangeToUtc(from, to);
+  // When the caller didn't pin an explicit `from` (e.g. Home's single
+  // "upcoming match" card, vs. Schedule's calendar which always passes the
+  // viewed month), start-of-today would still include a booking/match
+  // earlier today that has already ended — `now()` is the correct lower
+  // bound for "what's upcoming", not "what's today".
+  return { rangeStart: query.from ? rangeStart : new Date(), rangeEnd };
 }
 
 export async function listMySchedule(userId, query) {
@@ -69,10 +75,28 @@ export async function listMySchedule(userId, query) {
       rangeEnd,
       limit: query.limit,
     });
+    const now = Date.now();
     return {
-      items: rows.map(toPublicScheduleItem),
+      items: rows.map((row) => toPublicScheduleItem(row, now)),
       timezone: SCHEDULE_TIMEZONE,
     };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Poll-driven auto-completion for bookings whose end time has passed —
+ * mirrors matchmaking's processExpiredFullMatches (match.service.js).
+ * Run via `npm run worker:booking-completion`.
+ */
+export async function processExpiredBookings({ limit = 50 } = {}) {
+  const client = await pool.connect();
+  try {
+    const bookingIds = await bookingRepository.completeExpiredBookings(client, {
+      limit,
+    });
+    return { processed: bookingIds.length, bookingIds };
   } finally {
     client.release();
   }
@@ -300,6 +324,13 @@ export async function createBooking(playerId, dto) {
       });
     });
 
+    notifyPlayerOfNewBooking(playerId, field, booking, rangeStart).catch((err) => {
+      logger.warn('Player booking-created notification failed', {
+        error: err.message,
+        bookingId: booking.booking_id,
+      });
+    });
+
     return toPublicBooking(booking);
   } finally {
     client.release();
@@ -324,6 +355,27 @@ async function notifyOwnerOfNewBooking(field, booking, startAt) {
     bookingId: booking.booking_id,
     startAt,
     audience: 'OWNER',
+  });
+}
+
+/**
+ * Best-effort: confirms to the player their booking was created, and
+ * schedules the player's own T-24h/T-2h "booking starting soon" reminders
+ * (separate from the owner's reminders on the same booking).
+ */
+async function notifyPlayerOfNewBooking(playerId, field, booking, startAt) {
+  await notificationService.createNotification({
+    userId: playerId,
+    type: NOTIFICATION_TYPES.BOOKING_CREATED,
+    title: 'Booking confirmed',
+    body: `Your booking for ${field.field_name} at ${field.venue_name} on ${booking.booking_date} is confirmed.`,
+    data: { bookingId: booking.booking_id, fieldId: field.field_id },
+  });
+  await notificationService.scheduleBookingReminders({
+    userId: playerId,
+    bookingId: booking.booking_id,
+    startAt,
+    audience: 'PLAYER',
   });
 }
 
@@ -375,15 +427,56 @@ export async function createBookingsBulk(playerId, { bookings }) {
   };
 }
 
+/** Mark booking PAID with booking code — used by payment confirm flow. */
+export async function confirmBookingPaidAfterPayment(client, { bookingId, playerId, bookingCode }) {
+  return bookingRepository.markBookingPaidWithCode(
+    client,
+    bookingId,
+    playerId,
+    bookingCode,
+  );
+}
+
+/** Post-commit side effects after booking is PAID (referee fan-out). */
+export async function runPostPaidSideEffects(booking, bookingId) {
+  if (!booking?.hire_referee) {
+    return { created: 0, notificationsSent: 0 };
+  }
+
+  const client = await pool.connect();
+  let fanOut = { created: 0, invitations: [] };
+  try {
+    fanOut = await fanOutRefereeInvitations(bookingId, client);
+  } finally {
+    client.release();
+  }
+
+  if (fanOut.invitations?.length) {
+    await dispatchInvitationNotifications(
+      fanOut.invitations,
+      fanOut.meta,
+      bookingId,
+    );
+    return {
+      created: fanOut.created,
+      notificationsSent: fanOut.invitations.length,
+    };
+  }
+
+  return { created: fanOut.created, notificationsSent: 0 };
+}
+
 /** Dev/smoke: mark booking PAID and fan-out referee invitations if hire_referee. */
 export async function markBookingPaidDev(playerId, bookingId) {
+  const bookingCode = `SPOT-${String(bookingId).padStart(6, '0')}`;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const booking = await bookingRepository.markBookingPaid(
+    const booking = await bookingRepository.markBookingPaidWithCode(
       client,
       bookingId,
       playerId,
+      bookingCode,
     );
     if (!booking) {
       throw new AppError('Booking not found or not pending payment', 404);

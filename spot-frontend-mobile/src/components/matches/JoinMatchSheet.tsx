@@ -9,9 +9,12 @@ import ErrorBanner from '@/components/common/ErrorBanner';
 import FormField from '@/components/common/FormField';
 import InfoDialog from '@/components/common/InfoDialog';
 import SubmitButton from '@/components/common/SubmitButton';
-import { colors } from '@/constants/colors';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import { spacing } from '@/constants/spacing';
-import { skillLabel, skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUser } from '@/context/UserContext';
 import { joinMatchSchema, type JoinMatchFormInput, type JoinMatchFormValues } from '@/schemas/joinMatchSchema';
 import { getErrorMessage, joinMatch } from '@/services/matchService';
@@ -42,6 +45,9 @@ const MAX_GUESTS = 10;
  * to Profile, not a per-join override). Only Phone + Message are editable.
  */
 export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, requiredSkillLabels, onClose, onSubmitted }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const { user } = useUser();
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -86,11 +92,10 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
         result.skillWarning
           ? {
               tone: 'warning',
-              title: 'Request Sent — Skill Warning',
-              message:
-                result.warning ?? 'Your skill (or a guest skill) is outside this match range, but the request was still sent.',
+              title: t('matches.join.skillWarningTitle'),
+              message: result.warning ?? t('matches.join.skillWarningMessage'),
             }
-          : { tone: 'success', title: 'Request Sent', message: "You'll be notified once the host responds." }
+          : { tone: 'success', title: t('matches.join.requestSentTitle'), message: t('matches.join.requestSentMessage') }
       );
     } catch (err) {
       setSubmitError(getErrorMessage(err));
@@ -98,7 +103,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
   });
 
   const sportSkillKey = sport === 'FOOTBALL' ? 'football' : 'badminton';
-  const profileSkillLabel = profile ? skillLabel(sport, profile.skills[sportSkillKey]) : null;
+  const profileSkillLabel = profile ? groupSkillLabel(t, profile.skills[sportSkillKey]) : null;
 
   return (
     <>
@@ -107,13 +112,13 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Join Match</Text>
+              <Text style={styles.title}>{t('matches.join.title')}</Text>
               <Text style={styles.subtitle} numberOfLines={1}>
                 {matchTitle}
               </Text>
             </View>
             <TouchableOpacity testID="join-sheet-close" style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={16} color={colors.headingText} />
+              <Ionicons name="close" size={16} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -124,7 +129,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                   <Ionicons name="alert" size={18} color={colors.white} />
                 </View>
                 <View style={styles.skillBannerTextWrap}>
-                  <Text style={styles.skillBannerLabel}>REQUIRED SKILL LEVEL</Text>
+                  <Text style={styles.skillBannerLabel}>{t('matches.join.requiredSkillLevel')}</Text>
                   <View style={styles.skillBannerChips}>
                     {requiredSkillLabels.map((label, index) => (
                       <React.Fragment key={`${label}-${index}`}>
@@ -132,7 +137,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                           <Ionicons
                             name="arrow-forward"
                             size={12}
-                            color={colors.skillTierOrangeText}
+                            color={colors.warningText}
                             style={styles.skillRangeArrow}
                           />
                         ) : null}
@@ -152,7 +157,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                   <View style={styles.youAvatar}>
                     <Ionicons name="person" size={16} color={colors.white} />
                   </View>
-                  <Text style={styles.cardHeaderTitle}>You{profile?.fullName ? ` (${profile.fullName})` : ''}</Text>
+                  <Text style={styles.cardHeaderTitle}>{t('matches.join.you')}{profile?.fullName ? ` (${profile.fullName})` : ''}</Text>
                 </View>
               </View>
 
@@ -162,12 +167,12 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                 <>
                   <View style={styles.row}>
                     <View style={styles.rowItem}>
-                      <Text style={styles.readOnlyLabel}>Gender</Text>
+                      <Text style={styles.readOnlyLabel}>{t('matches.join.gender')}</Text>
                       <Text style={styles.readOnlyValue}>{profile?.gender ?? '—'}</Text>
                     </View>
                     <View style={styles.rowItem}>
-                      <Text style={styles.readOnlyLabel}>Skill Level</Text>
-                      <Text style={styles.readOnlyValue}>{profileSkillLabel ?? 'Not set'}</Text>
+                      <Text style={styles.readOnlyLabel}>{t('matches.join.skillLevel')}</Text>
+                      <Text style={styles.readOnlyValue}>{profileSkillLabel ?? t('matches.join.notSet')}</Text>
                     </View>
                   </View>
 
@@ -177,8 +182,8 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                     render={({ field, fieldState }) => (
                       <FormField
                         testID="join-sheet-phone"
-                        label="Phone"
-                        placeholder={profile?.phoneNumber || 'Enter phone number'}
+                        label={t('matches.join.phone')}
+                        placeholder={profile?.phoneNumber || t('matches.join.enterPhone')}
                         value={field.value}
                         onChangeText={field.onChange}
                         keyboardType="phone-pad"
@@ -193,8 +198,8 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                     render={({ field, fieldState }) => (
                       <FormField
                         testID="join-sheet-message"
-                        label="Message to Host (Optional)"
-                        placeholder="Say something to the host..."
+                        label={t('matches.join.messageHostOptional')}
+                        placeholder={t('matches.join.messageHostPlaceholder')}
                         value={field.value}
                         onChangeText={field.onChange}
                         multiline
@@ -213,12 +218,12 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.cardHeaderLeft}>
                     <View style={styles.guestAvatar}>
-                      <Ionicons name="person-add-outline" size={14} color={colors.primaryDark} />
+                      <Ionicons name="person-add-outline" size={14} color={colors.primary} />
                     </View>
-                    <Text style={styles.cardHeaderTitle}>Guest {index + 1}</Text>
+                    <Text style={styles.cardHeaderTitle}>{t('matches.join.guestPrefix')} {index + 1}</Text>
                   </View>
                   <TouchableOpacity testID={`join-sheet-remove-guest-${index}`} onPress={() => remove(index)}>
-                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                    <Ionicons name="trash-outline" size={18} color={colors.roleErrorText} />
                   </TouchableOpacity>
                 </View>
 
@@ -228,8 +233,8 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                   render={({ field, fieldState }) => (
                     <FormField
                       testID={`join-sheet-guest-name-${index}`}
-                      label="Guest Name *"
-                      placeholder="Enter guest name"
+                      label={t('matches.join.guestNameLabel')}
+                      placeholder={t('matches.join.guestNamePlaceholder')}
                       value={field.value}
                       onChangeText={field.onChange}
                       error={fieldState.error?.message}
@@ -243,7 +248,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                   render={({ field, fieldState }) => (
                     <FormField
                       testID={`join-sheet-guest-phone-${index}`}
-                      label="Guest Phone *"
+                      label={t('matches.join.guestPhoneLabel')}
                       placeholder="0901234567"
                       value={field.value}
                       onChangeText={field.onChange}
@@ -254,7 +259,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                 />
 
                 <View style={styles.section}>
-                  <Text style={styles.fieldLabel}>Guest Gender *</Text>
+                  <Text style={styles.fieldLabel}>{t('matches.join.guestGenderLabel')}</Text>
                   <Controller
                     control={control}
                     name={`guests.${index}.gender`}
@@ -268,7 +273,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                             onPress={() => field.onChange(gender)}
                           >
                             <Text style={[styles.genderButtonText, field.value === gender && styles.genderButtonTextActive]}>
-                              {gender === 'male' ? 'Male' : 'Female'}
+                              {gender === 'male' ? t('common.male') : t('common.female')}
                             </Text>
                           </TouchableOpacity>
                         ))}
@@ -278,7 +283,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                 </View>
 
                 <View style={styles.section}>
-                  <Text style={styles.fieldLabel}>Guest Skill *</Text>
+                  <Text style={styles.fieldLabel}>{t('matches.join.guestSkillLabel')}</Text>
                   <Controller
                     control={control}
                     name={`guests.${index}.skill`}
@@ -287,7 +292,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                         <View style={styles.skillGrid}>
                           {skillsForSport(sport).map((skill) => {
                             const selected = field.value === skill.code;
-                            const tier = skillTierColor(sport, skill.code);
+                            const tier = groupSkillTier(colors, sport, skill.code);
                             return (
                               <TouchableOpacity
                                 key={skill.code}
@@ -295,7 +300,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
                                 style={[styles.skillChip, { backgroundColor: selected ? tier.text : tier.bg, borderColor: tier.border }]}
                                 onPress={() => field.onChange(skill.code)}
                               >
-                                <Text style={[styles.skillChipText, { color: selected ? colors.white : tier.text }]}>{skill.label}</Text>
+                                <Text style={[styles.skillChipText, { color: selected ? colors.white : tier.text }]}>{groupSkillLabel(t, skill.code) ?? skill.label}</Text>
                               </TouchableOpacity>
                             );
                           })}
@@ -315,7 +320,7 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
               disabled={fields.length >= MAX_GUESTS}
             >
               <Ionicons name="add" size={16} color={colors.white} />
-              <Text style={styles.addGuestButtonText}>Add Guest</Text>
+              <Text style={styles.addGuestButtonText}>{t('matches.join.addGuest')}</Text>
             </TouchableOpacity>
 
             {submitError ? <ErrorBanner message={submitError} onRetry={onSubmit} /> : null}
@@ -323,10 +328,10 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
 
           <View style={styles.footer}>
             <TouchableOpacity testID="join-sheet-cancel" style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <View style={styles.submitWrap}>
-              <SubmitButton label={`Send Request (${1 + fields.length})`} loading={isSubmitting} onPress={onSubmit} />
+              <SubmitButton label={`${t('matches.join.sendRequestPrefix')} (${1 + fields.length})`} loading={isSubmitting} onPress={onSubmit} />
             </View>
           </View>
         </SafeAreaView>
@@ -347,42 +352,42 @@ export default function JoinMatchSheet({ visible, matchId, matchTitle, sport, re
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.sheetOverlay, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '90%', backgroundColor: colors.screenBackground, borderTopLeftRadius: 32, borderTopRightRadius: 32 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'flex-end' },
+  sheet: { maxHeight: '90%', backgroundColor: colors.screenBackgroundAlt, borderTopLeftRadius: 32, borderTopRightRadius: 32 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.iconBackground,
+    borderBottomColor: colors.roleCardSelectedBg,
   },
   headerText: { flex: 1, marginRight: spacing.sm },
-  title: { fontSize: 22, fontWeight: '700', color: colors.headingText },
-  subtitle: { fontSize: 13, color: colors.bodyText },
+  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textSecondaryAlt },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.md },
   messageInput: { height: 90, paddingTop: spacing.sm, textAlignVertical: 'top' },
 
-  skillBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.skillTierOrangeBg, borderRadius: 12, padding: spacing.md },
-  skillBannerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.skillTierOrangeText, alignItems: 'center', justifyContent: 'center' },
+  skillBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.warningSurface, borderRadius: 12, padding: spacing.md },
+  skillBannerIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.warningText, alignItems: 'center', justifyContent: 'center' },
   skillBannerTextWrap: { flex: 1, gap: spacing.xxs },
-  skillBannerLabel: { fontSize: 10, fontWeight: '800', color: colors.skillTierOrangeText, letterSpacing: 0.5 },
+  skillBannerLabel: { fontSize: 10, fontWeight: '800', color: colors.warningText, letterSpacing: 0.5 },
   skillBannerChips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xxs },
   skillRangeArrow: { marginHorizontal: 2 },
-  skillBannerChip: { backgroundColor: colors.skillBannerChipBackground, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
-  skillBannerChipText: { fontSize: 12, fontWeight: '700', color: colors.skillTierOrangeText },
+  skillBannerChip: { backgroundColor: colors.matchSkillBannerChipBg, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  skillBannerChipText: { fontSize: 12, fontWeight: '700', color: colors.warningText },
 
   card: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.roleCardBg,
     borderRadius: 16,
     padding: spacing.md,
     gap: spacing.sm,
@@ -390,17 +395,17 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   youAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  guestAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.iconBackground, alignItems: 'center', justifyContent: 'center' },
-  cardHeaderTitle: { fontSize: 16, fontWeight: '700', color: colors.headingText },
+  guestAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.roleCardSelectedBg, alignItems: 'center', justifyContent: 'center' },
+  cardHeaderTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
 
   row: { flexDirection: 'row', gap: spacing.md },
   rowItem: { flex: 1, gap: spacing.xxs },
-  readOnlyLabel: { fontSize: 12, fontWeight: '700', color: colors.bodyText },
-  readOnlyValue: { fontSize: 15, fontWeight: '600', color: colors.headingText },
+  readOnlyLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondaryAlt },
+  readOnlyValue: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
 
   section: { gap: spacing.xxs },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.bodyText },
-  fieldError: { fontSize: 12, color: colors.error },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondaryAlt },
+  fieldError: { fontSize: 12, color: colors.roleErrorText },
 
   genderToggle: { flexDirection: 'row', gap: spacing.sm },
   genderButton: {
@@ -409,11 +414,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    backgroundColor: colors.white,
+    borderColor: colors.chromeBorder,
+    backgroundColor: colors.surface,
   },
-  genderButtonActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
-  genderButtonText: { fontSize: 13, fontWeight: '700', color: colors.headingText },
+  genderButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  genderButtonText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   genderButtonTextActive: { color: colors.white },
 
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
@@ -425,12 +430,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
-  addGuestButtonDisabled: { backgroundColor: colors.outline },
+  addGuestButtonDisabled: { backgroundColor: colors.outlineMuted },
   addGuestButtonText: { color: colors.white, fontWeight: '700', fontSize: 14 },
 
   footer: {
@@ -438,15 +443,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.roleCardSelectedBg,
   },
   cancelButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 16,
   },
-  cancelButtonText: { fontSize: 15, fontWeight: '700', color: colors.headingText },
+  cancelButtonText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   submitWrap: { flex: 2 },
 });

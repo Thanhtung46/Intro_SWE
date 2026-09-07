@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { ROUTES, venueDetailRoute } from '@/constants/routes';
 import { ThemeColors } from '@/constants/theme';
@@ -13,10 +13,10 @@ import BookingVenueCard, { BookingVenue } from '@/components/booking/BookingVenu
 import FiltersSheet from '@/components/booking/FiltersSheet';
 import AppHeader from '@/components/layout/AppHeader';
 import SportSegmentedToggle from '@/components/venue/SportSegmentedToggle';
-import BottomNav from '@/components/navigation/BottomNav';
 import { listVenues, PublicVenue } from '@/services/venueService';
-import useUserLocation from '@/hooks/useUserLocation';
 import { EMPTY_VENUE_FILTERS, VenueFilters } from '@/types/venueFilters';
+import { useBookingVenuesCache } from '@/state/bookingVenuesCache';
+import { useCancelledGuard } from '@/hooks/useCancelledGuard';
 
 // The photo comes from the venue's own uploaded cover image when the owner
 // has set one (coverImageUrl); this bundled asset is only the fallback.
@@ -72,10 +72,11 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
   const [filters, setFilters] = useState<VenueFilters>(EMPTY_VENUE_FILTERS);
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
-  const [venues, setVenues] = useState<BookingVenue[]>([]);
-  const [venuesError, setVenuesError] = useState<string | null>(null);
-  const [venuesLoading, setVenuesLoading] = useState(true);
-  const userLocation = useUserLocation();
+  const cache = useBookingVenuesCache();
+  const venues = cache.data ?? [];
+  const venuesError = cache.error;
+  const createGuard = useCancelledGuard();
+  const [isFirstLoad, setIsFirstLoad] = useState(cache.data === null);
   const filtersActive =
     !!filters.date ||
     !!filters.timeFrom ||
@@ -86,11 +87,26 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
     !!filters.city ||
     filters.radiusKm != null;
 
-  useEffect(() => {
-    setVenuesLoading(true);
+  /** ~30s TTL (research.md §3) — how long cached venues stay fresh before a
+   * focus revisit triggers a silent background refetch (T023). */
+  const STALE_TTL_MS = 30_000;
+
+  const fetchVenues = useCallback(() => {
+    const guard = createGuard();
+    cache.setRefreshing(true);
     // A typed search takes over entirely — backend rejects location together
     // with lat/long/radiusKm ("Use location or distance, not both"), so skip
     // GPS/province-city/distance opts whenever there's an applied search.
+    //
+    // Device GPS is intentionally NOT fetched/sent here by default: the
+    // backend treats any lat/long pair as an active distance filter and
+    // defaults radiusKm to 20 when omitted (list-venues.dto.js), so silently
+    // including it would narrow every browse to "within 20km of wherever the
+    // device currently is" even though the user never asked for that — on an
+    // emulator/device whose GPS doesn't match the seeded venues' real
+    // coordinates this hid every result (reported as "no venues found" after
+    // GPS had time to resolve). Only apply a distance filter when the user
+    // explicitly picked Distance mode in the filter sheet.
     const opts = appliedLocation
       ? { location: appliedLocation }
       : filters.province || (filters.radiusKm != null && filters.latitude != null)
@@ -101,9 +117,7 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
             province: filters.province,
             city: filters.city,
           }
-        : userLocation
-          ? { lat: userLocation.latitude, long: userLocation.longitude }
-          : undefined;
+        : undefined;
     listVenues(sport, {
       ...opts,
       priceMin: filters.priceMin,
@@ -112,16 +126,32 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       timeFrom: filters.timeFrom,
       timeTo: filters.timeTo,
     }).then((result) => {
+      if (guard.isCancelled()) return;
       if (result.success) {
-        setVenues((result.venues ?? []).map(mapVenueToCard));
-        setVenuesError(null);
+        cache.applyResult((result.venues ?? []).map(mapVenueToCard));
       } else {
-        setVenues([]);
-        setVenuesError(result.message ?? t('common.genericError'));
+        cache.applyError(result.message ?? t('common.genericError'));
       }
-      setVenuesLoading(false);
+      setIsFirstLoad(false);
     });
-  }, [sport, userLocation, filters, appliedLocation]);
+    return guard.cancel;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cache/createGuard/t are stable
+  }, [sport, filters, appliedLocation]);
+
+  useEffect(() => fetchVenues(), [fetchVenues]);
+
+  // Screens stay mounted across tab switches now (US1), so a revisit no
+  // longer re-runs the effect above — refetch silently in the background if
+  // the cached list is older than the TTL, without touching isFirstLoad
+  // (data stays visible throughout, per data-model.md rule 3).
+  useFocusEffect(
+    useCallback(() => {
+      if (!isFirstLoad && cache.isStale(STALE_TTL_MS)) {
+        fetchVenues();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- cache is stable; isFirstLoad/fetchVenues intentionally re-derive the callback
+    }, [fetchVenues, isFirstLoad])
+  );
 
   function submitSearch() {
     const trimmed = searchText.trim();
@@ -152,6 +182,13 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       <View style={styles.sportToggleOuter}>
         <SportSegmentedToggle value={sport} onChange={setSport} inactiveColor={c.textSecondaryAlt} themeColors={c} />
       </View>
+
+      {/* Small, non-blocking background-revalidation indicator (T025) — only
+          shown once real content is already on screen, never during the
+          full first-load spinner below. */}
+      {cache.isRefreshing && !isFirstLoad ? (
+        <ActivityIndicator size="small" style={styles.refreshingIndicator} color={c.primary} />
+      ) : null}
 
       {/* Search & filter bar (Figma node 79:1506) */}
       <View style={styles.searchBar}>
@@ -187,14 +224,19 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {venuesLoading ? (
+        {/* A background-refresh failure (venues.length > 0) must not blank out
+            the last-known-good list — only a true first-load failure (no
+            data at all yet) replaces content with the error text. */}
+        {isFirstLoad ? (
           <ActivityIndicator style={styles.venuesLoading} color={c.primary} />
-        ) : venuesError ? (
+        ) : venuesError && venues.length === 0 ? (
           <Text style={styles.venuesEmptyText}>{venuesError}</Text>
         ) : venues.length === 0 ? (
           <Text style={styles.venuesEmptyText}>{t('home.venuesEmpty')}</Text>
         ) : (
-          venues.map((venue) => (
+          <>
+            {venuesError ? <Text style={styles.venuesEmptyText}>{venuesError}</Text> : null}
+            {venues.map((venue) => (
             <BookingVenueCard
               key={venue.id}
               venue={venue}
@@ -206,14 +248,16 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
                   venueName: venue.name,
                   venueAddress: venue.address,
                 })
-              }
-            />
-          ))
+                }
+              />
+            ))}
+          </>
         )}
       </ScrollView>
 
-      {/* Bottom navigation */}
-      <BottomNav active="booking" />
+      {/* Bottom navigation now rendered once by app/(tabs)/_layout.tsx's
+          Tabs (AppTabBar) — this tab root no longer renders its own copy
+          (see specs/002-tab-navigation-performance). */}
 
       <FiltersSheet
         visible={filtersVisible}
@@ -284,6 +328,9 @@ function getStyles(c: ThemeColors) {
     },
     venuesLoading: {
       marginTop: 16,
+    },
+    refreshingIndicator: {
+      marginTop: 4,
     },
   });
 }

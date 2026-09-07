@@ -3,45 +3,34 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { ReactNode, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/constants/colors';
 import { ROUTES } from '@/constants/routes';
-import SlidingBottomNav, { type SlidingTab, type SlidingTabKey } from '@/components/navigation/SlidingBottomNav';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { getUnreadCount } from '../services/notificationService';
 import { NotificationMenu } from './NotificationMenu';
 import { ProfileMenu } from './ProfileMenu';
 
-type TabKey = SlidingTabKey;
-
-const SHELL_TABS: SlidingTab[] = [
-  { key: 'home', label: 'Home', icon: 'home' },
-  { key: 'booking', label: 'Booking', icon: 'ticket-outline' },
-  { key: 'matches', label: 'Matches', icon: 'trophy-outline' },
-  { key: 'schedule', label: 'Schedule', icon: 'calendar-outline' },
-  { key: 'settings', label: 'Settings', icon: 'settings-outline' },
-];
-
-const TAB_PATH: Record<TabKey, '/home' | '/booking' | '/matches' | '/schedule' | '/settings'> = {
-  home: '/home',
-  booking: '/booking',
-  matches: '/matches',
-  schedule: '/schedule',
-  settings: '/settings',
-};
-
 /**
- * Persistent top header + bottom tab bar shared across Home/Matches/
- * Schedule/Settings (Figma: Football Dashboard.png, Settings.png, View
- * Schedule.png, Matches Homepage all show the same shell). Main Profile/
- * Edit Profile and auth screens intentionally do NOT use this shell
- * (Figma's Main Profile.png has its own back+Edit header, no bottom tabs).
+ * Persistent top header shared across Home/Matches/Schedule/Settings
+ * (Figma: Football Dashboard.png, Settings.png, View Schedule.png, Matches
+ * Homepage all show the same shell). Main Profile/Edit Profile and auth
+ * screens intentionally do NOT use this shell.
+ *
+ * The bottom tab bar previously rendered here (its own copy of
+ * `SlidingBottomNav`, driven by `router.replace()`) moved to `AppTabBar`,
+ * rendered once by `app/(tabs)/_layout.tsx`'s `Tabs` as the shared `tabBar`
+ * — see specs/002-tab-navigation-performance. Rendering it per-screen here
+ * would duplicate it under `Tabs` (which already supplies one bar for the
+ * whole group) and fight the mount-persistence fix this feature relies on.
  */
-export function AppShell({ activeTab, children }: { activeTab: TabKey; children: ReactNode }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useUser();
+  const { mode, colors: themeColors } = useTheme();
+  const { t } = useLanguage();
   const [profileMenuVisible, setProfileMenuVisible] = useState(false);
   const [notificationMenuVisible, setNotificationMenuVisible] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
@@ -56,54 +45,47 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
     refreshUnreadCount();
   }, []);
 
-  const goToTab = (tab: TabKey) => {
-    if (activeTab === tab) return;
-    // replace keeps the tab switch from stacking screens; root Stack uses
-    // animation: 'none' for these routes so pages don't overlap while fading.
-    router.replace(TAB_PATH[tab]);
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <BlurView intensity={30} tint="light" style={styles.header}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.screenBackgroundAlt }]} edges={['top']}>
+      <BlurView
+        intensity={30}
+        tint={mode === 'dark' ? 'dark' : 'light'}
+        style={[styles.header, { backgroundColor: themeColors.glassBarBg, borderBottomColor: themeColors.chromeBorder }]}
+      >
         <View style={styles.headerLeft}>
           <Image source={require('../../assets/logo.png')} style={styles.logo} />
-          <Text style={styles.logoText}>SPOT</Text>
+          <Text style={[styles.logoText, { color: themeColors.accentText }]}>SPOT</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={[styles.headerButton, { backgroundColor: themeColors.glassButtonBg, borderColor: themeColors.glassRingBorder }]}
             onPress={() => router.push(ROUTES.ASSISTANT)}
             accessibilityRole="button"
-            accessibilityLabel="AI Assistant"
+            accessibilityLabel={t('header.aiAssistant')}
           >
-            <MaterialCommunityIcons name="creation" size={20} color={colors.primaryDark} />
+            <MaterialCommunityIcons name="creation" size={20} color={themeColors.accentText} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={[styles.headerButton, { backgroundColor: themeColors.glassButtonBg, borderColor: themeColors.glassRingBorder }]}
             onPress={() => setNotificationMenuVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={t('header.notifications')}
           >
-            <Ionicons name="notifications-outline" size={18} color={colors.primaryDark} />
-            {hasUnreadNotifications ? <View style={styles.notificationDot} /> : null}
+            <Ionicons name="notifications-outline" size={18} color={themeColors.accentText} />
+            {hasUnreadNotifications ? <View style={[styles.notificationDot, { backgroundColor: themeColors.badgeBg, borderColor: themeColors.badgeBorder }]} /> : null}
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.avatarButton}
+            style={[styles.avatarButton, { backgroundColor: themeColors.glassButtonBg, borderColor: themeColors.glassRingBorder }]}
             onPress={() => setProfileMenuVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="Account menu"
+            accessibilityLabel={t('header.accountMenu')}
           >
-            <Text style={styles.avatarText}>{(user?.fullName || 'G').charAt(0).toUpperCase()}</Text>
+            <Text style={[styles.avatarText, { color: themeColors.accentText }]}>{(user?.fullName || 'G').charAt(0).toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
       </BlurView>
 
       <View style={styles.content}>{children}</View>
-
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-        <SlidingBottomNav tabs={SHELL_TABS} active={activeTab} onPress={goToTab} />
-      </View>
 
       <ProfileMenu visible={profileMenuVisible} onClose={() => setProfileMenuVisible(false)} />
       <NotificationMenu
@@ -120,7 +102,6 @@ export function AppShell({ activeTab, children }: { activeTab: TabKey; children:
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
   },
   header: {
     flexDirection: 'row',
@@ -129,7 +110,6 @@ const styles = StyleSheet.create({
     height: 64,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -145,7 +125,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.6,
-    color: colors.primaryDark,
   },
   headerRight: {
     flexDirection: 'row',
@@ -158,9 +137,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: colors.ringBorder,
   },
   notificationDot: {
     position: 'absolute',
@@ -169,9 +146,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#996100',
     borderWidth: 1,
-    borderColor: colors.white,
   },
   avatarButton: {
     width: 40,
@@ -179,25 +154,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderWidth: 2,
-    borderColor: colors.ringBorder,
   },
   avatarText: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.primaryDark,
   },
   content: {
     flex: 1,
-  },
-  bottomNav: {
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    // paddingBottom set from safe-area inset so the white bar reaches the
-    // home-indicator edge (no separate gray strip under the tabs).
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    backgroundColor: colors.white,
   },
 });

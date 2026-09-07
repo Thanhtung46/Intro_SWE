@@ -111,10 +111,10 @@ type Props = {
    * football and badminton courts and a player shouldn't be able to book
    * the wrong one. */
   sport?: string;
-  /** Preselected date (YYYY-MM-DD) / start time (HH:mm) — set when handed
-   * off from the AI assistant after a venue search (spec
-   * 007-assistant-venue-search P3), so the player lands with the slot
-   * they asked for already picked instead of a blank "today" view. */
+  /** Assistant hand-off (spec 007-assistant-venue-search P3) — when the
+   * player confirmed a specific date/time in the AI chat, these arrive via
+   * the route's query params so the slot picker below can open already
+   * positioned at that slot instead of making the player pick it again. */
   initialDate?: string;
   initialTimeFrom?: string;
   onBack: () => void;
@@ -135,7 +135,6 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [heroImageFailed, setHeroImageFailed] = useState(false);
-  const [imagesLoading, setImagesLoading] = useState(true);
   const [refereeHired, setRefereeHired] = useState(false);
   const [pitchTimeVisible, setPitchTimeVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('about');
@@ -144,7 +143,6 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
   useEffect(() => {
     if (!Number.isInteger(numericVenueId)) return;
     setHeroImageFailed(false);
-    setImagesLoading(true);
     getVenueDetail(numericVenueId, sport).then((result) => {
       if (!result.success || !result.venue) return;
       const apiVenue = result.venue;
@@ -210,7 +208,6 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
         setImages([]);
         setImagesError(result.message ?? t('common.genericError'));
       }
-      setImagesLoading(false);
     });
   }, [numericVenueId, sport]);
 
@@ -252,22 +249,12 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.hero}>
-          {imagesLoading ? (
-            // Avoid flashing the generic stock photo before the venue's own
-            // uploaded photo arrives — show a neutral placeholder instead
-            // and swap in the real image (or the stock fallback) once the
-            // photo fetch has actually settled.
-            <View style={[styles.heroImage, styles.heroImageLoading]}>
-              <ActivityIndicator color={colors.white} />
-            </View>
-          ) : (
-            <Image
-              source={images[0]?.imageUrl && !heroImageFailed ? { uri: images[0].imageUrl } : venue.heroImage}
-              style={styles.heroImage}
-              resizeMode="cover"
-              onError={() => setHeroImageFailed(true)}
-            />
-          )}
+          <Image
+            source={images[0]?.imageUrl && !heroImageFailed ? { uri: images[0].imageUrl } : venue.heroImage}
+            style={styles.heroImage}
+            resizeMode="cover"
+            onError={() => setHeroImageFailed(true)}
+          />
           <View style={styles.heroActions}>
             <TouchableOpacity
               style={styles.heroButton}
@@ -595,6 +582,10 @@ export default function VenueDetailScreen({ venueId, sport, initialDate, initial
         visible={pitchTimeVisible}
         venueId={numericVenueId}
         pitches={venue.pitches}
+        venueName={venue.name}
+        venueAddress={venue.address}
+        venueLatitude={venue.latitude}
+        venueLongitude={venue.longitude}
         openHour={parsedHours[0]}
         closeHour={parsedHours[1]}
         hireReferee={refereeHired}
