@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMySchedule, ScheduleItem } from '@/services/scheduleService';
 import { ReviewModal } from '@/components/ReviewModal';
@@ -25,6 +25,8 @@ type ScheduleEvent = {
   location: string;
   host?: string;
   status: 'upcoming' | 'completed';
+  /** Server-sourced (schema_review.reviews) — survives refetch/remount, unlike relying only on the local "just submitted" Set. */
+  alreadyReviewed: boolean;
   bookingId: number | null;
   itemType: 'BOOKING' | 'MATCH';
   matchId: number | null;
@@ -68,6 +70,7 @@ function mapItemsToEvents(items: ScheduleItem[]): ScheduleEvent[] {
     time: formatTimeRange(item.startsAt, item.endsAt),
     location: item.fieldName ? `${item.venueName} • ${item.fieldName}` : item.venueName,
     status: item.status === 'COMPLETED' ? 'completed' : 'upcoming',
+    alreadyReviewed: item.alreadyReviewed ?? false,
     bookingId: item.bookingId,
     itemType: item.type,
     matchId: item.matchId,
@@ -150,6 +153,7 @@ export default function ScheduleScreen({
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [reviewBookingId, setReviewBookingId] = useState<number | null>(null);
   const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<number>>(new Set());
 
@@ -183,7 +187,7 @@ export default function ScheduleScreen({
         bookingDate: toLocalDateString(event.date),
         status: event.rawStatus,
         totalAmountVnd: event.totalAmountVnd != null ? String(event.totalAmountVnd) : '',
-        alreadyReviewed: reviewedBookingIds.has(bookingId) ? '1' : '0',
+        alreadyReviewed: event.alreadyReviewed || reviewedBookingIds.has(bookingId) ? '1' : '0',
       },
     });
   };
@@ -194,6 +198,7 @@ export default function ScheduleScreen({
     const from = toLocalDateString(new Date(year, month, 1));
     const to = toLocalDateString(new Date(year, month + 1, 0));
 
+    setIsLoading(true);
     getMySchedule({ from, to }).then((result) => {
       if (result.success) {
         setEvents(mapItemsToEvents(result.items ?? []));
@@ -202,6 +207,7 @@ export default function ScheduleScreen({
         setEvents([]);
         setFetchError(result.message ?? t('common.genericError'));
       }
+      setIsLoading(false);
     });
   }, [currentMonth]);
 
@@ -301,7 +307,11 @@ export default function ScheduleScreen({
               {t('schedule.matchesOnPrefix')}{MONTH_ABBR[selectedDate.getMonth()].toUpperCase()} {selectedDate.getDate()}
             </Text>
 
-            {eventsForSelectedDate.length === 0 ? (
+            {isLoading ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="small" color={c.primary} />
+              </View>
+            ) : eventsForSelectedDate.length === 0 ? (
               <View style={styles.emptyState}>
                 <MaterialCommunityIcons name="calendar-remove-outline" size={28} color={c.textMuted} />
                 <Text style={styles.emptyStateText}>{t('schedule.emptyDay')}</Text>
@@ -365,7 +375,7 @@ export default function ScheduleScreen({
                       </Text>
                     </TouchableOpacity>
                     {event.itemType === 'BOOKING' && event.bookingId != null ? (
-                      reviewedBookingIds.has(event.bookingId) ? (
+                      event.alreadyReviewed || reviewedBookingIds.has(event.bookingId) ? (
                         <Text style={styles.reviewedText}>{t('schedule.reviewed')}</Text>
                       ) : (
                         <TouchableOpacity

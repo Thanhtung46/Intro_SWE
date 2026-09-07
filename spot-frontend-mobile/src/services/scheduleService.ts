@@ -14,6 +14,8 @@ export interface ScheduleItem {
   address: string;
   sportType: string;
   role?: 'HOST' | 'PARTICIPANT';
+  /** Server-sourced (schema_review.reviews) — true only for BOOKING items with an existing review. Survives refetch/remount, unlike a purely local "just submitted" flag. */
+  alreadyReviewed?: boolean;
   totalAmountVnd: number | null;
 }
 
