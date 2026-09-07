@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 
 import MatchCoverImage from '@/components/matches/MatchCoverImage';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { skillLabel } from '@/constants/matchSkills';
+import { groupSkillLabel } from '@/components/groups/groupPresentation';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { Group } from '@/types/group';
 
 type Props = {
@@ -39,14 +41,17 @@ export default function GroupCard({
   joining = false,
   distanceLabel,
 }: Props) {
-  const minLabel = skillLabel(group.sport, group.skillMin);
-  const maxLabel = skillLabel(group.sport, group.skillMax);
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
+  const minLabel = groupSkillLabel(t, group.skillMin);
+  const maxLabel = groupSkillLabel(t, group.skillMax);
   const skillText = group.allLevels || !minLabel || !maxLabel
-    ? 'All Levels'
+    ? t('groups.skill.allLevels')
     : minLabel === maxLabel
       ? minLabel
       : `${minLabel} – ${maxLabel}`;
-  const joinLabel = group.joinMode === 'AUTO' ? 'Open to Join' : 'Approval Required';
+  const joinLabel = group.joinMode === 'AUTO' ? t('groups.join.open') : t('groups.join.approvalRequired');
   const metaLine = `${joinLabel} • ${skillText}`;
   const extraMembers = Math.max(0, group.memberCount - group.memberAvatars.length);
 
@@ -72,9 +77,9 @@ export default function GroupCard({
         <View style={styles.metaRow}>
           <View style={styles.metaTextWrap}>
             <View style={styles.memberRow}>
-              <Ionicons name="people" size={14} color={colors.headingText} />
-              <Text style={styles.memberCount}>{group.memberCount} Members</Text>
-              {distanceLabel ? <Text style={styles.distanceText}>· {distanceLabel} away</Text> : null}
+              <Ionicons name="people" size={14} color={colors.textPrimary} />
+              <Text style={styles.memberCount}>{group.memberCount} {t('groups.members')}</Text>
+              {distanceLabel ? <Text style={styles.distanceText}>· {distanceLabel} {t('groups.away')}</Text> : null}
             </View>
             <Text style={styles.metaLine} numberOfLines={1} ellipsizeMode="tail">
               {metaLine}
@@ -101,26 +106,26 @@ export default function GroupCard({
             onJoin();
           }}
         >
-          <Text style={styles.joinButtonText}>{joining ? 'Joining...' : 'Join Group'}</Text>
+          <Text style={styles.joinButtonText}>{joining ? t('groups.join.joining') : t('groups.join.action')}</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 24,
     overflow: 'hidden',
-    shadowColor: colors.primaryDark,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 4,
   },
   cover: { height: 190, justifyContent: 'flex-end' },
-  coverScrim: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
+  coverScrim: { ...StyleSheet.absoluteFill, backgroundColor: colors.groupImageScrim },
   coverText: { padding: spacing.md, gap: 2 },
   coverName: { fontSize: 20, fontWeight: '800', color: colors.white },
   coverTagline: { fontSize: 13, color: colors.white, opacity: 0.9 },
@@ -129,9 +134,9 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   metaTextWrap: { flexShrink: 1, gap: 2 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  memberCount: { fontSize: 14, fontWeight: '800', color: colors.headingText },
-  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
-  metaLine: { fontSize: 12, color: colors.outline },
+  memberCount: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  metaLine: { fontSize: 12, color: colors.textMuted },
 
   avatars: { flexDirection: 'row' },
   avatar: {
@@ -140,16 +145,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: colors.white,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarOverlap: { marginLeft: -8 },
-  avatarExtra: { backgroundColor: colors.selectedBackground },
-  avatarExtraText: { fontSize: 10, fontWeight: '700', color: colors.primaryDark },
+  avatarExtra: { backgroundColor: colors.roleCardSelectedBg },
+  avatarExtraText: { fontSize: 10, fontWeight: '700', color: colors.primary },
 
   joinButton: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: spacing.md,
     alignItems: 'center',

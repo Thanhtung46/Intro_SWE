@@ -21,8 +21,10 @@ import TournamentMatchListItem from '@/components/tournaments/TournamentMatchLis
 import TournamentResultSheet from '@/components/tournaments/TournamentResultSheet';
 import TournamentStandingsTable from '@/components/tournaments/TournamentStandingsTable';
 import TournamentStatusPill from '@/components/tournaments/TournamentStatusPill';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { ROUND_LABELS, ROUND_ORDER } from '@/constants/tournamentFormats';
 import { getErrorMessage } from '@/services/apiErrors';
 import {
@@ -65,14 +67,7 @@ type Props = {
   onSetPlayerRanks?: () => void;
 };
 
-const TABS: { key: DetailTab; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'matches', label: 'Schedule' },
-  { key: 'standings', label: 'Table' },
-  { key: 'players', label: 'Rosters' },
-];
-
-function TabIntro({ title, body }: { title: string; body: string }) {
+function TabIntro({ title, body, styles }: { title: string; body: string; styles: ReturnType<typeof createStyles> }) {
   return (
     <View style={styles.tabIntro}>
       <Text style={styles.tabIntroTitle}>{title}</Text>
@@ -85,15 +80,19 @@ function EmptyHint({
   icon,
   title,
   body,
+  colors,
+  styles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.emptyHint}>
       <View style={styles.emptyHintIcon}>
-        <Ionicons name={icon} size={22} color={colors.primaryDark} />
+        <Ionicons name={icon} size={22} color={colors.primary} />
       </View>
       <Text style={styles.emptyHintTitle}>{title}</Text>
       <Text style={styles.emptyHintBody}>{body}</Text>
@@ -101,8 +100,8 @@ function EmptyHint({
   );
 }
 
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
+function fmtDateTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -110,8 +109,8 @@ function fmtDateTime(iso: string): string {
   });
 }
 
-function fmtDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function fmtDay(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function vnd(amount: number): string {
@@ -139,6 +138,16 @@ export default function TournamentDetailScreen({
   onSetWinners,
   onSetPlayerRanks,
 }: Props) {
+  const { colors } = useTheme();
+  const { t, language } = useLanguage();
+  const styles = createStyles(colors);
+  const locale = language === 'vi' ? 'vi-VN' : 'en-US';
+  const tabs: { key: DetailTab; label: string }[] = [
+    { key: 'overview', label: t('tournaments.detail.overview') },
+    { key: 'matches', label: t('tournaments.detail.matches') },
+    { key: 'standings', label: t('tournaments.detail.standings') },
+    { key: 'players', label: t('tournaments.detail.players') },
+  ];
   const [tournament, setTournament] = useState<TournamentDetail | null>(null);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -223,7 +232,7 @@ export default function TournamentDetailScreen({
       await withdrawTournamentJoin(tournamentId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('tournaments.common.error'), getErrorMessage(err));
     } finally {
       setIsWithdrawing(false);
     }
@@ -236,7 +245,7 @@ export default function TournamentDetailScreen({
       await cancelTournament(tournamentId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('tournaments.common.error'), getErrorMessage(err));
     } finally {
       setIsActioning(false);
     }
@@ -249,7 +258,7 @@ export default function TournamentDetailScreen({
       await completeTournament(tournamentId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('tournaments.common.error'), getErrorMessage(err));
     } finally {
       setIsActioning(false);
     }
@@ -341,7 +350,7 @@ export default function TournamentDetailScreen({
         </View>
 
         <View style={styles.tabBar}>
-          {TABS.map((item) => {
+          {tabs.map((item) => {
             const isActive = item.key === tab;
             return (
               <TouchableOpacity
@@ -360,15 +369,15 @@ export default function TournamentDetailScreen({
           {tab === 'overview' && (
             <>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>About</Text>
+                <Text style={styles.sectionTitle}>{t('tournaments.detail.about')}</Text>
                 <View style={styles.notesCard}>
-                  <Text style={styles.notesText}>{tournament.description || 'No description yet.'}</Text>
+                  <Text style={styles.notesText}>{tournament.description || t('groups.detail.noDescription')}</Text>
                 </View>
               </View>
 
               {organizer && organizerActions.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Organizer</Text>
+                  <Text style={styles.sectionTitle}>{t('tournaments.detail.organizer')}</Text>
                   {organizerActions.map((action) => (
                     <TouchableOpacity
                       key={action.label}
@@ -377,7 +386,7 @@ export default function TournamentDetailScreen({
                       onPress={action.onPress}
                     >
                       <View style={styles.orgRowIcon}>
-                        <Ionicons name={action.icon} size={16} color={colors.primaryDark} />
+                        <Ionicons name={action.icon} size={16} color={colors.primary} />
                       </View>
                       <Text style={styles.orgRowLabel}>{action.label}</Text>
                       {action.badge ? (
@@ -385,27 +394,29 @@ export default function TournamentDetailScreen({
                           <Text style={styles.orgRowBadgeText}>{action.badge}</Text>
                         </View>
                       ) : null}
-                      <Ionicons name="chevron-forward" size={16} color={colors.outline} />
+                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
               <View style={styles.infoGrid}>
-                <InfoCell icon="calendar-outline" label="Dates" value={`${fmtDay(tournament.startsAt)} – ${fmtDay(tournament.endsAt)}`} />
-                <InfoCell icon="time-outline" label="Registration closes" value={fmtDateTime(tournament.registrationDeadline)} />
-                <InfoCell icon="people-outline" label="Teams" value={`${tournament.acceptedTeamCount} / ${tournament.maxTeams}`} />
+                <InfoCell colors={colors} styles={styles} icon="calendar-outline" label={t('tournaments.detail.dateTime')} value={`${fmtDay(tournament.startsAt, locale)} – ${fmtDay(tournament.endsAt, locale)}`} />
+                <InfoCell colors={colors} styles={styles} icon="time-outline" label={t('tournaments.status.registrationClosed')} value={fmtDateTime(tournament.registrationDeadline, locale)} />
+                <InfoCell colors={colors} styles={styles} icon="people-outline" label={t('tournaments.detail.teams')} value={`${tournament.acceptedTeamCount} / ${tournament.maxTeams}`} />
                 <InfoCell
+                  colors={colors}
+                  styles={styles}
                   icon="cash-outline"
-                  label="Entry / Prize"
+                  label={`${t('tournaments.detail.registrationFee')} / ${t('tournaments.detail.prizePool')}`}
                   value={`${tournament.registrationFeeVnd > 0 ? vnd(tournament.registrationFeeVnd) : 'Free'} · ${vnd(tournament.prizePoolVnd)}`}
                 />
               </View>
 
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Registered Teams</Text>
+                <Text style={styles.sectionTitle}>{t('tournaments.detail.registeredTeams')}</Text>
                 {teams.length === 0 && tournament.acceptedTeamCount === 0 ? (
-                  <Text style={styles.placeholderText}>No teams accepted yet.</Text>
+                  <Text style={styles.placeholderText}>{t('tournaments.detail.noTeams')}</Text>
                 ) : (
                   <TeamSlotStrip
                     teams={teams.map((t) => ({ teamId: t.teamId, teamName: t.teamName, teamLogoUrl: t.teamLogoUrl }))}
@@ -416,7 +427,7 @@ export default function TournamentDetailScreen({
 
               {tournament.winners && tournament.winners.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Winners</Text>
+                  <Text style={styles.sectionTitle}>{t('tournaments.detail.winners')}</Text>
                   {tournament.winners
                     .slice()
                     .sort((a, b) => a.place - b.place)
@@ -434,7 +445,7 @@ export default function TournamentDetailScreen({
               )}
 
               <View style={styles.section}>
-                <Text style={styles.venueLabel}>VENUE</Text>
+                <Text style={styles.venueLabel}>{t('tournaments.detail.venue')}</Text>
                 <View style={styles.venueCard}>
                   <Text style={styles.venueName} numberOfLines={1} ellipsizeMode="tail">
                     {tournament.venueName}
@@ -459,7 +470,7 @@ export default function TournamentDetailScreen({
                             id: String(tournament.tournamentId),
                             latitude: tournament.latitude,
                             longitude: tournament.longitude,
-                            tintColor: colors.primaryDark,
+                            tintColor: colors.primary,
                             emoji: '📍',
                           },
                         ]}
@@ -473,7 +484,7 @@ export default function TournamentDetailScreen({
                     </TouchableOpacity>
                   ) : null}
                   <View style={styles.venueAddressRow}>
-                    <Ionicons name="location-outline" size={14} color={colors.bodyText} />
+                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                     <Text style={styles.venueAddressText} numberOfLines={2} ellipsizeMode="tail">
                       {tournament.venueAddress}, {locationLine}
                     </Text>
@@ -485,14 +496,14 @@ export default function TournamentDetailScreen({
 
           {tab === 'matches' && (
             <>
-              <TabIntro
+              <TabIntro styles={styles}
                 title="Match schedule"
                 body="Fixtures for this tournament by round. Scores appear after the organizer records results."
               />
               {organizer && onAddMatch && (
                 <TouchableOpacity testID="tournament-add-match" style={styles.addMatchButton} onPress={onAddMatch}>
                   <Ionicons name="add" size={15} color={colors.white} />
-                  <Text style={styles.addMatchText}>Add Match</Text>
+                  <Text style={styles.addMatchText}>{t('tournaments.detail.addMatch')}</Text>
                 </TouchableOpacity>
               )}
               {roundsPresent.length > 1 && (
@@ -522,7 +533,7 @@ export default function TournamentDetailScreen({
               ) : matchesError ? (
                 <ErrorBanner message={matchesError} onRetry={fetchMatches} />
               ) : visibleMatches.length === 0 ? (
-                <EmptyHint
+                <EmptyHint colors={colors} styles={styles}
                   icon="calendar-outline"
                   title="No fixtures yet"
                   body={
@@ -548,7 +559,7 @@ export default function TournamentDetailScreen({
 
           {tab === 'standings' && (
             <>
-              <TabIntro
+              <TabIntro styles={styles}
                 title="Team table"
                 body={
                   tournament.sport === 'FOOTBALL'
@@ -561,7 +572,7 @@ export default function TournamentDetailScreen({
               ) : standingsError ? (
                 <ErrorBanner message={standingsError} onRetry={fetchStandings} />
               ) : standings.length === 0 ? (
-                <EmptyHint
+                <EmptyHint colors={colors} styles={styles}
                   icon="podium-outline"
                   title="Table is empty"
                   body="Standings fill in automatically after match results are entered. No results yet."
@@ -574,12 +585,12 @@ export default function TournamentDetailScreen({
 
           {tab === 'players' && (
             <>
-              <TabIntro
+              <TabIntro styles={styles}
                 title="Team rosters"
                 body="Players on each accepted team. Numbers on the left are optional in-team ranks set by the organizer."
               />
               {teams.length === 0 ? (
-                <EmptyHint
+                <EmptyHint colors={colors} styles={styles}
                   icon="people-outline"
                   title="No accepted teams"
                   body="Rosters appear here after teams join and the organizer approves them."
@@ -604,12 +615,12 @@ export default function TournamentDetailScreen({
                         </View>
                       </View>
                       {team.roster.length === 0 ? (
-                        <Text style={styles.placeholderText}>No players listed for this team.</Text>
+                        <Text style={styles.placeholderText}>{t('tournaments.detail.noPlayers')}</Text>
                       ) : (
                         <>
                           <View style={styles.playerHeadRow}>
                             <Text style={styles.playerHeadRank}>#</Text>
-                            <Text style={styles.playerHeadName}>Player</Text>
+                            <Text style={styles.playerHeadName}>{t('tournaments.common.player')}</Text>
                             <Text style={styles.playerHeadJersey}>No.</Text>
                           </View>
                           {team.roster.map((p) => (
@@ -654,7 +665,7 @@ export default function TournamentDetailScreen({
                 onPress={() => setCancelDialogVisible(true)}
                 disabled={isActioning}
               >
-                <Text style={styles.outlineDangerText}>Cancel Tournament</Text>
+                <Text style={styles.outlineDangerText}>{t('tournaments.detail.cancelTournament')}</Text>
               </TouchableOpacity>
             ) : tournament.status === 'ACTIVE' ? (
               <TouchableOpacity
@@ -664,7 +675,7 @@ export default function TournamentDetailScreen({
                 disabled={isActioning}
               >
                 <Ionicons name="checkmark-done" size={16} color={colors.white} />
-                <Text style={styles.primaryButtonText}>Complete Tournament</Text>
+                <Text style={styles.primaryButtonText}>{t('tournaments.detail.completeTournament')}</Text>
               </TouchableOpacity>
             ) : (
               <Text style={styles.organizerNote}>
@@ -673,8 +684,8 @@ export default function TournamentDetailScreen({
             )
           ) : myStatus === 'ACCEPTED' ? (
             <View style={styles.registeredBanner}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.skillTierGreenText} />
-              <Text style={styles.registeredBannerText}>You're registered for this tournament</Text>
+              <Ionicons name="checkmark-circle" size={16} color={colors.successText} />
+              <Text style={styles.registeredBannerText}>{t('tournaments.detail.registered')}</Text>
             </View>
           ) : myStatus === 'PENDING' ? (
             <TouchableOpacity
@@ -693,11 +704,11 @@ export default function TournamentDetailScreen({
               style={styles.primaryButton}
               onPress={() => onJoin(tournament.tournamentId)}
             >
-              <Text style={styles.primaryButtonText}>Join Tournament</Text>
+              <Text style={styles.primaryButtonText}>{t('tournaments.browse.join')}</Text>
             </TouchableOpacity>
           ) : (
             <View style={[styles.primaryButton, styles.buttonDisabled]}>
-              <Text style={styles.primaryButtonText}>Registration closed</Text>
+              <Text style={styles.primaryButtonText}>{t('tournaments.detail.registrationClosed')}</Text>
             </View>
           )}
         </View>
@@ -751,15 +762,19 @@ function InfoCell({
   icon,
   label,
   value,
+  colors,
+  styles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.infoCell}>
       <View style={styles.infoCellHead}>
-        <Ionicons name={icon} size={13} color={colors.outline} />
+        <Ionicons name={icon} size={13} color={colors.textMuted} />
         <Text style={styles.infoCellLabel}>{label}</Text>
       </View>
       <Text style={styles.infoCellValue}>{value}</Text>
@@ -767,19 +782,19 @@ function InfoCell({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   centerFill: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.screenBackgroundAlt,
   },
   scrollContent: { paddingBottom: 140 },
 
   hero: { height: 210, overflow: 'hidden', position: 'relative' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim, zIndex: 1 },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.groupImageScrim, zIndex: 1 },
   heroContent: {
     position: 'absolute',
     left: spacing.md,
@@ -797,7 +812,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.stickyIconButtonBackground,
+    backgroundColor: colors.matchIconGlassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -808,34 +823,34 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.xs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     gap: spacing.xxs,
   },
   tabButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 8 },
-  tabButtonActive: { backgroundColor: colors.primaryDark },
-  tabButtonText: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabButtonText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   tabButtonTextActive: { color: colors.white },
 
   body: { padding: spacing.md, gap: spacing.lg },
   section: { gap: spacing.sm },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  placeholderText: { fontSize: 13, color: colors.outline, paddingVertical: spacing.sm },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  placeholderText: { fontSize: 13, color: colors.textMuted, paddingVertical: spacing.sm },
 
-  notesCard: { backgroundColor: colors.cardBackground, borderRadius: 16, padding: spacing.md },
-  notesText: { fontSize: 13, color: colors.bodyText, lineHeight: 20 },
+  notesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: spacing.md },
+  notesText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
 
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   infoCell: {
     flexGrow: 1,
     flexBasis: '46%',
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.sm,
     gap: spacing.xxs,
   },
   infoCellHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
-  infoCellLabel: { fontSize: 11, fontWeight: '700', color: colors.outline },
-  infoCellValue: { fontSize: 13, fontWeight: '600', color: colors.headingText },
+  infoCellLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  infoCellValue: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
 
   winnerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   winnerPlace: {
@@ -847,27 +862,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: colors.white,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.warningText,
   },
-  winnerTeam: { fontSize: 14, fontWeight: '600', color: colors.headingText },
+  winnerTeam: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
 
-  venueLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.outline },
-  venueCard: { backgroundColor: colors.cardBackground, borderRadius: 16, padding: spacing.md, gap: spacing.sm },
-  venueName: { fontSize: 17, fontWeight: '800', color: colors.headingText },
-  venueMap: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.iconBackground },
+  venueLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.textMuted },
+  venueCard: { backgroundColor: colors.surface, borderRadius: 16, padding: spacing.md, gap: spacing.sm },
+  venueName: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  venueMap: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.tintedSurface },
   venueAddressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  venueAddressText: { fontSize: 13, color: colors.bodyText, flexShrink: 1 },
+  venueAddressText: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
 
   roundScroller: { gap: spacing.xs, paddingBottom: spacing.sm },
   roundChip: {
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 9999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
   roundChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  roundChipText: { fontSize: 12, fontWeight: '600', color: colors.bodyText },
+  roundChipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   roundChipTextActive: { color: colors.white },
 
   tabSpinner: { marginTop: spacing.lg },
@@ -877,7 +892,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
@@ -885,39 +900,39 @@ const styles = StyleSheet.create({
   addMatchText: { fontSize: 13, fontWeight: '700', color: colors.white },
 
   teamsList: { gap: spacing.md },
-  teamCard: { backgroundColor: colors.cardBackground, borderRadius: 14, padding: spacing.md, gap: spacing.xs },
+  teamCard: { backgroundColor: colors.surface, borderRadius: 14, padding: spacing.md, gap: spacing.xs },
   teamCardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xxs },
-  teamLogo: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.iconBackground },
+  teamLogo: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.tintedSurface },
   teamCardHeadText: { flex: 1, gap: 2 },
-  teamCardName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.headingText },
-  teamCardMeta: { fontSize: 12, color: colors.outline },
+  teamCardName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  teamCardMeta: { fontSize: 12, color: colors.textMuted },
   playerHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingBottom: spacing.xxs,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.cardBorder,
+    borderBottomColor: colors.divider,
     marginBottom: spacing.xxs,
   },
-  playerHeadRank: { width: 22, fontSize: 11, fontWeight: '800', color: colors.outline },
-  playerHeadName: { flex: 1, fontSize: 11, fontWeight: '800', color: colors.outline },
-  playerHeadJersey: { width: 36, textAlign: 'right', fontSize: 11, fontWeight: '800', color: colors.outline },
+  playerHeadRank: { width: 22, fontSize: 11, fontWeight: '800', color: colors.textMuted },
+  playerHeadName: { flex: 1, fontSize: 11, fontWeight: '800', color: colors.textMuted },
+  playerHeadJersey: { width: 36, textAlign: 'right', fontSize: 11, fontWeight: '800', color: colors.textMuted },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxs },
-  playerRank: { width: 22, fontSize: 12, fontWeight: '700', color: colors.outline },
-  playerName: { flex: 1, fontSize: 13, color: colors.headingText },
-  playerJersey: { width: 36, textAlign: 'right', fontSize: 12, fontWeight: '600', color: colors.bodyText },
-  playerJerseyMuted: { width: 36, textAlign: 'right', fontSize: 12, color: colors.outline },
+  playerRank: { width: 22, fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  playerName: { flex: 1, fontSize: 13, color: colors.textPrimary },
+  playerJersey: { width: 36, textAlign: 'right', fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  playerJerseyMuted: { width: 36, textAlign: 'right', fontSize: 12, color: colors.textMuted },
 
   tabIntro: {
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.tintedSurface,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.xxs,
     marginBottom: spacing.sm,
   },
-  tabIntroTitle: { fontSize: 15, fontWeight: '800', color: colors.headingText },
-  tabIntroBody: { fontSize: 13, lineHeight: 18, color: colors.bodyText },
+  tabIntroTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  tabIntroBody: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
   emptyHint: {
     alignItems: 'center',
     gap: spacing.xs,
@@ -928,19 +943,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xxs,
   },
-  emptyHintTitle: { fontSize: 16, fontWeight: '800', color: colors.headingText, textAlign: 'center' },
-  emptyHintBody: { fontSize: 13, lineHeight: 18, color: colors.outline, textAlign: 'center' },
+  emptyHintTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
+  emptyHintBody: { fontSize: 13, lineHeight: 18, color: colors.textMuted, textAlign: 'center' },
 
-  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white },
+  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface },
   actionBar: {
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.divider,
   },
   primaryButton: {
     flexDirection: 'row',
@@ -952,13 +967,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   primaryButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
-  completeButton: { backgroundColor: colors.success },
-  organizerNote: { fontSize: 13, color: colors.outline, textAlign: 'center', paddingVertical: spacing.sm },
+  completeButton: { backgroundColor: colors.successText },
+  organizerNote: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.sm },
   orgRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
   },
@@ -966,14 +981,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orgRowLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.headingText },
-  orgRowBadge: { backgroundColor: colors.orange, borderRadius: 9999, paddingHorizontal: spacing.xs, paddingVertical: 1 },
+  orgRowLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  orgRowBadge: { backgroundColor: colors.warningText, borderRadius: 9999, paddingHorizontal: spacing.xs, paddingVertical: 1 },
   orgRowBadgeText: { fontSize: 11, fontWeight: '700', color: colors.white },
-  buttonDisabled: { backgroundColor: colors.outline },
+  buttonDisabled: { backgroundColor: colors.textMuted },
   outlineDanger: {
     borderWidth: 1,
     borderColor: colors.error,
@@ -987,9 +1002,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.skillTierGreenBg,
+    backgroundColor: colors.successSurface,
     borderRadius: 16,
     paddingVertical: spacing.md,
   },
-  registeredBannerText: { fontSize: 14, fontWeight: '700', color: colors.skillTierGreenText },
+  registeredBannerText: { fontSize: 14, fontWeight: '700', color: colors.successText },
 });

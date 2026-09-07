@@ -2,9 +2,10 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import SlidingBottomNav, { type SlidingTab, type SlidingTabKey } from '@/components/navigation/SlidingBottomNav';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 
 // 5-tab bottom nav (Home/Booking/Matches/Schedule/Settings) shown on Join
 // Match - Map. Booking/Schedule stay "Coming soon" here until those tickets land.
@@ -15,16 +16,17 @@ interface BottomNavBarProps {
   active: BottomNavTab;
 }
 
-const TABS: SlidingTab[] = [
-  { key: 'home', label: 'Home', icon: 'home-outline' },
-  { key: 'booking', label: 'Booking', icon: 'calendar-outline' },
-  { key: 'matches', label: 'Matches', icon: 'trophy-outline' },
-  { key: 'schedule', label: 'Schedule', icon: 'time-outline' },
-  { key: 'settings', label: 'Settings', icon: 'settings-outline' },
-];
-
 export function BottomNavBar({ active }: BottomNavBarProps) {
   const router = useRouter();
+  const { colors: themeColors } = useTheme();
+  const { t } = useLanguage();
+  const tabs: SlidingTab[] = [
+    { key: 'home', label: t('nav.home'), icon: 'home-outline' },
+    { key: 'booking', label: t('nav.booking'), icon: 'calendar-outline' },
+    { key: 'matches', label: t('nav.matches'), icon: 'trophy-outline' },
+    { key: 'schedule', label: t('nav.schedule'), icon: 'time-outline' },
+    { key: 'settings', label: t('nav.settings'), icon: 'settings-outline' },
+  ];
 
   const handlePress = (tab: BottomNavTab) => {
     if (tab === active) return;
@@ -35,13 +37,13 @@ export function BottomNavBar({ active }: BottomNavBarProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.glassBarBg, borderTopColor: themeColors.chromeBorder }]}>
       <SlidingBottomNav
-        tabs={TABS}
+        tabs={tabs}
         active={active}
         onPress={handlePress}
-        activeColor={colors.primaryDark}
-        inactiveColor={colors.outline}
+        activeColor={themeColors.activeTabBg}
+        inactiveColor={themeColors.inactiveTabText}
       />
     </View>
   );
@@ -52,8 +54,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.xs,
-    backgroundColor: colors.glassSurfaceBackground,
     borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
   },
 });

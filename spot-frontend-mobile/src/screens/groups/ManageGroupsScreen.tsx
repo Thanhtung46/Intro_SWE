@@ -8,7 +8,9 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import GroupJoinRequestListItem from '@/components/groups/GroupJoinRequestListItem';
 import ManageGroupCard from '@/components/groups/ManageGroupCard';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import {
   acceptGroupJoinRequest,
@@ -28,11 +30,6 @@ type Props = {
   onOpenGroupRequests: (groupId: number) => void;
 };
 
-const TABS: { key: GroupMineTab; label: string }[] = [
-  { key: 'managed', label: 'Managed' },
-  { key: 'joined', label: 'Joined' },
-];
-
 /**
  * Manage Groups (Pencil "Matches - Manage Group" + "Managed by Me" +
  * "Joined Groups" frames, Groups implementation plan). 2 tabs, each **2
@@ -43,6 +40,13 @@ const TABS: { key: GroupMineTab; label: string }[] = [
  * flat list — this screen's 2 tabs each show two.
  */
 export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupRequests }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
+  const tabs: { key: GroupMineTab; label: string }[] = [
+    { key: 'managed', label: t('groups.tabs.managed') },
+    { key: 'joined', label: t('groups.tabs.joined') },
+  ];
   const [tab, setTab] = useState<GroupMineTab>('managed');
   const [managedGroups, setManagedGroups] = useState<Group[]>([]);
   const [pendingRequests, setPendingRequests] = useState<GroupJoinRequest[]>([]);
@@ -132,15 +136,15 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="manage-groups-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="manage-groups-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('groups.actions.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Manage Groups</Text>
+        <Text style={styles.title}>{t('groups.manage.title')}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
       <View style={styles.tabs}>
-        {TABS.map((item) => {
+        {tabs.map((item) => {
           const isActive = item.key === tab;
           return (
             <TouchableOpacity
@@ -166,9 +170,9 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
           <ErrorBanner message={errorMessage} onRetry={() => fetchData()} />
         ) : tab === 'managed' ? (
           <>
-            <SectionHeader title="My Groups" count={managedGroups.length} />
+            <SectionHeader title={t('groups.manage.myGroups')} count={managedGroups.length} />
             {managedGroups.length === 0 ? (
-              <EmptyState text="You don't manage any groups yet." />
+              <EmptyState text={t('groups.manage.noManaged')} />
             ) : (
               managedGroups.map((group) => (
                 <ManageGroupCard
@@ -181,9 +185,9 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
               ))
             )}
 
-            <SectionHeader title="Pending Requests" count={pendingRequests.length} />
+            <SectionHeader title={t('groups.manage.pendingRequests')} count={pendingRequests.length} />
             {pendingRequests.length === 0 ? (
-              <EmptyState text="No pending join requests." />
+              <EmptyState text={t('groups.manage.noPending')} />
             ) : (
               pendingRequests.map((request) => (
                 <View key={request.requestId} style={styles.requestCard}>
@@ -200,7 +204,7 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
                         {request.fullName}
                       </Text>
                       <Text style={styles.requestGroupName} numberOfLines={1} ellipsizeMode="tail">
-                        Requested to join {groupNameById.get(request.groupId) ?? 'this group'}
+                        {t('groups.manage.requestedToJoin')} {groupNameById.get(request.groupId) ?? t('groups.manage.thisGroup')}
                       </Text>
                     </View>
                   </View>
@@ -211,7 +215,7 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
                       disabled={actingRequestId === request.requestId}
                       onPress={() => handleReject(request.requestId)}
                     >
-                      <Text style={styles.declineButtonText}>Reject</Text>
+                      <Text style={styles.declineButtonText}>{t('groups.actions.reject')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       testID={`approve-group-request-${request.requestId}`}
@@ -219,7 +223,7 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
                       disabled={actingRequestId === request.requestId}
                       onPress={() => handleAccept(request.requestId)}
                     >
-                      <Text style={styles.approveButtonText}>Approve</Text>
+                      <Text style={styles.approveButtonText}>{t('groups.actions.accept')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -228,9 +232,9 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
           </>
         ) : (
           <>
-            <SectionHeader title="Joined Groups" count={joinedGroups.length} />
+            <SectionHeader title={t('groups.manage.joinedGroups')} count={joinedGroups.length} />
             {joinedGroups.length === 0 ? (
-              <EmptyState text="You haven't joined any groups yet." />
+              <EmptyState text={t('groups.manage.noJoined')} />
             ) : (
               joinedGroups.map((group) => (
                 <ManageGroupCard
@@ -243,9 +247,9 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
               ))
             )}
 
-            <SectionHeader title="My Join Requests" count={myRequests.length} />
+            <SectionHeader title={t('groups.manage.myJoinRequests')} count={myRequests.length} />
             {myRequests.length === 0 ? (
-              <EmptyState text="No pending or rejected join requests." />
+              <EmptyState text={t('groups.manage.noJoinRequests')} />
             ) : (
               myRequests.map((request) => (
                 <GroupJoinRequestListItem
@@ -262,10 +266,10 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
 
       <ConfirmDialog
         visible={cancelTarget != null}
-        title="Cancel request?"
-        message="You can send a new request again later."
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Request"
+        title={t('groups.confirm.cancelTitle')}
+        message={t('groups.confirm.cancelMessage')}
+        confirmLabel={t('groups.actions.cancelRequest')}
+        cancelLabel={t('groups.actions.keepRequest')}
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelTarget(null)}
       />
@@ -274,6 +278,8 @@ export default function ManageGroupsScreen({ onBack, onOpenGroup, onOpenGroupReq
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -283,27 +289,29 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
 }
 
 function EmptyState({ text }: { text: string }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="people-outline" size={24} color={colors.outline} />
+      <Ionicons name="people-outline" size={24} color={colors.textMuted} />
       <Text style={styles.emptyStateText}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   tabs: {
     flexDirection: 'row',
@@ -311,29 +319,29 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.xxs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     gap: spacing.xxs,
   },
   tabButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 8 },
-  tabButtonActive: { backgroundColor: colors.primaryDark },
-  tabText: { fontSize: 13, fontWeight: '700', color: colors.outline },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   tabTextActive: { color: colors.white },
 
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.sm },
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.lg },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginTop: spacing.md },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.headingText },
-  sectionCount: { fontSize: 15, fontWeight: '700', color: colors.outline },
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  sectionCount: { fontSize: 15, fontWeight: '700', color: colors.textMuted },
 
   requestCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -346,16 +354,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   requestInfo: { flex: 1, gap: spacing.xxs },
-  requestName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  requestGroupName: { fontSize: 12, color: colors.outline },
+  requestName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  requestGroupName: { fontSize: 12, color: colors.textMuted },
   requestActions: { flexDirection: 'row', gap: spacing.sm },
   declineButton: {
     flex: 1,
@@ -365,6 +373,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   declineButtonText: { fontSize: 13, fontWeight: '700', color: colors.error, textAlign: 'center' },
-  approveButton: { flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: spacing.sm },
+  approveButton: { flex: 1, backgroundColor: colors.successText, borderRadius: 10, paddingVertical: spacing.sm },
   approveButtonText: { fontSize: 13, fontWeight: '700', color: colors.white, textAlign: 'center' },
 });

@@ -5,8 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import HostMatchScreen from '@/screens/matches/HostMatchScreen';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getErrorMessage, getMatchDetail } from '@/services/matchService';
 import type { Sport } from '@/types/match';
 
@@ -14,6 +16,9 @@ import type { Sport } from '@/types/match';
 // (PATCH /matches/:id). Sibling of host-form.tsx (create).
 export default function EditMatchRoute() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
   const matchId = Number(id);
   const [sport, setSport] = useState<Sport | null>(null);
@@ -21,7 +26,7 @@ export default function EditMatchRoute() {
 
   useEffect(() => {
     if (!Number.isFinite(matchId)) {
-      setError('Invalid match.');
+      setError(t('matches.detail.notFound'));
       return;
     }
     getMatchDetail(matchId)
@@ -56,12 +61,12 @@ export default function EditMatchRoute() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.screenBackgroundAlt,
     padding: spacing.md,
   },
 });

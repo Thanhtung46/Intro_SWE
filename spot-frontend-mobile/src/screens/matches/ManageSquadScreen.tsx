@@ -5,9 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
-import { colors } from '@/constants/colors';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import { spacing } from '@/constants/spacing';
-import { skillLabel, skillTierColor } from '@/constants/matchSkills';
+import { skillLabel } from '@/constants/matchSkills';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import type { TranslationKey } from '@/i18n/translations';
 import {
   acceptJoinRequest,
   getErrorMessage,
@@ -34,9 +38,10 @@ function genderShort(gender: string | null | undefined): 'M' | 'F' | null {
   return null;
 }
 
-function GuestMeta({ sport, guest }: { sport: Sport; guest: Guest }) {
-  const tier = skillTierColor(sport, guest.skill);
-  const label = skillLabel(sport, guest.skill);
+function GuestMeta({ sport, guest, colors, t }: { sport: Sport; guest: Guest; colors: ThemeColors; t: (key: TranslationKey) => string }) {
+  const styles = createStyles(colors);
+  const tier = groupSkillTier(colors, sport, guest.skill);
+  const label = groupSkillLabel(t, guest.skill) ?? skillLabel(sport, guest.skill);
   const gender = genderShort(guest.gender);
   return (
     <View style={styles.guestMeta}>
@@ -54,7 +59,7 @@ function GuestMeta({ sport, guest }: { sport: Sport; guest: Guest }) {
       </View>
       {guest.phoneNumber ? (
         <View style={styles.phoneRow}>
-          <Ionicons name="call-outline" size={12} color={colors.outline} />
+          <Ionicons name="call-outline" size={12} color={colors.outlineMuted} />
           <Text style={styles.phoneText} numberOfLines={1}>
             {guest.phoneNumber}
           </Text>
@@ -71,6 +76,9 @@ function GuestMeta({ sport, guest }: { sport: Sport; guest: Guest }) {
  * grid, no approve/reject flow.
  */
 export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [match, setMatch] = useState<Match | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
@@ -143,13 +151,13 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity testID="manage-squad-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.title}>Manage Squad</Text>
+          <Text style={styles.title}>{t('matches.squad.title')}</Text>
           {match && (
             <Text style={styles.subtitle} numberOfLines={1}>
-              {match.title} • {match.spotsLeft} spots left
+              {match.title} • {match.spotsLeft} {t('matches.browse.spotsLeft')}
             </Text>
           )}
         </View>
@@ -163,17 +171,17 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Pending Approval</Text>
+            <Text style={styles.sectionTitle}>{t('matches.squad.pendingApproval')}</Text>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>{pendingRequests.length}</Text>
             </View>
           </View>
           {pendingRequests.length === 0 ? (
-            <Text style={styles.emptyText}>No pending requests.</Text>
+            <Text style={styles.emptyText}>{t('matches.squad.noPending')}</Text>
           ) : (
             pendingRequests.map((request) => {
-              const tier = skillTierColor(sport, request.skill);
-              const label = skillLabel(sport, request.skill);
+              const tier = groupSkillTier(colors, sport, request.skill);
+              const label = groupSkillLabel(t, request.skill) ?? skillLabel(sport, request.skill);
               return (
                 <View key={request.requestId} style={styles.requestBlock}>
                   <View style={styles.requestRow}>
@@ -205,7 +213,7 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                           ) : null}
                           {request.phoneNumber ? (
                             <View style={styles.phoneRow}>
-                              <Ionicons name="call-outline" size={12} color={colors.outline} />
+                              <Ionicons name="call-outline" size={12} color={colors.outlineMuted} />
                               <Text style={styles.phoneText} numberOfLines={1}>
                                 {request.phoneNumber}
                               </Text>
@@ -221,7 +229,7 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                         disabled={actingRequestId === request.requestId}
                         onPress={() => handleReject(request.requestId)}
                       >
-                        <Text style={styles.declineButtonText}>Decline</Text>
+                        <Text style={styles.declineButtonText}>{t('matches.squad.decline')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         testID={`approve-request-${request.requestId}`}
@@ -229,7 +237,7 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                         disabled={actingRequestId === request.requestId}
                         onPress={() => handleAccept(request.requestId)}
                       >
-                        <Text style={styles.approveButtonText}>Approve</Text>
+                        <Text style={styles.approveButtonText}>{t('matches.squad.approve')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -244,10 +252,10 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                             {guest.name}
                           </Text>
                           <View style={styles.guestTag}>
-                            <Text style={styles.guestTagText}>GUEST</Text>
+                            <Text style={styles.guestTagText}>{t('matches.detail.guest').toUpperCase()}</Text>
                           </View>
                         </View>
-                        <GuestMeta sport={sport} guest={guest} />
+                        <GuestMeta sport={sport} guest={guest} colors={colors} t={t} />
                       </View>
                     </View>
                   ))}
@@ -257,7 +265,7 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
           )}
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Squad List</Text>
+            <Text style={styles.sectionTitle}>{t('matches.squad.squadList')}</Text>
             {match && (
               <Text style={styles.squadCount}>
                 {match.filledCount}/{match.maxPlayers}
@@ -293,25 +301,25 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                               style={[
                                 styles.skillPill,
                                 {
-                                  backgroundColor: skillTierColor(sport, participant.skill).bg,
-                                  borderColor: skillTierColor(sport, participant.skill).border,
+                                  backgroundColor: groupSkillTier(colors, sport, participant.skill).bg,
+                                  borderColor: groupSkillTier(colors, sport, participant.skill).border,
                                 },
                               ]}
                             >
                               <Text
                                 style={[
                                   styles.skillPillText,
-                                  { color: skillTierColor(sport, participant.skill).text },
+                                  { color: groupSkillTier(colors, sport, participant.skill).text },
                                 ]}
                               >
-                                {skillLabel(sport, participant.skill)}
+                                {groupSkillLabel(t, participant.skill) ?? skillLabel(sport, participant.skill)}
                               </Text>
                             </View>
                           </View>
                         ) : null}
                         {participant.phoneNumber ? (
                           <View style={styles.phoneRow}>
-                            <Ionicons name="call-outline" size={12} color={colors.outline} />
+                            <Ionicons name="call-outline" size={12} color={colors.outlineMuted} />
                             <Text style={styles.phoneText} numberOfLines={1}>
                               {participant.phoneNumber}
                             </Text>
@@ -323,19 +331,19 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                 </TouchableOpacity>
                 {participant.role === 'HOST' ? (
                   <View style={styles.hostTag}>
-                    <Text style={styles.hostTagText}>HOST</Text>
+                    <Text style={styles.hostTagText}>{t('matches.squad.host')}</Text>
                   </View>
                 ) : (
                   <>
                     {participant.paymentStatus === 'SUCCESS' && (
-                      <Text style={styles.paidText}>Paid: {formatVnd(participant.shareAmount)}</Text>
+                      <Text style={styles.paidText}>{t('matches.squad.paidPrefix')} {formatVnd(participant.shareAmount)}</Text>
                     )}
                     <TouchableOpacity
                       testID={`kick-participant-${participant.userId}`}
                       style={styles.kickButton}
                       onPress={() => setKickTarget(participant)}
                     >
-                      <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+                      <Ionicons name="close-circle-outline" size={20} color={colors.roleErrorText} />
                     </TouchableOpacity>
                   </>
                 )}
@@ -351,10 +359,10 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
                         {guest.name}
                       </Text>
                       <View style={styles.guestTag}>
-                        <Text style={styles.guestTagText}>GUEST</Text>
+                        <Text style={styles.guestTagText}>{t('matches.detail.guest').toUpperCase()}</Text>
                       </View>
                     </View>
-                    <GuestMeta sport={sport} guest={guest} />
+                    <GuestMeta sport={sport} guest={guest} colors={colors} t={t} />
                   </View>
                 </View>
               ))}
@@ -365,13 +373,15 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
 
       <ConfirmDialog
         visible={kickTarget != null}
-        title="Kick this player?"
+        title={t('matches.squad.kickTitle')}
         message={
           kickTarget?.guests.length
-            ? `${kickTarget.fullName ?? 'This player'} and ${kickTarget.guests.length} guest(s) will be removed and won't be able to rejoin this match.`
-            : `${kickTarget?.fullName ?? 'This player'} will be removed from the squad and won't be able to rejoin this match.`
+            ? t('matches.squad.kickMessageWithGuests')
+                .replace('{name}', kickTarget.fullName ?? t('matches.squad.playerFallback'))
+                .replace('{count}', String(kickTarget.guests.length))
+            : t('matches.squad.kickMessage').replace('{name}', kickTarget?.fullName ?? t('matches.squad.playerFallback'))
         }
-        confirmLabel={kicking ? 'Kicking…' : 'Kick'}
+        confirmLabel={kicking ? t('matches.squad.kicking') : t('matches.squad.kick')}
         destructive
         onConfirm={kicking ? () => {} : handleKick}
         onCancel={() => setKickTarget(null)}
@@ -380,52 +390,52 @@ export default function ManageSquadScreen({ matchId, onBack, onOpenProfile }: Pr
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
   headerTextWrap: { flex: 1 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  subtitle: { fontSize: 12, color: colors.outline },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.outlineMuted },
 
   spinner: { marginTop: spacing.xl },
   content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.headingText },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   countBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
   },
   countBadgeText: { fontSize: 11, fontWeight: '700', color: colors.white },
-  squadCount: { fontSize: 12, fontWeight: '700', color: colors.outline },
-  emptyText: { fontSize: 13, color: colors.outline },
+  squadCount: { fontSize: 12, fontWeight: '700', color: colors.outlineMuted },
+  emptyText: { fontSize: 13, color: colors.outlineMuted },
 
   requestBlock: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     overflow: 'hidden',
   },
   squadBlock: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     overflow: 'hidden',
   },
   requestRow: {
@@ -439,15 +449,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   requestInfo: { flex: 1, gap: spacing.xxs, minWidth: 0 },
-  requestName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  requestName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   guestMeta: { gap: 4 },
   guestMetaChips: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   metaChip: {
@@ -455,11 +465,11 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     paddingHorizontal: 6,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metaChipText: { fontSize: 10, fontWeight: '800', color: colors.primaryDark },
+  metaChipText: { fontSize: 10, fontWeight: '800', color: colors.primary },
   skillPill: {
     borderWidth: 1,
     borderRadius: 9999,
@@ -468,18 +478,18 @@ const styles = StyleSheet.create({
   },
   skillPillText: { fontSize: 10, fontWeight: '700' },
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  phoneText: { flexShrink: 1, fontSize: 12, color: colors.subtitle, letterSpacing: 0.2 },
+  phoneText: { flexShrink: 1, fontSize: 12, color: colors.textSecondary, letterSpacing: 0.2 },
   requestActions: { gap: spacing.xxs },
   declineButton: {
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: colors.roleErrorText,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  declineButtonText: { fontSize: 12, fontWeight: '700', color: colors.error, textAlign: 'center' },
+  declineButtonText: { fontSize: 12, fontWeight: '700', color: colors.roleErrorText, textAlign: 'center' },
   approveButton: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -492,15 +502,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm,
   },
-  squadName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  squadName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   hostTag: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
   hostTagText: { fontSize: 10, fontWeight: '700', color: colors.white },
-  paidText: { fontSize: 12, fontWeight: '700', color: colors.priceText },
+  paidText: { fontSize: 12, fontWeight: '700', color: colors.matchPriceValueText },
   kickButton: { padding: spacing.xxs },
 
   guestRow: {
@@ -511,26 +521,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingRight: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: colors.chromeBorder,
   },
   guestAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: colors.screenBackgroundAlt,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  guestAvatarText: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  guestAvatarText: { fontSize: 12, fontWeight: '700', color: colors.outlineMuted },
   guestNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
-  guestName: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.headingText },
+  guestName: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   guestTag: {
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 8,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
   },
-  guestTagText: { fontSize: 9, fontWeight: '800', color: colors.primaryDark },
+  guestTagText: { fontSize: 9, fontWeight: '800', color: colors.primary },
 });

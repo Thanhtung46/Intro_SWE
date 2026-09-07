@@ -3,8 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { toHm, toIsoDate } from '@/utils/dateTime';
 
 type Props = {
@@ -24,7 +26,8 @@ function toLocalDatetime(d: Date): string {
 
 // react-native-web renders unrecognised lowercase JSX tags as raw DOM nodes.
 // Same shape as HostMatchScreen's WebDateTimeInput (fix `175f2e5`).
-function WebDateTimeInput(props: { value: string; disabled?: boolean; onChange: (v: string) => void }) {
+function WebDateTimeInput(props: { value: string; disabled?: boolean; onChange: (v: string) => void; colors: ThemeColors }) {
+  const { colors } = props;
   return (
     <input
       type="datetime-local"
@@ -34,12 +37,12 @@ function WebDateTimeInput(props: { value: string; disabled?: boolean; onChange: 
       style={{
         borderWidth: 1,
         borderStyle: 'solid',
-        borderColor: colors.dotInactive,
+        borderColor: colors.inputBorder,
         borderRadius: 10,
         padding: spacing.sm,
         fontSize: 14,
-        color: colors.headingText,
-        backgroundColor: props.disabled ? colors.formScreenBackground : colors.white,
+        color: colors.textPrimary,
+        backgroundColor: props.disabled ? colors.tintedSurface : colors.inputBg,
         width: '100%',
         boxSizing: 'border-box',
       }}
@@ -56,6 +59,9 @@ function WebDateTimeInput(props: { value: string; disabled?: boolean; onChange: 
  * WebDateTimeInput (fix `175f2e5`).
  */
 export default function DateTimeField({ label, value, onChange, error, disabled }: Props) {
+  const { colors } = useTheme();
+  const { t, language } = useLanguage();
+  const styles = createStyles(colors);
   const [stage, setStage] = useState<'none' | 'date' | 'time'>('none');
   const [temp, setTemp] = useState<Date>(value ?? new Date());
 
@@ -64,6 +70,7 @@ export default function DateTimeField({ label, value, onChange, error, disabled 
       <View style={styles.field} testID={`datetime-field-web-${label}`}>
         <Text style={styles.label}>{label}</Text>
         <WebDateTimeInput
+          colors={colors}
           value={value ? toLocalDatetime(value) : ''}
           disabled={disabled}
           onChange={(v) => {
@@ -111,16 +118,16 @@ export default function DateTimeField({ label, value, onChange, error, disabled 
       >
         <Text style={value ? styles.value : styles.placeholder}>
           {value
-            ? value.toLocaleString('en-US', {
+            ? value.toLocaleString(language === 'vi' ? 'vi-VN' : 'en-US', {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
               })
-            : 'Pick date & time'}
+            : t('tournaments.detail.dateTime')}
         </Text>
-        <Ionicons name="calendar-outline" size={18} color={colors.primaryDark} />
+        <Ionicons name="calendar-outline" size={18} color={colors.primary} />
       </TouchableOpacity>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {stage === 'date' && (
@@ -133,22 +140,22 @@ export default function DateTimeField({ label, value, onChange, error, disabled 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   field: { gap: spacing.xs },
-  label: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   picker: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.dotInactive,
+    borderColor: colors.inputBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.inputBg,
   },
-  pickerDisabled: { backgroundColor: colors.formScreenBackground },
-  value: { fontSize: 14, color: colors.headingText },
-  placeholder: { fontSize: 14, color: colors.outline },
+  pickerDisabled: { backgroundColor: colors.tintedSurface },
+  value: { fontSize: 14, color: colors.textPrimary },
+  placeholder: { fontSize: 14, color: colors.textMuted },
   error: { fontSize: 12, color: colors.error },
 });

@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { TournamentMatch } from '@/types/tournament';
 
 type Props = {
@@ -22,9 +24,9 @@ function scoreText(match: TournamentMatch): string {
   return `${teamASets} – ${teamBSets}`;
 }
 
-function whenText(scheduledAt: string): string {
+function whenText(scheduledAt: string, locale: string): string {
   const d = new Date(scheduledAt);
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -33,12 +35,15 @@ function whenText(scheduledAt: string): string {
 }
 
 export default function TournamentMatchListItem({ match, onEdit, onEnterResult }: Props) {
+  const { colors } = useTheme();
+  const { t, language } = useLanguage();
+  const styles = createStyles(colors);
   const done = match.resultStatus === 'COMPLETED';
 
   return (
     <View style={styles.card}>
       <Text style={[styles.when, done && styles.whenDone]}>
-        {whenText(match.scheduledAt)}
+        {whenText(match.scheduledAt, language === 'vi' ? 'vi-VN' : 'en-US')}
         {done ? ' · Full time' : ' · Scheduled'}
       </Text>
       <View style={styles.teams}>
@@ -55,14 +60,14 @@ export default function TournamentMatchListItem({ match, onEdit, onEnterResult }
         <View style={styles.actions}>
           {onEdit && (
             <TouchableOpacity style={styles.actionOutline} onPress={onEdit}>
-              <Ionicons name="pencil" size={13} color={colors.bodyText} />
-              <Text style={styles.actionOutlineText}>Edit</Text>
+              <Ionicons name="pencil" size={13} color={colors.textSecondary} />
+              <Text style={styles.actionOutlineText}>{t('tournaments.common.edit')}</Text>
             </TouchableOpacity>
           )}
           {onEnterResult && (
             <TouchableOpacity style={styles.actionFilled} onPress={onEnterResult}>
               <Ionicons name="clipboard-outline" size={13} color={colors.white} />
-              <Text style={styles.actionFilledText}>{done ? 'Edit Result' : 'Enter Result'}</Text>
+              <Text style={styles.actionFilledText}>{t('tournaments.matches.resultTitle')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -71,20 +76,20 @@ export default function TournamentMatchListItem({ match, onEdit, onEnterResult }
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  when: { fontSize: 11, fontWeight: '700', color: colors.outline },
-  whenDone: { color: colors.skillTierGreenText },
+  when: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  whenDone: { color: colors.successText },
   teams: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  team: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.headingText },
+  team: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   teamRight: { textAlign: 'right' },
-  score: { fontSize: 16, fontWeight: '800', color: colors.headingText },
-  scorePending: { color: colors.outline },
+  score: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  scorePending: { color: colors.textMuted },
   actions: { flexDirection: 'row', gap: spacing.sm },
   actionOutline: {
     flex: 1,
@@ -93,11 +98,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 9,
     paddingVertical: spacing.xs,
   },
-  actionOutlineText: { fontSize: 12, fontWeight: '600', color: colors.bodyText },
+  actionOutlineText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   actionFilled: {
     flex: 1,
     flexDirection: 'row',
