@@ -18,7 +18,10 @@ const BOOKING_SELECT = `
     f.sport_type,
     NULL::text AS match_role,
     NULL::text AS host_name,
-    b.total_amount
+    b.total_amount,
+    EXISTS (
+      SELECT 1 FROM schema_review.reviews r WHERE r.booking_id = b.booking_id
+    ) AS has_review
   FROM schema_booking.bookings b
   INNER JOIN schema_venue.fields f ON f.field_id = b.field_id
   INNER JOIN schema_venue.venues v ON v.venue_id = f.venue_id
@@ -45,7 +48,8 @@ const MATCH_SELECT = `
       ELSE 'PARTICIPANT'
     END AS match_role,
     host_profile.full_name AS host_name,
-    NULL::numeric AS total_amount
+    NULL::numeric AS total_amount,
+    FALSE AS has_review
   FROM schema_matchmaking.matches m
   LEFT JOIN schema_auth.user_profiles host_profile ON host_profile.user_id = m.host_user_id
   WHERE m.status <> 'CANCELLED'

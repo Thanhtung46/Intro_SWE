@@ -58,5 +58,10 @@ export function toPublicScheduleItem(row, now = Date.now()) {
     item.role = row.match_role ?? null;
   }
 
+  // A booking review is a durable server fact (schema_review.reviews has a
+  // UNIQUE booking_id) — the FE must not rely on its own in-memory state to
+  // remember this across remounts/refetches, so it's always returned here.
+  item.alreadyReviewed = row.item_type === 'BOOKING' ? Boolean(row.has_review) : false;
+
   return item;
 }

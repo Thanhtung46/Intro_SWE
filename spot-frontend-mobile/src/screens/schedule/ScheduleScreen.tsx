@@ -30,6 +30,8 @@ export type ScheduleEvent = {
   role: 'HOST' | 'PARTICIPANT' | null;
   /** Server-computed time bucket (schedule.entity.js::computeDisplayStatus) — rendered as-is, never re-derived here. */
   status: 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
+  /** Server-sourced (schema_review.reviews) — survives refetch/remount, unlike relying only on the local "just submitted" Set. */
+  alreadyReviewed: boolean;
   bookingId: number | null;
   itemType: 'BOOKING' | 'MATCH';
   matchId: number | null;
@@ -82,6 +84,7 @@ function mapItemsToEvents(items: ScheduleItem[]): ScheduleEvent[] {
     host: item.hostName ?? undefined,
     role: item.role ?? null,
     status: DISPLAY_STATUS_MAP[item.displayStatus] ?? 'upcoming',
+    alreadyReviewed: item.alreadyReviewed ?? false,
     bookingId: item.bookingId,
     itemType: item.type,
     matchId: item.matchId,
@@ -212,7 +215,7 @@ export default function ScheduleScreen({
         bookingDate: toLocalDateString(event.date),
         status: event.rawStatus,
         totalAmountVnd: event.totalAmountVnd != null ? String(event.totalAmountVnd) : '',
-        alreadyReviewed: reviewedBookingIds.has(bookingId) ? '1' : '0',
+        alreadyReviewed: event.alreadyReviewed || reviewedBookingIds.has(bookingId) ? '1' : '0',
       },
     });
   };
@@ -476,7 +479,7 @@ export default function ScheduleScreen({
                       </Text>
                     </TouchableOpacity>
                     {event.itemType === 'BOOKING' && event.bookingId != null ? (
-                      reviewedBookingIds.has(event.bookingId) ? (
+                      event.alreadyReviewed || reviewedBookingIds.has(event.bookingId) ? (
                         <Text style={styles.reviewedText}>{t('schedule.reviewed')}</Text>
                       ) : (
                         <TouchableOpacity

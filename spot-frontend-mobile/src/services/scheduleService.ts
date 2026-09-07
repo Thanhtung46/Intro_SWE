@@ -18,6 +18,8 @@ export interface ScheduleItem {
   role?: 'HOST' | 'PARTICIPANT' | null;
   /** Only non-null for type: 'MATCH'. */
   hostName?: string | null;
+  /** Server-sourced (schema_review.reviews) — true only for BOOKING items with an existing review. Survives refetch/remount, unlike a purely local "just submitted" flag. */
+  alreadyReviewed?: boolean;
   totalAmountVnd: number | null;
 }
 
