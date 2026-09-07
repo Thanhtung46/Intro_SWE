@@ -19,6 +19,26 @@ export interface VenueRatingResult {
   message?: string;
 }
 
+export interface VenueReview {
+  reviewId: number;
+  bookingId: number;
+  venueId: number;
+  playerId: number;
+  playerName: string | null;
+  playerAvatarUrl: string | null;
+  rating: number;
+  reviewText: string | null;
+  createdAt: string;
+  reply: { replyId: number; replyText: string; createdAt: string } | null;
+}
+
+export interface VenueReviewsResult {
+  success: boolean;
+  reviews?: VenueReview[];
+  total?: number;
+  message?: string;
+}
+
 /** GET /reviews/venues/:venueId/rating — aggregate only, no individual review list. */
 export async function getVenueRating(venueId: number): Promise<VenueRatingResult> {
   try {
@@ -26,6 +46,23 @@ export async function getVenueRating(venueId: number): Promise<VenueRatingResult
       `/reviews/venues/${venueId}/rating`,
     );
     return { success: true, avgRating: res.data.avgRating, ratingCount: res.data.ratingCount };
+  } catch (err) {
+    const error = err as AxiosError<{ message?: string }>;
+    if (!error.response) {
+      return { success: false, message: 'Network error. Please check your connection and try again.' };
+    }
+    return { success: false, message: error.response.data?.message || 'Something went wrong. Please try again.' };
+  }
+}
+
+/** GET /reviews/venues/:venueId — individual reviews (rating + comment + reply). */
+export async function listVenueReviews(venueId: number, opts?: { limit?: number; offset?: number }): Promise<VenueReviewsResult> {
+  try {
+    const res = await apiClient.get<{ reviews: VenueReview[]; total: number }>(
+      `/reviews/venues/${venueId}`,
+      { params: opts },
+    );
+    return { success: true, reviews: res.data.reviews, total: res.data.total };
   } catch (err) {
     const error = err as AxiosError<{ message?: string }>;
     if (!error.response) {

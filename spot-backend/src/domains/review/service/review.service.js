@@ -13,6 +13,7 @@ import * as refereeProfileRepository from '../../referee/repository/referee-prof
 import {
   toPublicReview,
   toPublicReply,
+  toPublicReviewListItem,
   toPublicVenueRating,
   toPublicRefereeReview,
   toPublicRefereeRating,
@@ -171,6 +172,19 @@ export async function replyToReview(userId, reviewId, dto) {
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listVenueReviews(venueId, { limit = 20, offset = 0 } = {}) {
+  const client = await pool.connect();
+  try {
+    const { rows, total } = await reviewRepository.listReviewsForVenue(client, venueId, {
+      limit,
+      offset,
+    });
+    return { reviews: rows.map(toPublicReviewListItem), total };
   } finally {
     client.release();
   }

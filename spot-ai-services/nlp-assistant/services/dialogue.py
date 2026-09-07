@@ -14,7 +14,10 @@ from typing import Any, Optional
 from services import interpretation
 from services.backend_client import BackendClient, BackendConflictError
 from services.conversation_store import ConversationStore
+from services.date_parse import normalize_date
+from services.geo import get_catalog
 from services.llm_client import LLMClient
+from services.time_parse import normalize_time
 
 OFF_TOPIC_REPLY = (
     "Mình chỉ hỗ trợ tìm và tham gia kèo thôi. Bạn thử hỏi về sân bãi hoặc "
@@ -42,6 +45,32 @@ def _clarifying_question(missing_fields: list[str]) -> str:
     return _CLARIFYING_QUESTIONS.get(
         field, f"Bạn cho mình biết thêm về {field} nhé?"
     )
+
+
+async def _normalize_criteria(
+    backend: BackendClient, interpreted_request: dict[str, Any], message_text: str
+) -> None:
+    """Rewrites `date`/`timeFrom`/`timeTo` to the exact shapes spot-backend's
+    `GET /matches` requires and `province`/`city` to GSO codes, in place —
+    so it never sees Gemini's raw free-text extraction (e.g. "tối nay",
+    "7h", "Quận 7"). See services/date_parse.py, services/time_parse.py,
+    and services/geo.py."""
+    interpreted_request["date"] = normalize_date(interpreted_request.get("date"))
+    interpreted_request["timeFrom"] = normalize_time(
+        interpreted_request.get("timeFrom"), message_text
+    )
+    interpreted_request["timeTo"] = normalize_time(
+        interpreted_request.get("timeTo"), message_text
+    )
+
+    province_raw = interpreted_request.get("province")
+    city_raw = interpreted_request.get("city")
+    if province_raw or city_raw:
+        province_code, city_code = await get_catalog().resolve(
+            backend, province_raw, city_raw
+        )
+        interpreted_request["province"] = province_code
+        interpreted_request["city"] = city_code
 
 
 def _search_params(interpreted_request: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +119,7 @@ async def interpret_and_search(
     interpreted_request = interpretation.build_interpreted_request(
         conversation.get("lastInterpretedRequest"), extraction["criteria_delta"]
     )
+    await _normalize_criteria(backend, interpreted_request, message_text)
     await store.set_last_interpreted_request(conversation, interpreted_request)
 
     if interpreted_request["missingRequiredFields"]:

@@ -16,7 +16,8 @@ const BOOKING_SELECT = `
     f.name AS field_name,
     v.address,
     f.sport_type,
-    NULL::text AS match_role
+    NULL::text AS match_role,
+    b.total_amount
   FROM schema_booking.bookings b
   INNER JOIN schema_venue.fields f ON f.field_id = b.field_id
   INNER JOIN schema_venue.venues v ON v.venue_id = f.venue_id
@@ -28,34 +29,32 @@ const BOOKING_SELECT = `
 const MATCH_SELECT = `
   SELECT
     'MATCH'::text AS item_type,
-    b.booking_id,
+    NULL::int AS booking_id,
     m.match_id,
-    lower(b.booking_time_range) AS starts_at,
-    upper(b.booking_time_range) AS ends_at,
-    b.booking_date::text AS booking_date,
-    b.status AS booking_status,
-    v.name AS venue_name,
-    f.name AS field_name,
-    v.address,
-    COALESCE(m.sport_type, f.sport_type) AS sport_type,
+    m.starts_at,
+    m.ends_at,
+    (m.starts_at AT TIME ZONE 'Asia/Bangkok')::date::text AS booking_date,
+    m.status AS booking_status,
+    m.venue_name,
+    NULL::text AS field_name,
+    m.venue_address AS address,
+    m.sport AS sport_type,
     CASE
-      WHEN m.host_id = $1 THEN 'HOST'
+      WHEN m.host_user_id = $1 THEN 'HOST'
       ELSE 'PARTICIPANT'
-    END AS match_role
-  FROM schema_social.matches m
-  INNER JOIN schema_booking.bookings b ON b.booking_id = m.booking_id
-  INNER JOIN schema_venue.fields f ON f.field_id = b.field_id
-  INNER JOIN schema_venue.venues v ON v.venue_id = f.venue_id
-  WHERE b.status <> 'CANCELLED'
-    AND b.booking_time_range && tstzrange($2::timestamptz, $3::timestamptz, '[)')
+    END AS match_role,
+    NULL::numeric AS total_amount
+  FROM schema_matchmaking.matches m
+  WHERE m.status <> 'CANCELLED'
+    AND tstzrange(m.starts_at, m.ends_at, '[)') && tstzrange($2::timestamptz, $3::timestamptz, '[)')
     AND (
-      m.host_id = $1
+      m.host_user_id = $1
       OR EXISTS (
         SELECT 1
-        FROM schema_social.match_participants mp
-        WHERE mp.match_id = m.match_id
-          AND mp.player_id = $1
-          AND mp.join_status = 'APPROVED'
+        FROM schema_matchmaking.match_join_requests r
+        WHERE r.match_id = m.match_id
+          AND r.user_id = $1
+          AND r.status = 'ACCEPTED'
       )
     )
 `;

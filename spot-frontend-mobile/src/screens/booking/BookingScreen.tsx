@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { ROUTES, venueDetailRoute } from '@/constants/routes';
 import { ThemeColors } from '@/constants/theme';
-import { comingSoon } from '@/utils/comingSoon';
+import { openVenueDirections } from '@/utils/directions';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import BookingVenueCard, { BookingVenue } from '@/components/booking/BookingVenueCard';
@@ -18,25 +18,36 @@ import { listVenues, PublicVenue } from '@/services/venueService';
 import useUserLocation from '@/hooks/useUserLocation';
 import { EMPTY_VENUE_FILTERS, VenueFilters } from '@/types/venueFilters';
 
-// GET /venues has no per-venue photo/price at list level (data-model.md
-// PublicVenue) — this is a static placeholder image/price, not real data.
+// The photo comes from the venue's own uploaded cover image when the owner
+// has set one (coverImageUrl); this bundled asset is only the fallback.
 const VENUE_PLACEHOLDER_IMAGE = require('../../../assets/booking/venue-skyline-arena-action.jpg');
 const NOT_AVAILABLE_LABEL = '—';
+
+const FOOTBALL_VARIANT_LABEL: Record<string, string> = {
+  FIVE_A_SIDE: 'Sân 5',
+  SEVEN_A_SIDE: 'Sân 7',
+};
 
 function mapVenueToCard(venue: PublicVenue): BookingVenue {
   return {
     id: String(venue.venueId),
     name: venue.name,
-    image: VENUE_PLACEHOLDER_IMAGE,
-    distanceLabel:
-      venue.distanceKm !== undefined ? `${venue.distanceKm.toFixed(1)} km` : NOT_AVAILABLE_LABEL,
-    price: NOT_AVAILABLE_LABEL,
+    image: venue.coverImageUrl ? { uri: venue.coverImageUrl } : VENUE_PLACEHOLDER_IMAGE,
+    fallbackImage: VENUE_PLACEHOLDER_IMAGE,
+    // Empty (not '—') when unknown — BookingVenueCard hides the row entirely
+    // until a real distance is calculated, same as MatchCard.
+    distanceLabel: venue.distanceKm != null ? `${venue.distanceKm.toFixed(1)} km` : '',
     rating: venue.avgRating,
     address: venue.address,
     hours:
       venue.openingHours && venue.closingHours
         ? `${venue.openingHours} - ${venue.closingHours}`
         : NOT_AVAILABLE_LABEL,
+    latitude: venue.latitude,
+    longitude: venue.longitude,
+    courtTypeLabel: venue.footballVariants.length
+      ? venue.footballVariants.map((v) => FOOTBALL_VARIANT_LABEL[v] ?? v).join(', ')
+      : null,
   };
 }
 
@@ -59,6 +70,8 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
   const [sport, setSport] = useState<Sport>('football');
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [filters, setFilters] = useState<VenueFilters>(EMPTY_VENUE_FILTERS);
+  const [searchText, setSearchText] = useState('');
+  const [appliedLocation, setAppliedLocation] = useState('');
   const [venues, setVenues] = useState<BookingVenue[]>([]);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [venuesLoading, setVenuesLoading] = useState(true);
@@ -75,11 +88,12 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
 
   useEffect(() => {
     setVenuesLoading(true);
-    // Explicit filter location (province/city or a chosen radius) takes over
-    // from the silent device-GPS default (see useUserLocation) used only
-    // when the user hasn't opened the filter sheet yet.
-    const opts =
-      filters.province || (filters.radiusKm != null && filters.latitude != null)
+    // A typed search takes over entirely — backend rejects location together
+    // with lat/long/radiusKm ("Use location or distance, not both"), so skip
+    // GPS/province-city/distance opts whenever there's an applied search.
+    const opts = appliedLocation
+      ? { location: appliedLocation }
+      : filters.province || (filters.radiusKm != null && filters.latitude != null)
         ? {
             lat: filters.latitude,
             long: filters.longitude,
@@ -107,7 +121,21 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       }
       setVenuesLoading(false);
     });
-  }, [sport, userLocation, filters]);
+  }, [sport, userLocation, filters, appliedLocation]);
+
+  function submitSearch() {
+    const trimmed = searchText.trim();
+    setAppliedLocation(trimmed);
+    if (trimmed) {
+      // Clear distance-mode filters so the XOR rule above never fires a 400.
+      setFilters((prev) => ({ ...prev, province: undefined, city: undefined, radiusKm: undefined, latitude: undefined, longitude: undefined }));
+    }
+  }
+
+  function clearSearch() {
+    setSearchText('');
+    setAppliedLocation('');
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -129,7 +157,21 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
       <View style={styles.searchBar}>
         <View style={styles.searchInput}>
           <Ionicons name="search" size={18} color={c.textSecondaryAlt} />
-          <Text style={styles.searchPlaceholder}>{t('booking.searchPlaceholder')}</Text>
+          <TextInput
+            testID="booking-search-input"
+            style={styles.searchTextInput}
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={submitSearch}
+            placeholder={t('booking.searchPlaceholder')}
+            placeholderTextColor={c.bookingPlaceholderText}
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity testID="booking-search-clear" onPress={clearSearch} hitSlop={8} accessibilityRole="button">
+              <Ionicons name="close-circle" size={18} color={c.textSecondaryAlt} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => setFiltersVisible(true)} accessibilityRole="button" accessibilityLabel={t('booking.filtersLabel')}>
             <Ionicons name="options-outline" size={20} color={filtersActive ? c.primary : c.textSecondaryAlt} />
           </TouchableOpacity>
@@ -156,9 +198,15 @@ export default function BookingScreen({ onAvatarPress, avatarInitial, onNotifica
             <BookingVenueCard
               key={venue.id}
               venue={venue}
-              onBookPress={() => router.push(venueDetailRoute(venue.id))}
-              onFavoritePress={() => comingSoon(t('booking.saveVenueLabel'))}
-              onNavigatePress={() => comingSoon(t('booking.navigateToVenueLabel'))}
+              onBookPress={() => router.push(venueDetailRoute(venue.id, sport))}
+              onNavigatePress={() =>
+                openVenueDirections(router, {
+                  latitude: venue.latitude,
+                  longitude: venue.longitude,
+                  venueName: venue.name,
+                  venueAddress: venue.address,
+                })
+              }
             />
           ))
         )}
@@ -209,10 +257,11 @@ function getStyles(c: ThemeColors) {
       borderColor: c.inputBorder,
       backgroundColor: c.inputBg,
     },
-    searchPlaceholder: {
+    searchTextInput: {
       flex: 1,
       fontSize: 14,
-      color: c.bookingPlaceholderText,
+      color: c.venueCardHeadingText,
+      padding: 0,
     },
     mapButton: {
       width: 42,

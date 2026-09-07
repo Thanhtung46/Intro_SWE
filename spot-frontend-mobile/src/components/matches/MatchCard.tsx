@@ -3,10 +3,13 @@ import React from 'react';
 import { type GestureResponderEvent, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import MatchCoverImage, { BADMINTON_COVER_ASPECT } from '@/components/matches/MatchCoverImage';
-import { colors } from '@/constants/colors';
+import { groupSkillTier } from '@/components/groups/groupPresentation';
 import { spacing } from '@/constants/spacing';
-import { skillLabel, skillTierColor } from '@/constants/matchSkills';
+import { skillLabel } from '@/constants/matchSkills';
 import { formatLabel } from '@/constants/matchFormats';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { Match } from '@/types/match';
 import { formatMatchWhen, formatVnd } from '@/utils/format';
 
@@ -15,7 +18,6 @@ type Props = {
   onPress: () => void;
   /** Prefer for the Join Match CTA — opens join flow (detail + sheet). Falls back to onPress. */
   onJoin?: () => void;
-  onToggleFavorite: () => void;
   onDirections: () => void;
   /** Precomputed distance from viewer GPS, e.g. "1.2 km". */
   distanceLabel?: string | null;
@@ -32,7 +34,10 @@ type Props = {
  * src/utils/directions.ts. `onDirections` is a callback prop (not owned
  * here) so every screen can wire the same `openDirections(match)` helper.
  */
-export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, onDirections, distanceLabel }: Props) {
+export default function MatchCard({ match, onPress, onJoin, onDirections, distanceLabel }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const isFull = match.status === 'FULL' || match.spotsLeft < 1;
   // Prefer runtime yourShare (SPLIT_EVENLY = ceil(total/maxPlayers); GENDER_RANGE by viewer gender).
   // Fall back to listed prices when yourShare is null (e.g. GENDER_RANGE + viewer gender unknown).
@@ -53,20 +58,6 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
       <View style={styles.cardCover}>
         <MatchCoverImage sport={match.sport} coverUrl={match.coverUrl} />
         <View style={styles.cardCoverTopRow} pointerEvents="box-none">
-          <TouchableOpacity
-            testID={`match-favorite-${match.matchId}`}
-            style={styles.cardIconButton}
-            onPress={(e: GestureResponderEvent) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
-          >
-            <Ionicons
-              name={match.isFavorited ? 'heart' : 'heart-outline'}
-              size={16}
-              color={match.isFavorited ? colors.error : colors.white}
-            />
-          </TouchableOpacity>
           <TouchableOpacity
             testID={`match-directions-${match.matchId}`}
             style={styles.cardIconButton}
@@ -94,7 +85,7 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
             }}
             disabled={isFull}
           >
-            <Text style={styles.joinButtonText}>{isFull ? 'Full' : 'Join Match'}</Text>
+            <Text style={styles.joinButtonText}>{isFull ? t('matches.actions.full') : t('matches.actions.joinMatch')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -117,40 +108,40 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
             {match.hostFullName}
           </Text>
           <Text style={styles.hostMeta} numberOfLines={1}>
-            · {match.host.matchCount} matches
+            · {match.host.matchCount} {t('matches.browse.matchesSuffix')}
           </Text>
         </View>
 
         <View style={styles.cardMetaBlock}>
           <View style={styles.cardMetaRow}>
-            <Ionicons name="calendar-outline" size={14} color={colors.bodyText} />
+            <Ionicons name="calendar-outline" size={14} color={colors.textSecondaryAlt} />
             <Text style={[styles.cardMetaText, styles.cardMetaTextFlex]} numberOfLines={1} ellipsizeMode="tail">
               {formatMatchWhen(match.startsAt, match.endsAt)}
             </Text>
           </View>
           <View style={styles.cardMetaRow}>
-            <Ionicons name="location-outline" size={14} color={colors.bodyText} />
+            <Ionicons name="location-outline" size={14} color={colors.textSecondaryAlt} />
             <Text style={[styles.cardMetaText, styles.cardMetaTextFlex]} numberOfLines={1} ellipsizeMode="tail">
               {locationLabel}
             </Text>
           </View>
           <View style={styles.cardMetaRow}>
-            <Ionicons name="stats-chart-outline" size={13} color={colors.bodyText} />
-            <Text style={styles.cardMetaText}>Skill:</Text>
+            <Ionicons name="stats-chart-outline" size={13} color={colors.textSecondaryAlt} />
+            <Text style={styles.cardMetaText}>{t('matches.browse.skillPrefix')}</Text>
             <View style={styles.skillChips}>
               {showSkillRange ? (
                 <>
-                  {minLabel ? <SkillPill sport={match.sport} code={match.skillMin} label={minLabel} /> : null}
+                  {minLabel ? <SkillPill colors={colors} sport={match.sport} code={match.skillMin} label={minLabel} /> : null}
                   {minLabel && maxLabel && maxLabel !== minLabel ? (
-                    <Ionicons name="arrow-forward" size={12} color={colors.outline} style={styles.skillRangeArrow} />
+                    <Ionicons name="arrow-forward" size={12} color={colors.outlineMuted} style={styles.skillRangeArrow} />
                   ) : null}
                   {maxLabel && maxLabel !== minLabel ? (
-                    <SkillPill sport={match.sport} code={match.skillMax} label={maxLabel} />
+                    <SkillPill colors={colors} sport={match.sport} code={match.skillMax} label={maxLabel} />
                   ) : null}
                 </>
               ) : (
                 <View style={[styles.skillPill, styles.skillPillAllLevels]}>
-                  <Text style={[styles.skillPillText, styles.skillPillAllLevelsText]}>All levels</Text>
+                  <Text style={[styles.skillPillText, styles.skillPillAllLevelsText]}>{t('matches.browse.allLevels')}</Text>
                 </View>
               )}
             </View>
@@ -158,10 +149,10 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
         </View>
 
         <View style={styles.spotsRow}>
-          <Text style={styles.spotsLeftText}>{isFull ? 'Full' : `${match.spotsLeft} spots left`}</Text>
+          <Text style={styles.spotsLeftText}>{isFull ? t('matches.actions.full') : `${match.spotsLeft} ${t('matches.browse.spotsLeft')}`}</Text>
           {distanceLabel ? (
             <Text style={styles.distanceText} numberOfLines={1}>
-              {distanceLabel} away
+              {distanceLabel} {t('matches.browse.away')}
             </Text>
           ) : null}
         </View>
@@ -181,8 +172,9 @@ export default function MatchCard({ match, onPress, onJoin, onToggleFavorite, on
   );
 }
 
-function SkillPill({ sport, code, label }: { sport: Match['sport']; code: string | null; label: string }) {
-  const tier = skillTierColor(sport, code);
+function SkillPill({ colors, sport, code, label }: { colors: ThemeColors; sport: Match['sport']; code: string | null; label: string }) {
+  const styles = createStyles(colors);
+  const tier = groupSkillTier(colors, sport, code);
   return (
     <View style={[styles.skillPill, { backgroundColor: tier.bg, borderColor: tier.border }]}>
       <Text style={[styles.skillPillText, { color: tier.text }]}>{label}</Text>
@@ -190,12 +182,12 @@ function SkillPill({ sport, code, label }: { sport: Match['sport']; code: string
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 24,
     overflow: 'hidden',
-    shadowColor: colors.primaryDark,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -224,7 +216,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     // Dark glass so white heart / paper-plane stay visible on light covers
     // (same idea as Match Detail stickyIconButtonBackground).
-    backgroundColor: colors.stickyIconButtonBackground,
+    backgroundColor: colors.matchIconGlassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -244,61 +236,61 @@ const styles = StyleSheet.create({
   pricePill: {
     flexShrink: 1,
     maxWidth: '58%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.matchPriceChipBg,
     borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-  pricePillText: { fontSize: 14, fontWeight: '800', color: colors.primaryDark },
+  pricePillText: { fontSize: 14, fontWeight: '800', color: colors.matchPriceChipText },
   joinButton: {
     flexShrink: 0,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  joinButtonDisabled: { backgroundColor: colors.outline },
+  joinButtonDisabled: { backgroundColor: colors.outlineMuted },
   joinButtonText: { color: colors.white, fontWeight: '700', fontSize: 12 },
 
   cardBody: { padding: spacing.md, gap: spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  cardTitle: { fontSize: 18, fontWeight: '800', color: colors.headingText },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
   cardTitleFlex: { flex: 1, flexShrink: 1 },
   formatBadge: {
     flexShrink: 0,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  formatBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primaryDark },
+  formatBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
   cardHostRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
   hostAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hostAvatarText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
-  hostName: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.headingText },
-  hostMeta: { flexShrink: 0, fontSize: 11, color: colors.outline },
+  hostAvatarText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  hostName: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  hostMeta: { flexShrink: 0, fontSize: 11, color: colors.outlineMuted },
 
   cardMetaBlock: { gap: spacing.xxs, marginTop: spacing.xs },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  cardMetaText: { fontSize: 13, color: colors.bodyText },
+  cardMetaText: { fontSize: 13, color: colors.textSecondaryAlt },
   cardMetaTextFlex: { flex: 1, flexShrink: 1 },
-  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark, flexShrink: 0 },
+  distanceText: { fontSize: 12, fontWeight: '700', color: colors.primary, flexShrink: 0 },
   skillChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xxs },
   skillRangeArrow: { marginHorizontal: 2 },
   skillPill: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   skillPillText: { fontSize: 11, fontWeight: '700' },
   skillPillAllLevels: {
-    backgroundColor: colors.iconBackground,
-    borderColor: colors.cardBorder,
+    backgroundColor: colors.roleCardSelectedBg,
+    borderColor: colors.chromeBorder,
   },
-  skillPillAllLevelsText: { color: colors.primaryDark },
+  skillPillAllLevelsText: { color: colors.primary },
 
   spotsRow: {
     marginTop: spacing.xs,
@@ -307,7 +299,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  spotsLeftText: { fontSize: 12, fontWeight: '700', color: colors.error, flexShrink: 1 },
+  spotsLeftText: { fontSize: 12, fontWeight: '700', color: colors.roleErrorText, flexShrink: 1 },
 
   participantsRow: { flexDirection: 'row', marginTop: spacing.xs },
   participantAvatar: {
@@ -316,11 +308,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: colors.white,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   participantAvatarOverlap: { marginLeft: -8 },
-  participantExtra: { backgroundColor: colors.iconBackground },
-  participantExtraText: { fontSize: 10, fontWeight: '700', color: colors.primaryDark },
+  participantExtra: { backgroundColor: colors.roleCardSelectedBg },
+  participantExtraText: { fontSize: 10, fontWeight: '700', color: colors.primary },
 });

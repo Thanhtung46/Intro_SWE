@@ -40,6 +40,19 @@ carry over values yourself):
   "scope": "search" | "off_topic"
 }
 
+Extraction rules for each field — extract the RAW phrase as the player said
+it, do not reformat or convert it yourself (a separate deterministic step
+does that):
+- "province"/"city": if the message names ANY place (a district/quận,
+  ward/phường, city/thành phố, or province/tỉnh — e.g. "quận 7", "hà nội",
+  "q1", "thủ đức"), you MUST fill the most specific one into "city" (and the
+  broader one into "province" only if BOTH are mentioned). Never leave both
+  null when a place name appears in the message.
+- "date": copy the player's own words for when they want to play (e.g. "tối
+  nay", "ngày mai", "thứ 7 này") verbatim — do not compute a calendar date.
+- "timeFrom"/"timeTo": copy the player's own words for the time (e.g. "7h",
+  "19h30", "sau 7 giờ tối") verbatim — do not convert to HH:mm yourself.
+
 Set "scope" to "off_topic" if the message is not about finding, joining, or
 hosting a pickup match/kèo (e.g. small talk, unrelated requests).
 """

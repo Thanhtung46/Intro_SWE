@@ -39,9 +39,12 @@ export const ROUTES = {
 } as const;
 
 /** Dynamic route to a venue's detail screen (app/venue/[id].tsx) — not a
- * plain string, so it can't live in ROUTES above. */
-export function venueDetailRoute(id: string): string {
-  return `/venue/${id}`;
+ * plain string, so it can't live in ROUTES above. `sport` (when known, e.g.
+ * from the Booking screen's active tab) narrows the detail screen's pitches
+ * to that sport only, so a venue with both football and badminton courts
+ * doesn't let a player book the wrong one. */
+export function venueDetailRoute(id: string, sport?: string): string {
+  return sport ? `/venue/${id}?sport=${encodeURIComponent(sport)}` : `/venue/${id}`;
 }
 
 /** Referee job-board venue detail (Apply + in-app directions). */

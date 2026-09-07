@@ -1,8 +1,10 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import type { ThemeColors } from '@/constants/theme';
 
 type Props = {
   visible: boolean;
@@ -27,11 +29,14 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   destructive = true,
   onConfirm,
   onCancel,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
@@ -40,7 +45,7 @@ export default function ConfirmDialog({
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttonRow}>
             <TouchableOpacity testID="confirm-dialog-cancel" style={styles.cancelButton} onPress={onCancel}>
-              <Text style={styles.cancelButtonText}>{cancelLabel}</Text>
+              <Text style={styles.cancelButtonText}>{cancelLabel ?? t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="confirm-dialog-confirm"
@@ -56,34 +61,36 @@ export default function ConfirmDialog({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.sheetOverlay, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.modalOverlay, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   card: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
     borderRadius: 20,
     padding: spacing.lg,
     gap: spacing.sm,
   },
-  title: { fontSize: 17, fontWeight: '700', color: colors.headingText },
-  message: { fontSize: 14, color: colors.bodyText, lineHeight: 20 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  message: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
   buttonRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   cancelButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
-  cancelButtonText: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  cancelButtonText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   confirmButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },

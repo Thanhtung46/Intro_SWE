@@ -53,6 +53,11 @@ class BackendClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_geo_vn(self) -> dict[str, Any]:
+        response = await self._client.get("/geo/vn")
+        response.raise_for_status()
+        return response.json()
+
     async def join_match(
         self, match_id: int, body: Optional[dict[str, Any]] = None
     ) -> dict[str, Any]:

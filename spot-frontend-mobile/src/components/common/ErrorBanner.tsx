@@ -1,8 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 
 type Props = {
   message: string;
@@ -15,17 +17,20 @@ type Props = {
  * second error UI pattern.
  */
 export default function ErrorBanner({ message, onRetry }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>{message}</Text>
-      <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry">
-        <Text style={styles.retry}>Try Again</Text>
+      <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+        <Text style={styles.retry}>{t('common.retry')}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   banner: {
     width: '100%',
     flexDirection: 'row',
@@ -35,7 +40,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.error,
-    backgroundColor: colors.errorBackground,
+    backgroundColor: colors.dangerSurface,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },

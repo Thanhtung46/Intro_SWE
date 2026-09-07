@@ -65,6 +65,13 @@ export async function getOrCreateConversationId(): Promise<string> {
   if (existing) {
     return existing;
   }
+  return startNewConversation();
+}
+
+/** Persists a fresh conversation id, replacing whatever was stored before —
+ * used when the player clears the chat, so the next message starts a new
+ * server-side conversation rather than reusing the just-cleared one. */
+export async function startNewConversation(): Promise<string> {
   const generated = generateUuid();
   await AsyncStorage.setItem(CONVERSATION_ID_KEY, generated);
   return generated;

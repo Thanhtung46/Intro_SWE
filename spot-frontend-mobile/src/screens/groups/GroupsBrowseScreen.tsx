@@ -6,10 +6,12 @@ import ErrorBanner from '@/components/common/ErrorBanner';
 import InfoDialog from '@/components/common/InfoDialog';
 import GroupCard from '@/components/groups/GroupCard';
 import GroupFilterSheet from '@/components/groups/GroupFilterSheet';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage } from '@/services/apiErrors';
-import { joinGroup, listGroups, setGroupFavorite } from '@/services/groupService';
+import { joinGroup, listGroups } from '@/services/groupService';
 import type { Group } from '@/types/group';
 import type { Sport } from '@/types/match';
 import type { GroupFilters } from '@/types/groupFilters';
@@ -53,6 +55,9 @@ export default function GroupsBrowseScreen({
   onApplyFilters,
   onOpenGroup,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [groups, setGroups] = useState<Group[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -94,16 +99,6 @@ export default function GroupsBrowseScreen({
     fetchGroups();
   }, [fetchGroups]);
 
-  const handleToggleFavorite = async (group: Group) => {
-    const nextFavorited = !group.isFavorited;
-    setGroups((prev) => prev.map((g) => (g.groupId === group.groupId ? { ...g, isFavorited: nextFavorited } : g)));
-    try {
-      await setGroupFavorite(group.groupId, nextFavorited);
-    } catch (err) {
-      setGroups((prev) => prev.map((g) => (g.groupId === group.groupId ? { ...g, isFavorited: group.isFavorited } : g)));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
 
   const handleJoin = async (group: Group) => {
     if (joiningGroupId != null) return;
@@ -117,17 +112,17 @@ export default function GroupsBrowseScreen({
         accepted
           ? {
               tone: 'success',
-              title: 'Welcome!',
-              message: 'You joined the group successfully. Find it anytime under Manage Groups.',
+              title: t('groups.join.welcomeTitle'),
+              message: t('groups.join.welcomeMessage'),
             }
           : {
               tone: 'success',
-              title: 'Request sent',
-              message: 'The group admin will review your request. We will let you know when they respond.',
+              title: t('groups.join.requestSentTitle'),
+              message: t('groups.join.requestSentMessage'),
             }
       );
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setJoiningGroupId(null);
     }
@@ -146,8 +141,8 @@ export default function GroupsBrowseScreen({
           <ErrorBanner message={errorMessage} onRetry={() => fetchGroups()} />
         ) : groups.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={28} color={colors.outline} />
-            <Text style={styles.emptyStateText}>No groups found. Try a different sport or search.</Text>
+            <Ionicons name="people-outline" size={28} color={colors.textMuted} />
+            <Text style={styles.emptyStateText}>{t('groups.browse.empty')}</Text>
           </View>
         ) : (
           groups.map((group) => {
@@ -165,7 +160,6 @@ export default function GroupsBrowseScreen({
                 joining={joiningGroupId === group.groupId}
                 onPress={() => onOpenGroup(group.groupId)}
                 onJoin={() => handleJoin(group)}
-                onToggleFavorite={() => handleToggleFavorite(group)}
               />
             );
           })
@@ -191,10 +185,10 @@ export default function GroupsBrowseScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   list: { flex: 1 },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 });

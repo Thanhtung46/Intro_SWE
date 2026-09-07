@@ -1,6 +1,4 @@
 import { createHash } from 'crypto';
-import path from 'path';
-import fs from 'fs';
 import pool from '../../../shared/database/pool.js';
 import redis from '../../../shared/database/redis.js';
 import {
@@ -20,7 +18,12 @@ import { hashPassword, verifyPassword } from '../../../shared/utils/password.js'
 import { sendOtpEmail } from '../../../shared/utils/mailer.js';
 import logger from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/middleware/errorHandler.js';
-import { AVATAR_UPLOAD_DIR } from '../../../shared/middleware/avatarUpload.js';
+import { safeAvatarExt } from '../../../shared/middleware/avatarUpload.js';
+import {
+  uploadBufferToStorage,
+  deleteFromStorage,
+  storagePathFromPublicUrl,
+} from '../../../shared/utils/supabaseStorage.js';
 import * as userRepository from '../../auth/repository/user.repository.js';
 import * as otpRepository from '../../auth/repository/otp.repository.js';
 import * as userSportSkillRepository from '../../auth/repository/user-sport-skill.repository.js';
@@ -609,38 +612,19 @@ export async function changePassword(userId, input) {
   }
 }
 
-function isLocalAvatarUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.startsWith('/uploads/avatars/');
-  } catch {
-    return false;
-  }
-}
-
-function localAvatarPathFromUrl(url) {
-  const parsed = new URL(url);
-  const name = path.basename(parsed.pathname);
-  if (!name || name === '.' || name === '..') return null;
-  return path.join(AVATAR_UPLOAD_DIR, name);
-}
-
 export async function uploadAvatar(userId, file) {
   if (!file) {
     throw new AppError('Avatar file is required (field name: avatar)', 400);
   }
 
-  const avatarUrl = `${config.publicBaseUrl}/uploads/avatars/${file.filename}`;
+  const objectPath = `avatars/${userId}-${Date.now()}${safeAvatarExt(file.originalname)}`;
+  const avatarUrl = await uploadBufferToStorage(objectPath, file.buffer, file.mimetype);
+
   const client = await pool.connect();
   try {
     const existing = await userRepository.findById(client, userId);
     if (!existing) {
-      try {
-        fs.unlinkSync(path.join(AVATAR_UPLOAD_DIR, file.filename));
-      } catch {
-        /* ignore */
-      }
+      await deleteFromStorage(objectPath);
       throw new AppError('User not found', 404);
     }
 
@@ -649,15 +633,9 @@ export async function uploadAvatar(userId, file) {
       avatarUrl,
     });
 
-    if (isLocalAvatarUrl(previousUrl)) {
-      const prevPath = localAvatarPathFromUrl(previousUrl);
-      if (prevPath && prevPath !== path.join(AVATAR_UPLOAD_DIR, file.filename)) {
-        try {
-          fs.unlinkSync(prevPath);
-        } catch {
-          /* ignore missing old file */
-        }
-      }
+    const prevPath = storagePathFromPublicUrl(previousUrl);
+    if (prevPath && prevPath !== objectPath) {
+      await deleteFromStorage(prevPath);
     }
 
     return {

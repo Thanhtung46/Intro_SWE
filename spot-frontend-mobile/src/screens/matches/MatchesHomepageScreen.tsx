@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   AppState,
   FlatList,
@@ -20,9 +19,9 @@ import ErrorBanner from '@/components/common/ErrorBanner';
 import FilterSheet from '@/components/matches/FilterSheet';
 import MatchCard from '@/components/matches/MatchCard';
 import SlidingSegmentControl from '@/components/navigation/SlidingSegmentControl';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { getErrorMessage, listMatches, setFavorite } from '@/services/matchService';
+import type { ThemeColors } from '@/constants/theme';
+import { getErrorMessage, listMatches } from '@/services/matchService';
 import { listGroups } from '@/services/groupService';
 import { listTournaments } from '@/services/tournamentService';
 import { openVenueDirections } from '@/utils/directions';
@@ -35,6 +34,8 @@ import type { GroupSuggestion } from '@/types/group';
 import type { TournamentSuggestion } from '@/types/tournament';
 import GroupsBrowseScreen from '@/screens/groups/GroupsBrowseScreen';
 import TournamentsBrowseScreen from '@/screens/tournaments/TournamentsBrowseScreen';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 
 type SubTab = 'matches' | 'groups' | 'tournaments';
 
@@ -62,22 +63,27 @@ type FabAction = { icon: keyof typeof Ionicons.glyphMap; label: string; onPress:
 // Each sub-tab routes through its own props (onCreateGroup/onManageGroups,
 // onCreateTournament/onManageTournaments) rather than reusing the
 // Matches-tab-specific onHostMatch/onManageMatches.
-function getFabActions(subTab: SubTab, sport: Sport, props: Props): FabAction[] {
+function getFabActions(
+  subTab: SubTab,
+  sport: Sport,
+  props: Props,
+  labels: { groupCreate: string; groupManage: string; hostMatch: string; manageMatches: string; createTournament: string; manageTournaments: string }
+): FabAction[] {
   if (subTab === 'matches') {
     return [
-      { icon: 'megaphone-outline', label: 'Host a Match', onPress: () => props.onHostMatch(sport) },
-      { icon: 'people-outline', label: 'Manage Matches', onPress: props.onManageMatches },
+      { icon: 'megaphone-outline', label: labels.hostMatch, onPress: () => props.onHostMatch(sport) },
+      { icon: 'people-outline', label: labels.manageMatches, onPress: props.onManageMatches },
     ];
   }
   if (subTab === 'groups') {
     return [
-      { icon: 'add-circle-outline', label: 'Create a Group', onPress: () => props.onCreateGroup(sport) },
-      { icon: 'people-outline', label: 'Manage Groups', onPress: props.onManageGroups },
+      { icon: 'add-circle-outline', label: labels.groupCreate, onPress: () => props.onCreateGroup(sport) },
+      { icon: 'people-outline', label: labels.groupManage, onPress: props.onManageGroups },
     ];
   }
   return [
-    { icon: 'add-circle-outline', label: 'Create a Tournament', onPress: () => props.onCreateTournament(sport) },
-    { icon: 'people-outline', label: 'Manage Tournaments', onPress: props.onManageTournaments },
+    { icon: 'add-circle-outline', label: labels.createTournament, onPress: () => props.onCreateTournament(sport) },
+    { icon: 'people-outline', label: labels.manageTournaments, onPress: props.onManageTournaments },
   ];
 }
 
@@ -111,6 +117,9 @@ const MAP_BUTTON_SIZE = 44;
  */
 export default function MatchesHomepageScreen(props: Props) {
   const router = useRouter();
+  const { colors: themeColors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(themeColors);
   const [sport, setSport] = useState<Sport>('FOOTBALL');
   const [subTab, setSubTab] = useState<SubTab>('matches');
   const [searchText, setSearchText] = useState('');
@@ -309,24 +318,18 @@ export default function MatchesHomepageScreen(props: Props) {
     return 'pricetag-outline';
   };
 
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch (err) {
-      // revert on failure
-      setMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-      Alert.alert('Something went wrong', getErrorMessage(err));
-    }
-  };
-
-
   const handleSubTabPress = (tab: SubTab) => {
     setSubTab(tab);
   };
 
-  const fabActions = getFabActions(subTab, sport, props);
+  const fabActions = getFabActions(subTab, sport, props, {
+    groupCreate: t('groups.actions.create'),
+    groupManage: t('groups.actions.manage'),
+    hostMatch: t('matches.actions.hostMatch'),
+    manageMatches: t('matches.actions.manageMatches'),
+    createTournament: t('matches.actions.createTournament'),
+    manageTournaments: t('matches.actions.manageTournaments'),
+  });
 
   const matchFiltersActive =
     (filters.skill?.length ?? 0) > 0 ||
@@ -349,11 +352,13 @@ export default function MatchesHomepageScreen(props: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.screenBackgroundAlt }]} edges={[]}>
       <SlidingSegmentControl
         style={styles.sportToggle}
         active={sport}
-        inactiveColor={colors.primaryDark}
+        inactiveColor={themeColors.accentText}
+        pillColor={themeColors.primary}
+        activeColor={themeColors.white}
         segmentPaddingVertical={14}
         onChange={(next) => {
           setSport(next);
@@ -362,37 +367,37 @@ export default function MatchesHomepageScreen(props: Props) {
         items={[
           {
             key: 'FOOTBALL',
-            label: 'Football',
+            label: t('common.sportFootball'),
             testID: 'sport-toggle-football',
             renderIcon: (isActive) => (
-              <Ionicons name="football-outline" size={16} color={isActive ? colors.white : colors.primaryDark} />
+              <Ionicons name="football-outline" size={16} color={isActive ? themeColors.white : (themeColors.accentText)} />
             ),
           },
           {
             key: 'BADMINTON',
-            label: 'Badminton',
+            label: t('common.sportBadminton'),
             testID: 'sport-toggle-badminton',
             renderIcon: (isActive) => (
-              <MaterialCommunityIcons name="badminton" size={16} color={isActive ? colors.white : colors.primaryDark} />
+              <MaterialCommunityIcons name="badminton" size={16} color={isActive ? themeColors.white : (themeColors.accentText)} />
             ),
           },
         ]}
       />
 
       <View style={styles.searchRow}>
-        <View style={styles.searchInputWrap}>
-          <Ionicons name="search-outline" size={18} color={colors.outline} />
+        <View style={[styles.searchInputWrap, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder }]}>
+          <Ionicons name="search-outline" size={18} color={themeColors.textMuted} />
           <TextInput
             testID="matches-search-input"
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: themeColors.textPrimary }]}
             placeholder={
               subTab === 'groups'
-                ? 'Search groups, venues, or areas...'
+                ? t('groups.browse.searchPlaceholder')
                 : subTab === 'tournaments'
-                  ? 'Search tournaments or venues...'
-                  : 'Find me a 7v7 match tonight...'
+                  ? t('matches.browse.tournamentsSearchPlaceholder')
+                  : t('matches.browse.searchPlaceholder')
             }
-            placeholderTextColor={colors.outline}
+            placeholderTextColor={themeColors.textMuted}
             value={searchText}
             onChangeText={setSearchText}
             onFocus={() => setSuggestionsVisible(true)}
@@ -419,7 +424,7 @@ export default function MatchesHomepageScreen(props: Props) {
           />
           {searchText.length > 0 && (
             <TouchableOpacity testID="matches-search-clear" onPress={clearSearch} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={colors.outline} />
+              <Ionicons name="close-circle" size={18} color={themeColors.textMuted} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -434,24 +439,24 @@ export default function MatchesHomepageScreen(props: Props) {
             hitSlop={8}
           >
             <View>
-              <Ionicons name="options-outline" size={18} color={colors.bodyText} />
+              <Ionicons name="options-outline" size={18} color={themeColors.textSecondary} />
               {filterActive && <View style={styles.filterDot} />}
             </View>
           </TouchableOpacity>
         </View>
         <TouchableOpacity
           testID="matches-map-button"
-          style={styles.mapButton}
+          style={[styles.mapButton, { backgroundColor: themeColors.glassButtonBg, borderColor: themeColors.glassRingBorder }]}
           onPress={() => props.onOpenMap(subTab)}
         >
-          <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+          <Ionicons name="map-outline" size={18} color={themeColors.accentText} />
         </TouchableOpacity>
       </View>
 
       {suggestionsVisible && searchText.trim().length > 0 && (suggestionsLoading || suggestions.length > 0) && (
-        <View testID="matches-search-suggestions" style={styles.suggestionsBox}>
+        <View testID="matches-search-suggestions" style={[styles.suggestionsBox, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
           {suggestionsLoading ? (
-            <ActivityIndicator style={styles.suggestionsSpinner} color={colors.primary} />
+            <ActivityIndicator style={styles.suggestionsSpinner} color={themeColors.primary} />
           ) : (
             suggestions.map((suggestion, index) => (
               <TouchableOpacity
@@ -460,8 +465,8 @@ export default function MatchesHomepageScreen(props: Props) {
                 style={styles.suggestionRow}
                 onPress={() => applySuggestion(suggestion)}
               >
-                <Ionicons name={suggestionIcon(suggestion.kind)} size={16} color={colors.outline} />
-                <Text style={styles.suggestionText} numberOfLines={1}>
+                <Ionicons name={suggestionIcon(suggestion.kind)} size={16} color={themeColors.textMuted} />
+                <Text style={[styles.suggestionText, { color: themeColors.textPrimary }]} numberOfLines={1}>
                   {suggestion.text}
                 </Text>
               </TouchableOpacity>
@@ -471,16 +476,18 @@ export default function MatchesHomepageScreen(props: Props) {
       )}
 
       <SlidingSegmentControl
-        style={styles.subTabs}
+        style={[styles.subTabs, { backgroundColor: themeColors.tintedSurface }]}
         active={subTab}
-        inactiveColor={colors.outline}
+        inactiveColor={themeColors.textMuted}
+        pillColor={themeColors.primary}
+        activeColor={themeColors.white}
         segmentPaddingVertical={spacing.md}
         labelStyle={styles.subTabText}
         onChange={handleSubTabPress}
         items={[
-          { key: 'matches', label: 'Matches', testID: 'sub-tab-matches' },
-          { key: 'groups', label: 'Groups', testID: 'sub-tab-groups' },
-          { key: 'tournaments', label: 'Tournaments', testID: 'sub-tab-tournaments' },
+          { key: 'matches', label: t('groups.tabs.matches'), testID: 'sub-tab-matches' },
+          { key: 'groups', label: t('groups.tabs.groups'), testID: 'sub-tab-groups' },
+          { key: 'tournaments', label: t('groups.tabs.tournaments'), testID: 'sub-tab-tournaments' },
         ]}
       />
 
@@ -532,7 +539,7 @@ export default function MatchesHomepageScreen(props: Props) {
           onEndReachedThreshold={0.4}
           ListHeaderComponent={
             status === 'loading' ? (
-              <ActivityIndicator style={styles.spinner} color={colors.primary} />
+              <ActivityIndicator style={styles.spinner} color={themeColors.primary} />
             ) : status === 'error' ? (
               <ErrorBanner message={errorMessage} onRetry={() => fetchMatches()} />
             ) : null
@@ -540,13 +547,13 @@ export default function MatchesHomepageScreen(props: Props) {
           ListEmptyComponent={
             status === 'ready' ? (
               <View style={styles.emptyState}>
-                <Ionicons name="calendar-outline" size={28} color={colors.outline} />
-                <Text style={styles.emptyStateText}>No matches found. Try a different sport or search.</Text>
+                <Ionicons name="calendar-outline" size={28} color={themeColors.outlineMuted} />
+                <Text style={styles.emptyStateText}>{t('matches.browse.empty')}</Text>
               </View>
             ) : null
           }
           ListFooterComponent={
-            loadingMore ? <ActivityIndicator style={styles.loadMoreSpinner} color={colors.primary} /> : null
+            loadingMore ? <ActivityIndicator style={styles.loadMoreSpinner} color={themeColors.primary} /> : null
           }
           ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
           renderItem={({ item: match }) => {
@@ -562,7 +569,6 @@ export default function MatchesHomepageScreen(props: Props) {
                 distanceLabel={distanceLabel}
                 onPress={() => props.onOpenMatch(match.matchId)}
                 onJoin={() => (props.onJoinMatch ?? props.onOpenMatch)(match.matchId)}
-                onToggleFavorite={() => handleToggleFavorite(match)}
                 onDirections={() => openVenueDirections(router, match)}
               />
             );
@@ -582,6 +588,7 @@ export default function MatchesHomepageScreen(props: Props) {
         pointerEvents={fabOpen ? 'auto' : 'none'}
         style={[
           styles.fabMenu,
+          { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder, borderWidth: 1 },
           {
             opacity: fabAnim,
             transform: [
@@ -593,7 +600,7 @@ export default function MatchesHomepageScreen(props: Props) {
       >
         {fabActions.map((action, index) => (
           <React.Fragment key={action.label}>
-            {index > 0 && <View style={styles.fabMenuDivider} />}
+            {index > 0 && <View style={[styles.fabMenuDivider, { backgroundColor: themeColors.divider }]} />}
             <TouchableOpacity
               testID={`fab-action-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
               style={styles.fabMenuItem}
@@ -602,17 +609,17 @@ export default function MatchesHomepageScreen(props: Props) {
                 action.onPress();
               }}
             >
-              <View style={styles.fabMenuIcon}>
-                <Ionicons name={action.icon} size={16} color={colors.primaryDark} />
+              <View style={[styles.fabMenuIcon, { backgroundColor: themeColors.tintedSurface }]}>
+                <Ionicons name={action.icon} size={16} color={themeColors.accentText} />
               </View>
-              <Text style={styles.fabMenuLabel}>{action.label}</Text>
+              <Text style={[styles.fabMenuLabel, { color: themeColors.textPrimary }]}>{action.label}</Text>
             </TouchableOpacity>
           </React.Fragment>
         ))}
       </Animated.View>
       <TouchableOpacity
         testID="matches-fab"
-        style={styles.fab}
+          style={[styles.fab, { backgroundColor: themeColors.primary, borderColor: themeColors.screenBackgroundAlt }]}
         onPress={() => toggleFab(!fabOpen)}
         activeOpacity={0.85}
       >
@@ -625,7 +632,7 @@ export default function MatchesHomepageScreen(props: Props) {
             ],
           }}
         >
-          <Ionicons name="add" size={26} color={colors.white} />
+          <Ionicons name="add" size={26} color={themeColors.white} />
         </Animated.View>
       </TouchableOpacity>
 
@@ -651,8 +658,8 @@ export default function MatchesHomepageScreen(props: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   sportToggle: {
     marginHorizontal: spacing.md,
   },
@@ -669,14 +676,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.headingText },
+  searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.textPrimary },
   filterDot: {
     position: 'absolute',
     top: -2,
@@ -693,9 +700,9 @@ const styles = StyleSheet.create({
     width: MAP_BUTTON_SIZE,
     height: MAP_BUTTON_SIZE,
     borderRadius: 12,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.mapButtonBorder,
+    borderColor: colors.chromeBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -704,12 +711,12 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginTop: -spacing.xs,
     marginBottom: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     paddingVertical: spacing.xs,
-    shadowColor: colors.primaryDark,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -723,7 +730,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  suggestionText: { flex: 1, fontSize: 13, color: colors.headingText },
+  suggestionText: { flex: 1, fontSize: 13, color: colors.textPrimary },
 
   subTabs: {
     marginHorizontal: spacing.md,
@@ -740,7 +747,7 @@ const styles = StyleSheet.create({
   spinner: { marginTop: spacing.xl },
   loadMoreSpinner: { marginVertical: spacing.md },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.outlineMuted, textAlign: 'center' },
 
   // Transparent full-screen catcher rendered behind the open FAB menu so a
   // tap anywhere outside the panel/button closes it (the menu + fab render
@@ -754,11 +761,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: colors.white,
+    borderColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
@@ -770,24 +777,24 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     bottom: FAB_MENU_BOTTOM_OFFSET,
     width: FAB_MENU_WIDTH,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingVertical: spacing.xs,
-    shadowColor: colors.primaryDark,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 10,
   },
   fabMenuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm },
-  fabMenuDivider: { height: 1, backgroundColor: colors.iconBackground, marginHorizontal: spacing.sm },
+  fabMenuDivider: { height: 1, backgroundColor: colors.roleCardSelectedBg, marginHorizontal: spacing.sm },
   fabMenuIcon: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fabMenuLabel: { fontSize: 13, fontWeight: '700', color: colors.headingText },
+  fabMenuLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
 });

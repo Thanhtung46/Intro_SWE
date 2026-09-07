@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,14 +19,17 @@ import { venueDetailRoute } from '@/constants/routes';
 import { comingSoon } from '@/utils/comingSoon';
 import ChatMessageBubble from '@/components/assistant/ChatMessageBubble';
 import PendingActionCard from '@/components/assistant/PendingActionCard';
+import TypingIndicator from '@/components/assistant/TypingIndicator';
 import VoiceRecorderButton from '@/components/assistant/VoiceRecorderButton';
 import {
   AssistantReply,
   ConflictAlternative,
   MatchResult,
+  clearConversation,
   getHistory,
   getOrCreateConversationId,
   sendMessage,
+  startNewConversation,
 } from '@/services/assistantService';
 import { ChatMessage, nextMessageId } from '@/types/assistant';
 
@@ -113,6 +117,12 @@ export default function AssistantScreen({ onBack }: Props) {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   };
 
+  useEffect(() => {
+    if (sending) {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [sending]);
+
   const handleSend = async (text: string) => {
     if (!conversationId || sending) return;
     const playerMessage: ChatMessage = {
@@ -167,6 +177,23 @@ export default function AssistantScreen({ onBack }: Props) {
     handleSend(actionText);
   };
 
+  const handleClearConversation = () => {
+    if (!conversationId || sending || messages.length === 0) return;
+    Alert.alert('Xoá đoạn hội thoại?', 'Toàn bộ tin nhắn với trợ lý sẽ bị xoá.', [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Xoá',
+        style: 'destructive',
+        onPress: async () => {
+          await clearConversation(conversationId);
+          const newId = await startNewConversation();
+          setConversationId(newId);
+          setMessages([]);
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -179,7 +206,19 @@ export default function AssistantScreen({ onBack }: Props) {
           <Ionicons name="arrow-back" size={18} color={colors.headingText} />
         </TouchableOpacity>
         <Text style={styles.title}>AI Assistant</Text>
-        <View style={styles.backButton} />
+        <TouchableOpacity
+          onPress={handleClearConversation}
+          disabled={sending || messages.length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Xoá đoạn hội thoại"
+          style={styles.backButton}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={18}
+            color={messages.length === 0 ? colors.cardBorder : colors.headingText}
+          />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -208,15 +247,9 @@ export default function AssistantScreen({ onBack }: Props) {
                 <ChatMessageBubble key={message.id} message={message} onResultPress={handleResultPress} />
               ),
             )}
+            {sending ? <TypingIndicator /> : null}
           </ScrollView>
         )}
-
-        {sending ? (
-          <View style={styles.typingRow}>
-            <Ionicons name="ellipsis-horizontal" size={16} color={colors.bodyText} />
-            <Text style={styles.typingText}>Trợ lý đang trả lời...</Text>
-          </View>
-        ) : null}
 
         <View style={styles.inputRow}>
           <VoiceRecorderButton
@@ -303,17 +336,6 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     paddingVertical: 12,
-  },
-  typingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  typingText: {
-    fontSize: 12,
-    color: colors.bodyText,
   },
   inputRow: {
     flexDirection: 'row',

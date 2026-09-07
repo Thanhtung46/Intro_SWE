@@ -5,8 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getErrorMessage } from '@/services/apiErrors';
 import {
   acceptTournamentRequest,
@@ -32,6 +34,9 @@ type Props = {
  * hosted tournaments still lives in ManageTournamentsScreen's Hosted tab.)
  */
 export default function ManageTournamentRequestsScreen({ tournamentId, onBack }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [tournament, setTournament] = useState<TournamentDetail | null>(null);
   const [requests, setRequests] = useState<TournamentJoinRequest[]>([]);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
@@ -73,7 +78,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
       await action(tournamentId, requestId);
       await fetchData();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('tournaments.common.error'), getErrorMessage(err));
     } finally {
       setActingId(null);
     }
@@ -87,7 +92,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
       setKickTarget(null);
       await fetchData();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('tournaments.common.error'), getErrorMessage(err));
     } finally {
       setIsKicking(false);
     }
@@ -112,7 +117,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
   if (status === 'error' || !tournament) {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={errorMessage || 'Tournament not found.'} onRetry={fetchData} />
+        <ErrorBanner message={errorMessage || t('tournaments.common.error')} onRetry={fetchData} />
       </SafeAreaView>
     );
   }
@@ -123,25 +128,25 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="manage-tournament-requests-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="manage-tournament-requests-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('tournaments.common.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.title}>Join Requests</Text>
+          <Text style={styles.title}>{t('tournaments.requests.title')}</Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            {tournament.title} · {tournament.acceptedTeamCount}/{tournament.maxTeams} teams
+            {tournament.title} · {t('tournaments.browse.teamsCount').replace('{accepted}', String(tournament.acceptedTeamCount)).replace('{max}', String(tournament.maxTeams))}
           </Text>
         </View>
         <View style={styles.backButtonSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.pendingCount}>{requests.length} pending</Text>
+        <Text style={styles.pendingCount}>{t('tournaments.requests.pending').replace('{count}', String(requests.length))}</Text>
 
         {requests.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="checkmark-done-outline" size={24} color={colors.outline} />
-            <Text style={styles.emptyText}>No pending requests.</Text>
+            <Ionicons name="checkmark-done-outline" size={24} color={colors.textMuted} />
+            <Text style={styles.emptyText}>{t('tournaments.requests.empty')}</Text>
           </View>
         ) : (
           requests.map((request) => {
@@ -162,7 +167,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
                       {request.teamName}
                     </Text>
                     <Text style={styles.captainLine} numberOfLines={1} ellipsizeMode="tail">
-                      Captain: {request.captain.fullName ?? 'Unknown'}
+                      {t('tournaments.requests.captain')}: {request.captain.fullName ?? t('tournaments.requests.unknown')}
                       {request.captain.phoneNumber ? ` · ${request.captain.phoneNumber}` : ''}
                     </Text>
                   </View>
@@ -173,11 +178,11 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
                   style={styles.rosterToggle}
                   onPress={() => toggleExpanded(request.requestId)}
                 >
-                  <Ionicons name="people-outline" size={14} color={colors.outline} />
+                  <Ionicons name="people-outline" size={14} color={colors.textMuted} />
                   <Text style={styles.rosterToggleText}>
-                    {isOpen ? 'Hide' : 'View'} roster ({request.roster.length})
+                    {isOpen ? t('tournaments.requests.hideRoster') : t('tournaments.requests.viewRoster')} ({request.roster.length})
                   </Text>
-                  <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.outline} />
+                  <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
                 </TouchableOpacity>
 
                 {isOpen && (
@@ -202,7 +207,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
                     disabled={isActing}
                     onPress={() => act(request.requestId, rejectTournamentRequest)}
                   >
-                    <Text style={styles.rejectButtonText}>Reject</Text>
+                    <Text style={styles.rejectButtonText}>{t('tournaments.requests.reject')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID={`accept-request-${request.requestId}`}
@@ -210,7 +215,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
                     disabled={isActing}
                     onPress={() => act(request.requestId, acceptTournamentRequest)}
                   >
-                    <Text style={styles.acceptButtonText}>Accept</Text>
+                    <Text style={styles.acceptButtonText}>{t('tournaments.requests.accept')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -220,7 +225,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
 
         {canKick && teams.length > 0 && (
           <View style={styles.acceptedSection}>
-            <Text style={styles.pendingCount}>Accepted teams</Text>
+            <Text style={styles.pendingCount}>{t('tournaments.manage.acceptedTeams')}</Text>
             {teams.map((team) => (
               <View key={team.teamId} style={styles.acceptedRow}>
                 <View style={styles.logo}>
@@ -235,7 +240,7 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
                     {team.teamName}
                   </Text>
                   <Text style={styles.captainLine} numberOfLines={1}>
-                    Captain: {team.captainFullName ?? 'Unknown'}
+                    {t('tournaments.requests.captain')}: {team.captainFullName ?? t('tournaments.requests.unknown')}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -253,9 +258,9 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
 
       <ConfirmDialog
         visible={kickTarget !== null}
-        title="Remove this team?"
-        message={`${kickTarget?.teamName ?? 'This team'} will be removed and its captain can't rejoin this tournament.`}
-        confirmLabel={isKicking ? 'Removing…' : 'Remove team'}
+        title={t('tournaments.requests.removeTitle')}
+        message={t('tournaments.requests.removeMessage').replace('{name}', kickTarget?.teamName ?? t('tournaments.common.team'))}
+        confirmLabel={isKicking ? t('tournaments.requests.removing') : t('tournaments.requests.remove')}
         onConfirm={confirmKick}
         onCancel={() => setKickTarget(null)}
       />
@@ -263,33 +268,33 @@ export default function ManageTournamentRequestsScreen({ tournamentId, onBack }:
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
   headerTextWrap: { flex: 1 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  subtitle: { fontSize: 12, color: colors.outline },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textMuted },
 
   content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl },
-  pendingCount: { fontSize: 12, fontWeight: '700', color: colors.outline, letterSpacing: 0.3 },
+  pendingCount: { fontSize: 12, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.3 },
   empty: { alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xl },
-  emptyText: { fontSize: 13, color: colors.outline },
+  emptyText: { fontSize: 13, color: colors.textMuted },
 
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.sm,
   },
@@ -298,31 +303,31 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   logoImage: { width: '100%', height: '100%' },
-  logoText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  logoText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   cardInfo: { flex: 1, gap: spacing.xxs },
-  teamName: { fontSize: 15, fontWeight: '700', color: colors.headingText },
-  captainLine: { fontSize: 12, color: colors.outline },
+  teamName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  captainLine: { fontSize: 12, color: colors.textMuted },
 
   rosterToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.formScreenBackground,
+    backgroundColor: colors.tintedSurface,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  rosterToggleText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.bodyText },
+  rosterToggleText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   rosterList: { gap: spacing.xxs, paddingHorizontal: spacing.xs },
   rosterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.xxs },
-  rosterName: { flex: 1, fontSize: 13, color: colors.bodyText },
-  rosterJersey: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  rosterName: { flex: 1, fontSize: 13, color: colors.textSecondary },
+  rosterJersey: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
 
   actions: { flexDirection: 'row', gap: spacing.sm },
   rejectButton: {
@@ -334,7 +339,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rejectButtonText: { fontSize: 13, fontWeight: '700', color: colors.error },
-  acceptButton: { flex: 1, backgroundColor: colors.success, borderRadius: 10, paddingVertical: spacing.sm, alignItems: 'center' },
+  acceptButton: { flex: 1, backgroundColor: colors.successText, borderRadius: 10, paddingVertical: spacing.sm, alignItems: 'center' },
   acceptButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
 
   acceptedSection: { gap: spacing.sm, marginTop: spacing.md },
@@ -342,10 +347,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
   },
   kickButton: {

@@ -7,10 +7,12 @@ import { useRouter } from 'expo-router';
 
 import ErrorBanner from '@/components/common/ErrorBanner';
 import MatchCard from '@/components/matches/MatchCard';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { skillLabel } from '@/constants/matchSkills';
-import { getErrorMessage, getHostProfile, getHostReviews, listMatches, setFavorite } from '@/services/matchService';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
+import { getErrorMessage, getHostProfile, getHostReviews, listMatches } from '@/services/matchService';
 import { openVenueDirections } from '@/utils/directions';
 import type { HostProfile, HostReview, Match, Sport } from '@/types/match';
 
@@ -50,6 +52,9 @@ const HOSTED_MATCHES_PREVIEW_COUNT = 1;
  */
 export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, onJoinMatch }: Props) {
   const router = useRouter();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [profile, setProfile] = useState<HostProfile | null>(null);
   const [hostedMatches, setHostedMatches] = useState<Match[]>([]);
   const [reviews, setReviews] = useState<HostReview[]>([]);
@@ -80,16 +85,6 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
     fetchProfile();
   }, [fetchProfile]);
 
-  const handleToggleFavorite = async (match: Match) => {
-    const nextFavorited = !match.isFavorited;
-    setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: nextFavorited } : m)));
-    try {
-      await setFavorite(match.matchId, nextFavorited);
-    } catch {
-      setHostedMatches((prev) => prev.map((m) => (m.matchId === match.matchId ? { ...m, isFavorited: match.isFavorited } : m)));
-    }
-  };
-
   if (status === 'loading') {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
@@ -101,7 +96,7 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
   if (status === 'error' || !profile) {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={errorMessage || 'Profile not found.'} onRetry={fetchProfile} />
+        <ErrorBanner message={errorMessage || t('matches.profile.notFound')} onRetry={fetchProfile} />
       </SafeAreaView>
     );
   }
@@ -120,7 +115,7 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.hero}>
           <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
+            colors={[colors.matchProfileGradientStart, colors.matchProfileGradientEnd]}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -135,7 +130,7 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
           <Text style={styles.name}>{profile.fullName}</Text>
           {profile.rating != null && (
             <View style={styles.ratingPill}>
-              <Ionicons name="star" size={13} color={colors.amber} />
+              <Ionicons name="star" size={13} color={colors.warningText} />
               <Text style={styles.ratingPillText}>{profile.rating.toFixed(1)}</Text>
             </View>
           )}
@@ -144,17 +139,17 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{profile.matchCount}</Text>
-            <Text style={styles.statLabel}>Hosted Matches</Text>
+            <Text style={styles.statLabel}>{t('matches.profile.hostedMatches')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{profile.reviewCount}</Text>
-            <Text style={styles.statLabel}>Reviews</Text>
+            <Text style={styles.statLabel}>{t('matches.profile.reviews')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{joinedLabel}</Text>
-            <Text style={styles.statLabel}>Joined</Text>
+            <Text style={styles.statLabel}>{t('matches.profile.joined')}</Text>
           </View>
         </View>
 
@@ -162,13 +157,13 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
           {skillEntries.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Ionicons name="football-outline" size={20} color={colors.headingText} />
-                <Text style={styles.sectionTitle}>Sports & Skill Level</Text>
+                <Ionicons name="football-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.sectionTitle}>{t('matches.profile.sportsSkillLevel')}</Text>
               </View>
               <View style={styles.skillRow}>
                 {skillEntries.map((entry) => (
                   <View key={entry.sport} style={styles.skillPill}>
-                    <Text style={styles.skillPillSport}>{entry.sport === 'FOOTBALL' ? 'Football' : 'Badminton'}</Text>
+                    <Text style={styles.skillPillSport}>{entry.sport === 'FOOTBALL' ? t('common.sportFootball') : t('common.sportBadminton')}</Text>
                     <View style={styles.skillPillDivider} />
                     <Text style={styles.skillPillLevel}>{entry.label}</Text>
                   </View>
@@ -179,22 +174,22 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
 
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Ionicons name="calendar-outline" size={20} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>Hosted Matches</Text>
+              <Ionicons name="calendar-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.sectionTitle}>{t('matches.profile.hostedMatches')}</Text>
               {hostedMatches.length > HOSTED_MATCHES_PREVIEW_COUNT && (
                 <TouchableOpacity
                   testID="hosted-matches-view-all"
                   style={styles.viewAllButton}
                   onPress={() => setShowAllHostedMatches((prev) => !prev)}
                 >
-                  <Text style={styles.viewAllText}>{showAllHostedMatches ? 'Show Less' : 'View All'}</Text>
+                  <Text style={styles.viewAllText}>{showAllHostedMatches ? t('matches.profile.showLess') : t('matches.profile.viewAll')}</Text>
                 </TouchableOpacity>
               )}
             </View>
             {hostedMatches.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="calendar-outline" size={24} color={colors.outline} />
-                <Text style={styles.emptyCardText}>No active hosted matches.</Text>
+                <Ionicons name="calendar-outline" size={24} color={colors.outlineMuted} />
+                <Text style={styles.emptyCardText}>{t('matches.manage.emptyActive')}</Text>
               </View>
             ) : (
               <View style={styles.matchList}>
@@ -204,7 +199,6 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
                     match={match}
                     onPress={() => onOpenMatch(match.matchId)}
                     onJoin={() => (onJoinMatch ?? onOpenMatch)(match.matchId)}
-                    onToggleFavorite={() => handleToggleFavorite(match)}
                     onDirections={() => openVenueDirections(router, match)}
                   />
                 ))}
@@ -214,13 +208,13 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
 
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.headingText} />
-              <Text style={styles.sectionTitle}>Reviews</Text>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.textPrimary} />
+              <Text style={styles.sectionTitle}>{t('matches.profile.reviews')}</Text>
             </View>
             {reviews.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.outline} />
-                <Text style={styles.emptyCardText}>No reviews yet.</Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.outlineMuted} />
+                <Text style={styles.emptyCardText}>{t('matches.profile.noReviews')}</Text>
               </View>
             ) : (
               <View style={styles.reviewList}>
@@ -232,14 +226,14 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
                       </View>
                       <View style={styles.reviewHeaderText}>
                         <Text style={styles.reviewerName} numberOfLines={1} ellipsizeMode="tail">
-                          {review.reviewer.fullName || 'Player'}
+                          {review.reviewer.fullName || t('matches.profile.playerFallback')}
                         </Text>
                         <Text style={styles.reviewMatchTitle} numberOfLines={1} ellipsizeMode="tail">
                           {review.match.title}
                         </Text>
                       </View>
                       <View style={styles.reviewRatingPill}>
-                        <Ionicons name="star" size={12} color={colors.amber} />
+                        <Ionicons name="star" size={12} color={colors.warningText} />
                         <Text style={styles.reviewRatingText}>{review.rating.toFixed(1)}</Text>
                       </View>
                     </View>
@@ -261,13 +255,13 @@ export default function CheckProfileScreen({ hostUserId, onBack, onOpenMatch, on
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackgroundAlt },
   scrollContent: { paddingBottom: spacing.xl },
 
   hero: { height: 192, overflow: 'hidden' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.groupImageScrim },
   topBarWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
   backButton: {
     marginLeft: spacing.md,
@@ -275,7 +269,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.stickyIconButtonBackground,
+    backgroundColor: colors.matchIconGlassBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -285,69 +279,69 @@ const styles = StyleSheet.create({
     width: 128,
     height: 128,
     borderRadius: 64,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderWidth: 6,
-    borderColor: colors.screenBackground,
+    borderColor: colors.screenBackgroundAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 40, fontWeight: '700', color: colors.primaryDark },
-  name: { fontSize: 20, fontWeight: '700', color: colors.headingText },
+  avatarText: { fontSize: 40, fontWeight: '700', color: colors.primary },
+  name: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   ratingPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-    backgroundColor: colors.amberSoft,
+    backgroundColor: colors.warningSurface,
     borderRadius: 9999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  ratingPillText: { fontSize: 13, fontWeight: '700', color: colors.amber },
+  ratingPillText: { fontSize: 13, fontWeight: '700', color: colors.warningText },
 
   statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md, gap: spacing.lg },
   statItem: { alignItems: 'center', gap: spacing.xxs },
   statValue: { fontSize: 16, fontWeight: '800', color: colors.primary },
-  statLabel: { fontSize: 13, color: colors.bodyText },
-  statDivider: { width: 1, height: 32, backgroundColor: colors.cardBorder },
+  statLabel: { fontSize: 13, color: colors.textSecondaryAlt },
+  statDivider: { width: 1, height: 32, backgroundColor: colors.chromeBorder },
 
   body: { padding: spacing.md, gap: spacing.lg },
   section: { gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  sectionTitle: { flex: 1, fontSize: 20, fontWeight: '700', color: colors.headingText },
+  sectionTitle: { flex: 1, fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   viewAllButton: { paddingVertical: spacing.xxs, paddingHorizontal: spacing.xs },
-  viewAllText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  viewAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   skillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   skillPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 9999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  skillPillSport: { fontSize: 14, fontWeight: '600', color: colors.headingText },
-  skillPillDivider: { width: 1, height: 16, backgroundColor: colors.cardBorder },
-  skillPillLevel: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
+  skillPillSport: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  skillPillDivider: { width: 1, height: 16, backgroundColor: colors.chromeBorder },
+  skillPillLevel: { fontSize: 12, fontWeight: '700', color: colors.primary },
 
   emptyCard: {
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.roleCardBg,
     borderRadius: 12,
     paddingVertical: spacing.xl,
   },
-  emptyCardText: { fontSize: 13, color: colors.bodyText },
+  emptyCardText: { fontSize: 13, color: colors.textSecondaryAlt },
 
   matchList: { gap: spacing.lg },
 
   reviewList: { gap: spacing.sm },
   reviewCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     padding: spacing.md,
     gap: spacing.xs,
   },
@@ -356,24 +350,24 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewAvatarText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  reviewAvatarText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   reviewHeaderText: { flex: 1, gap: spacing.xxs },
-  reviewerName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  reviewMatchTitle: { fontSize: 12, color: colors.outline },
+  reviewerName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  reviewMatchTitle: { fontSize: 12, color: colors.outlineMuted },
   reviewRatingPill: {
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-    backgroundColor: colors.amberSoft,
+    backgroundColor: colors.warningSurface,
     borderRadius: 9999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xxs,
   },
-  reviewRatingText: { fontSize: 12, fontWeight: '700', color: colors.amber },
-  reviewText: { fontSize: 13, color: colors.bodyText },
+  reviewRatingText: { fontSize: 12, fontWeight: '700', color: colors.warningText },
+  reviewText: { fontSize: 13, color: colors.textSecondaryAlt },
 });

@@ -70,6 +70,9 @@ class FakeBackend:
     async def search_matches(self, criteria):
         return []
 
+    async def get_geo_vn(self):
+        return {"provinces": []}
+
 
 class FakeLLM:
     def __init__(self, intent=None, extraction=None):
