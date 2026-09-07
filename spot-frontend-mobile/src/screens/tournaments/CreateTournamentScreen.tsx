@@ -17,8 +17,10 @@ import SubmitButton from '@/components/common/SubmitButton';
 import DateTimeField from '@/components/tournaments/DateTimeField';
 import PinDropModal from '@/components/matches/PinDropModal';
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { GENDER_DIVISIONS, formatsForSport, needsGenderDivision } from '@/constants/tournamentFormats';
 import { createTournamentSchema } from '@/schemas/createTournamentSchema';
 import { getErrorMessage } from '@/services/apiErrors';
@@ -59,6 +61,9 @@ export default function CreateTournamentScreen({
   onSaved,
   onHostMatch,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const init = initialTournament;
   const locked = mode === 'edit' && (init?.status === 'ACTIVE' || init?.status === 'COMPLETED');
 
@@ -270,7 +275,7 @@ export default function CreateTournamentScreen({
   if (gate === 'checking') {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <Text style={styles.checkingText}>Checking organizer access…</Text>
+        <Text style={styles.checkingText}>{t('tournaments.create.checkingAccess')}</Text>
       </SafeAreaView>
     );
   }
@@ -279,30 +284,28 @@ export default function CreateTournamentScreen({
     const stats = gateStats ?? { matchCount: 0, avgRating: 0 };
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <Header title="Create Tournament" onBack={onBack} />
+        <Header title={t('tournaments.create.createTitle')} onBack={onBack} />
         <ScrollView contentContainerStyle={styles.gateContent}>
           <View style={styles.gateIcon}>
-            <Ionicons name="lock-closed" size={30} color={colors.outline} />
+            <Ionicons name="lock-closed" size={30} color={colors.textMuted} />
           </View>
-          <Text style={styles.gateTitle}>Organizer access required</Text>
-          <Text style={styles.gateSubtitle}>
-            Hosting a tournament unlocks once you have a strong track record hosting pickup matches.
-          </Text>
+          <Text style={styles.gateTitle}>{t('tournaments.create.accessRequired')}</Text>
+          <Text style={styles.gateSubtitle}>{t('tournaments.create.gateSubtitle')}</Text>
 
           <GateRow
             pass={stats.matchCount >= MIN_HOSTED}
-            label="Hosted matches"
+            label={t('tournaments.create.hostedMatches')}
             value={`${stats.matchCount} / ${MIN_HOSTED}`}
           />
           <GateRow
             pass={stats.avgRating >= MIN_RATING}
-            label="Host rating"
+            label={t('tournaments.create.hostRating')}
             value={`${stats.avgRating.toFixed(1)} ★ (need ${MIN_RATING})`}
           />
-          <Text style={styles.gateCaveat}>Your organizer status is confirmed when you publish.</Text>
+          <Text style={styles.gateCaveat}>{t('tournaments.create.accessCaveat')}</Text>
 
           <TouchableOpacity testID="create-tournament-host-match" style={styles.gateCta} onPress={onHostMatch}>
-            <Text style={styles.gateCtaText}>Host a Match</Text>
+            <Text style={styles.gateCtaText}>{t('tournaments.create.hostMatch')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -311,26 +314,24 @@ export default function CreateTournamentScreen({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <Header title={mode === 'edit' ? 'Edit Tournament' : 'Create Tournament'} onBack={onBack} />
+      <Header title={mode === 'edit' ? t('tournaments.create.editTitle') : t('tournaments.create.createTitle')} onBack={onBack} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {locked ? (
           <View style={styles.lockBanner}>
-            <Ionicons name="lock-closed" size={15} color={colors.orange} />
-            <Text style={styles.lockBannerText}>
-              This tournament is {init?.status?.toLowerCase()} — venue and schedule are locked.
-            </Text>
+            <Ionicons name="lock-closed" size={15} color={colors.warningText} />
+            <Text style={styles.lockBannerText}>{t('tournaments.create.lockBanner').replace('{status}', init?.status?.toLowerCase() ?? '')}</Text>
           </View>
         ) : null}
         {submitError ? <ErrorBanner message={submitError} onRetry={handleSubmit} /> : null}
 
-        <Section title="Sport & Format" icon="trophy-outline">
-          <Field label="Sport">
+        <Section title={t('tournaments.create.sportFormat')} icon="trophy-outline">
+          <Field label={t('tournaments.create.sport')}>
             <View style={[styles.readOnlyPill]}>
               <Text style={styles.readOnlyPillText}>{sport === 'FOOTBALL' ? 'Football' : 'Badminton'}</Text>
             </View>
           </Field>
-          <Field label="Format" error={fieldErrors.format}>
+          <Field label={t('tournaments.create.format')} error={fieldErrors.format}>
             <View style={styles.chipRow}>
               {formatOptions.map((opt) => {
                 const active = opt.value === format;
@@ -349,7 +350,7 @@ export default function CreateTournamentScreen({
             </View>
           </Field>
           {needsGenderDivision(sport) && (
-            <Field label="Gender Division" error={fieldErrors.genderDivision}>
+            <Field label={t('tournaments.create.genderDivision')} error={fieldErrors.genderDivision}>
               <View style={styles.chipRow}>
                 {GENDER_DIVISIONS.map((opt) => {
                   const active = opt.value === genderDivision;
@@ -370,23 +371,23 @@ export default function CreateTournamentScreen({
           )}
         </Section>
 
-        <Section title="Details" icon="information-circle-outline">
-          <Field label="Tournament Title" error={fieldErrors.title}>
+        <Section title={t('tournaments.create.details')} icon="information-circle-outline">
+          <Field label={t('tournaments.create.title')} error={fieldErrors.title}>
             <TextInput
               testID="create-tournament-title"
               style={styles.input}
-              placeholder="e.g. Saigon Amateur Cup 2026"
-              placeholderTextColor={colors.outline}
+              placeholder={t('tournaments.create.titlePlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={title}
               onChangeText={setTitle}
             />
           </Field>
-          <Field label="Cover Image URL" error={fieldErrors.coverUrl}>
+          <Field label={t('tournaments.create.coverUrl')} error={fieldErrors.coverUrl}>
             <TextInput
               testID="create-tournament-cover"
               style={styles.input}
-              placeholder="https://..."
-              placeholderTextColor={colors.outline}
+              placeholder={t('tournaments.join.logoUrlPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               keyboardType="url"
               value={coverUrl}
@@ -396,12 +397,12 @@ export default function CreateTournamentScreen({
               <Image source={{ uri: coverUrl }} style={styles.coverPreview} resizeMode="cover" />
             ) : null}
           </Field>
-          <Field label="Description" error={fieldErrors.description}>
+          <Field label={t('tournaments.create.description')} error={fieldErrors.description}>
             <TextInput
               testID="create-tournament-description"
               style={[styles.input, styles.multiline]}
-              placeholder="Overview, rules, and competition structure (groups, knockout…). There is no separate Rules tab."
-              placeholderTextColor={colors.outline}
+              placeholder={t('tournaments.create.descriptionPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               multiline
               value={description}
               onChangeText={setDescription}
@@ -409,15 +410,15 @@ export default function CreateTournamentScreen({
           </Field>
         </Section>
 
-        <Section title="Venue" icon="location-outline">
-          <Field label="Venue Name" error={fieldErrors.venueName}>
+        <Section title={t('tournaments.create.venue')} icon="location-outline">
+          <Field label={t('tournaments.create.venue')} error={fieldErrors.venueName}>
             <View style={styles.locationFieldWrap}>
               <View style={styles.pickerField}>
                 <TextInput
                   testID="create-tournament-venue-name"
                   style={[styles.locationInput, locked && styles.readOnlyInput]}
-                  placeholder="Search or enter venue name"
-                  placeholderTextColor={colors.outline}
+                  placeholder={t('tournaments.create.venuePlaceholder')}
+                  placeholderTextColor={colors.textMuted}
                   value={venueName}
                   editable={!locked}
                   onChangeText={(t) => {
@@ -429,7 +430,7 @@ export default function CreateTournamentScreen({
                 />
                 {!locked && (
                   <TouchableOpacity testID="create-tournament-open-map" onPress={() => setPinVisible(true)}>
-                    <Ionicons name="map-outline" size={18} color={colors.primaryDark} />
+                    <Ionicons name="map-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -446,7 +447,7 @@ export default function CreateTournamentScreen({
                           style={[styles.suggestionRow, index > 0 && styles.suggestionRowBorder]}
                           onPress={() => applyVenueSuggestion(s)}
                         >
-                          <Ionicons name="location-outline" size={14} color={colors.outline} />
+                          <Ionicons name="location-outline" size={14} color={colors.textMuted} />
                           <View style={styles.flexShrink}>
                             <Text style={styles.suggestionText} numberOfLines={1}>
                               {s.venueName}
@@ -459,18 +460,18 @@ export default function CreateTournamentScreen({
                       ))}
                     </ScrollView>
                   ) : (
-                    <Text style={styles.suggestionsEmpty}>No saved venues match. Keep typing or pick on the map.</Text>
+                    <Text style={styles.suggestionsEmpty}>{t('tournaments.create.noVenues')}</Text>
                   )}
                 </View>
               )}
             </View>
           </Field>
-          <Field label="Street Address" error={fieldErrors.venueAddress}>
+          <Field label={t('tournaments.create.streetAddress')} error={fieldErrors.venueAddress}>
             <TextInput
               testID="create-tournament-venue-address"
               style={[styles.input, locked && styles.readOnlyInput]}
-              placeholder="123 Sports Blvd"
-              placeholderTextColor={colors.outline}
+              placeholder={t('tournaments.create.addressPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               value={venueAddress}
               editable={!locked}
               onChangeText={setVenueAddress}
@@ -478,8 +479,8 @@ export default function CreateTournamentScreen({
           </Field>
           <View style={styles.row}>
             <SelectField
-              label="Province/City"
-              placeholder="Select province"
+              label={t('tournaments.create.province')}
+              placeholder={t('tournaments.create.selectProvince')}
               value={province}
               disabled={locked || locationLocked}
               onChange={(v) => {
@@ -492,8 +493,8 @@ export default function CreateTournamentScreen({
               containerStyle={styles.rowItem}
             />
             <SelectField
-              label="Ward/Commune"
-              placeholder={province ? 'Select ward' : 'Pick province'}
+              label={t('tournaments.create.ward')}
+              placeholder={province ? t('tournaments.create.selectWard') : t('tournaments.create.pickProvince')}
               value={city}
               disabled={locked || locationLocked}
               onChange={(v) => !locked && setCity(v)}
@@ -503,36 +504,34 @@ export default function CreateTournamentScreen({
             />
           </View>
           {(fieldErrors.latitude || fieldErrors.longitude) && !locked ? (
-            <Text style={styles.fieldError}>Set the exact location on the map.</Text>
+            <Text style={styles.fieldError}>{t('tournaments.create.exactLocation')}</Text>
           ) : null}
           {latitude != null && longitude != null ? (
-            <Text style={styles.coordHint}>
-              Pinned at {latitude.toFixed(5)}, {longitude.toFixed(5)}
-            </Text>
+            <Text style={styles.coordHint}>{t('tournaments.create.pinnedAt').replace('{lat}', latitude.toFixed(5)).replace('{lng}', longitude.toFixed(5))}</Text>
           ) : null}
         </Section>
 
-        <Section title="Schedule" icon="calendar-outline">
+        <Section title={t('tournaments.create.schedule')} icon="calendar-outline">
           <DateTimeField
-            label="Starts At"
+            label={t('tournaments.create.startsAt')}
             value={startsAt}
             disabled={locked}
             error={fieldErrors.startsAt}
             onChange={setStartsAt}
           />
-          <DateTimeField label="Ends At" value={endsAt} disabled={locked} error={fieldErrors.endsAt} onChange={setEndsAt} />
+          <DateTimeField label={t('tournaments.create.endsAt')} value={endsAt} disabled={locked} error={fieldErrors.endsAt} onChange={setEndsAt} />
           <DateTimeField
-            label="Registration Deadline"
+            label={t('tournaments.create.registrationDeadline')}
             value={registrationDeadline}
             disabled={locked}
             error={fieldErrors.registrationDeadline}
             onChange={setRegistrationDeadline}
           />
-          <Text style={styles.helperText}>Deadline ≤ start ≤ end.</Text>
+          <Text style={styles.helperText}>{t('tournaments.create.scheduleHelp')}</Text>
         </Section>
 
-        <Section title="Teams & Fees" icon="cash-outline">
-          <Field label="Max Teams" error={fieldErrors.maxTeams}>
+        <Section title={t('tournaments.create.teamsFees')} icon="cash-outline">
+          <Field label={t('tournaments.create.maxTeams')} error={fieldErrors.maxTeams}>
             <TextInput
               testID="create-tournament-max-teams"
               style={[styles.input, mode === 'edit' && styles.readOnlyInput]}
@@ -542,7 +541,7 @@ export default function CreateTournamentScreen({
               onChangeText={(t) => setMaxTeams(t.replace(/[^0-9]/g, ''))}
             />
           </Field>
-          <Field label="Registration Fee (VND / team)" error={fieldErrors.registrationFeeVnd}>
+          <Field label={t('tournaments.create.feePerTeam')} error={fieldErrors.registrationFeeVnd}>
             <TextInput
               testID="create-tournament-fee"
               style={styles.input}
@@ -551,7 +550,7 @@ export default function CreateTournamentScreen({
               onChangeText={(t) => setRegistrationFeeVnd(t.replace(/[^0-9]/g, ''))}
             />
           </Field>
-          <Field label="Prize Pool (VND)" error={fieldErrors.prizePoolVnd}>
+          <Field label={t('tournaments.create.prizeVnd')} error={fieldErrors.prizePoolVnd}>
             <TextInput
               testID="create-tournament-prize"
               style={styles.input}
@@ -560,16 +559,16 @@ export default function CreateTournamentScreen({
               onChangeText={(t) => setPrizePoolVnd(t.replace(/[^0-9]/g, ''))}
             />
           </Field>
-          <Text style={styles.helperText}>Display only — no payment is collected in-app.</Text>
+          <Text style={styles.helperText}>{t('tournaments.create.paymentNotice')}</Text>
         </Section>
 
         <View style={styles.hostedByRow}>
-          <Ionicons name="shield-checkmark-outline" size={15} color={colors.outline} />
-          <Text style={styles.hostedByText}>Hosted by SPOT</Text>
+          <Ionicons name="shield-checkmark-outline" size={15} color={colors.textMuted} />
+          <Text style={styles.hostedByText}>{t('tournaments.create.hostedBySpot')}</Text>
         </View>
 
         <SubmitButton
-          label={mode === 'edit' ? 'Save Changes' : 'Create Tournament'}
+          label={mode === 'edit' ? t('tournaments.create.update') : t('tournaments.create.publish')}
           loading={isSubmitting}
           onPress={handleSubmit}
         />
@@ -602,10 +601,13 @@ export default function CreateTournamentScreen({
 }
 
 function Header({ title, onBack }: { title: string; onBack: () => void }) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   return (
     <View style={styles.header}>
-      <TouchableOpacity testID="create-tournament-back" style={styles.backButton} onPress={onBack}>
-        <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+      <TouchableOpacity testID="create-tournament-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('tournaments.common.back')}>
+        <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={styles.backButton} />
@@ -622,11 +624,13 @@ function Section({
   icon: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionIconCircle}>
-          <Ionicons name={icon} size={16} color={colors.primaryDark} />
+          <Ionicons name={icon} size={16} color={colors.primary} />
         </View>
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
@@ -636,6 +640,8 @@ function Section({
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -646,34 +652,36 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 function GateRow({ pass, label, value }: { pass: boolean; label: string; value: string }) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   return (
     <View style={styles.gateRow}>
       <Ionicons
         name={pass ? 'checkmark-circle' : 'alert-circle'}
         size={18}
-        color={pass ? colors.success : colors.amber}
+        color={pass ? colors.successText : colors.warningText}
       />
       <Text style={styles.gateRowLabel}>{label}</Text>
-      <Text style={[styles.gateRowValue, { color: pass ? colors.success : colors.amber }]}>{value}</Text>
+      <Text style={[styles.gateRowValue, { color: pass ? colors.successText : colors.warningText }]}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.screenBackground },
-  checkingText: { fontSize: 14, color: colors.outline },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.screenBackgroundAlt },
+  checkingText: { fontSize: 14, color: colors.textMuted },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.headingText },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   content: { padding: spacing.md, paddingBottom: spacing.xl * 2, gap: spacing.md },
 
@@ -681,11 +689,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.orangeSoft,
+    backgroundColor: colors.warningSurface,
     borderRadius: 12,
     padding: spacing.sm,
   },
-  lockBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.orange },
+  lockBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.warningText },
 
   section: { gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -693,66 +701,66 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.headingText },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   sectionBody: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
     gap: spacing.md,
   },
 
   field: { gap: spacing.xs },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   fieldError: { fontSize: 12, color: colors.error },
 
   input: {
     borderWidth: 1,
-    borderColor: colors.dotInactive,
+    borderColor: colors.inputBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
   multiline: { minHeight: 90, textAlignVertical: 'top' },
-  readOnlyInput: { backgroundColor: colors.formScreenBackground, color: colors.outline },
+  readOnlyInput: { backgroundColor: colors.tintedSurface, color: colors.textMuted },
 
   coverPreview: {
     marginTop: spacing.xs,
     width: '100%',
     height: 120,
     borderRadius: 10,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     overflow: 'hidden',
   },
 
   readOnlyPill: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.formScreenBackground,
+    backgroundColor: colors.tintedSurface,
     borderRadius: 9999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-  readOnlyPillText: { fontSize: 13, fontWeight: '600', color: colors.outline },
+  readOnlyPillText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     borderWidth: 1,
-    borderColor: colors.dotInactive,
+    borderColor: colors.inputBorder,
     borderRadius: 9999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipDisabled: { opacity: 0.4 },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   chipTextActive: { color: colors.white },
 
   pickerField: {
@@ -760,26 +768,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.dotInactive,
+    borderColor: colors.inputBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  locationInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  locationInput: { flex: 1, fontSize: 14, color: colors.textPrimary, paddingVertical: 0 },
   locationFieldWrap: { gap: spacing.xxs },
   suggestionsBox: {
     maxHeight: 200,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   suggestionsSpinner: { paddingVertical: spacing.md },
   suggestionsEmpty: {
     fontSize: 12,
-    color: colors.outline,
+    color: colors.textMuted,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
@@ -790,46 +798,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
-  suggestionSubtext: { fontSize: 11, color: colors.outline },
+  suggestionRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.surfaceBorder },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  suggestionSubtext: { fontSize: 11, color: colors.textMuted },
   flexShrink: { flexShrink: 1 },
-  pickerValue: { fontSize: 14, color: colors.headingText },
-  pickerPlaceholder: { fontSize: 14, color: colors.outline },
-  coordHint: { fontSize: 12, color: colors.outline },
+  pickerValue: { fontSize: 14, color: colors.textPrimary },
+  pickerPlaceholder: { fontSize: 14, color: colors.textMuted },
+  coordHint: { fontSize: 12, color: colors.textMuted },
 
   row: { flexDirection: 'row', gap: spacing.sm },
   rowItem: { flex: 1, gap: spacing.xxs },
-  helperText: { fontSize: 12, color: colors.outline },
+  helperText: { fontSize: 12, color: colors.textMuted },
 
   hostedByRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs },
-  hostedByText: { fontSize: 13, fontWeight: '600', color: colors.outline },
+  hostedByText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
 
   gateContent: { padding: spacing.xl, alignItems: 'center', gap: spacing.md },
   gateIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gateTitle: { fontSize: 20, fontWeight: '800', color: colors.headingText },
-  gateSubtitle: { fontSize: 14, color: colors.bodyText, textAlign: 'center', lineHeight: 20 },
+  gateTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  gateSubtitle: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   gateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     width: '100%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.md,
   },
-  gateRowLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.headingText },
+  gateRowLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   gateRowValue: { fontSize: 14, fontWeight: '700' },
-  gateCaveat: { fontSize: 12, color: colors.outline, textAlign: 'center' },
+  gateCaveat: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
   gateCta: {
     marginTop: spacing.sm,
     backgroundColor: colors.primary,

@@ -300,6 +300,13 @@ export async function createBooking(playerId, dto) {
       });
     });
 
+    notifyPlayerOfNewBooking(playerId, field, booking, rangeStart).catch((err) => {
+      logger.warn('Player booking-created notification failed', {
+        error: err.message,
+        bookingId: booking.booking_id,
+      });
+    });
+
     return toPublicBooking(booking);
   } finally {
     client.release();
@@ -324,6 +331,27 @@ async function notifyOwnerOfNewBooking(field, booking, startAt) {
     bookingId: booking.booking_id,
     startAt,
     audience: 'OWNER',
+  });
+}
+
+/**
+ * Best-effort: confirms to the player their booking was created, and
+ * schedules the player's own T-24h/T-2h "booking starting soon" reminders
+ * (separate from the owner's reminders on the same booking).
+ */
+async function notifyPlayerOfNewBooking(playerId, field, booking, startAt) {
+  await notificationService.createNotification({
+    userId: playerId,
+    type: NOTIFICATION_TYPES.BOOKING_CREATED,
+    title: 'Booking confirmed',
+    body: `Your booking for ${field.field_name} at ${field.venue_name} on ${booking.booking_date} is confirmed.`,
+    data: { bookingId: booking.booking_id, fieldId: field.field_id },
+  });
+  await notificationService.scheduleBookingReminders({
+    userId: playerId,
+    bookingId: booking.booking_id,
+    startAt,
+    audience: 'PLAYER',
   });
 }
 

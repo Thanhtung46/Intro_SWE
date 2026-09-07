@@ -4,9 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SelectField } from '@/components/SelectField';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
-import { skillTierColor, skillsForSport } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
+import { groupSkillTier } from '@/components/groups/groupPresentation';
+import { groupSkillLabel } from '@/components/groups/groupPresentation';
 import { getVnAdminTree } from '@/services/matchService';
 import { promptLocationFailure, requestCurrentPosition } from '@/utils/location';
 import type { GroupFilters } from '@/types/groupFilters';
@@ -39,6 +43,9 @@ const SLIDER_INSET = spacing.md;
  * latitude/longitude/radiusKm (XOR with province/city at the API level).
  */
 export default function GroupFilterSheet({ visible, sport, initialFilters, onClose, onApply }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [favoritedOnly, setFavoritedOnly] = useState(false);
   const [locationMode, setLocationMode] = useState<LocationMode>('location');
@@ -122,9 +129,9 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
           <View style={styles.header}>
-            <Text style={styles.title}>Filters</Text>
-            <TouchableOpacity testID="group-filter-close" style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={16} color={colors.headingText} />
+            <Text style={styles.title}>{t('groups.filter.title')}</Text>
+            <TouchableOpacity testID="group-filter-close" style={styles.closeButton} onPress={onClose} accessibilityLabel={t('groups.actions.close')}>
+              <Ionicons name="close" size={16} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -134,7 +141,7 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                 <View style={[styles.radioOuter, locationMode === 'location' && styles.radioOuterActive]}>
                   {locationMode === 'location' && <View style={styles.radioInner} />}
                 </View>
-                <Text style={styles.sectionLabel}>Location</Text>
+                <Text style={styles.sectionLabel}>{t('groups.filter.location')}</Text>
               </TouchableOpacity>
               <View
                 style={locationMode !== 'location' && styles.dimmed}
@@ -145,8 +152,9 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
               ) : (
                 <View style={styles.row}>
                   <SelectField
-                    label="Province/City"
-                    placeholder="Select province"
+                    themeColors={colors}
+                    label={t('groups.form.province')}
+                    placeholder={t('groups.form.selectProvince')}
                     value={provinceCode}
                     onChange={(value) => {
                       setProvinceCode(value);
@@ -156,8 +164,9 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                     containerStyle={styles.rowItem}
                   />
                   <SelectField
-                    label="Ward/Commune"
-                    placeholder={provinceCode ? 'Select ward' : 'Pick province'}
+                    themeColors={colors}
+                    label={t('groups.form.ward')}
+                    placeholder={provinceCode ? t('groups.form.selectWard') : t('groups.form.pickProvince')}
                     value={cityCode}
                     onChange={setCityCode}
                     options={cityOptions}
@@ -170,12 +179,12 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                       style={styles.favoriteButton}
                       onPress={() => setFavoritedOnly((prev) => !prev)}
                       accessibilityRole="button"
-                      accessibilityLabel="Favorited groups only"
+                      accessibilityLabel={t('groups.filter.favoritesOnly')}
                     >
                       <Ionicons
                         name={favoritedOnly ? 'heart' : 'heart-outline'}
                         size={18}
-                        color={favoritedOnly ? colors.error : colors.primaryDark}
+                        color={favoritedOnly ? colors.error : colors.primary}
                       />
                     </TouchableOpacity>
                   </View>
@@ -189,7 +198,7 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                 <View style={[styles.radioOuter, locationMode === 'distance' && styles.radioOuterActive]}>
                   {locationMode === 'distance' && <View style={styles.radioInner} />}
                 </View>
-                <Text style={styles.sectionLabel}>Distance</Text>
+                <Text style={styles.sectionLabel}>{t('groups.filter.distance')}</Text>
                 <Text style={[styles.distanceValue, locationMode !== 'distance' && styles.dimmed]}>{radiusKm} km</Text>
               </TouchableOpacity>
               <View
@@ -206,8 +215,8 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                       sliderLength={Math.max(sliderWidth - SLIDER_INSET * 2, 0)}
                       onValuesChange={([value]) => setRadiusKm(value)}
                       enabledOne={locationMode === 'distance'}
-                      selectedStyle={{ backgroundColor: colors.primaryDark }}
-                      unselectedStyle={{ backgroundColor: colors.cardBorder }}
+                      selectedStyle={{ backgroundColor: colors.primary }}
+                      unselectedStyle={{ backgroundColor: colors.surfaceBorder }}
                       markerStyle={styles.sliderMarker}
                       touchDimensions={{ height: 40, width: 40, borderRadius: 20, slipDisplacement: 40 }}
                     />
@@ -217,16 +226,16 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                   <Text style={styles.helperText}>{RADIUS_MIN} km</Text>
                   <Text style={styles.helperText}>{RADIUS_MAX} km</Text>
                 </View>
-                <Text style={styles.helperText}>Uses your current device location.</Text>
+                <Text style={styles.helperText}>{t('groups.filter.deviceLocation')}</Text>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Skill Level</Text>
+              <Text style={styles.sectionLabel}>{t('groups.skill.title')}</Text>
               <View style={styles.skillGrid}>
                 {skillsForSport(sport).map((skill) => {
                   const selected = selectedSkills.includes(skill.code);
-                  const tier = skillTierColor(sport, skill.code);
+                  const tier = groupSkillTier(colors, sport, skill.code);
                   return (
                     <TouchableOpacity
                       key={skill.code}
@@ -239,7 +248,7 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
                       onPress={() => toggleSkill(skill.code)}
                     >
                       {selected && <Ionicons name="checkmark" size={14} color={colors.white} style={styles.skillChipCheck} />}
-                      <Text style={styles.skillChipText}>{skill.label}</Text>
+                      <Text style={styles.skillChipText}>{groupSkillLabel(t, skill.code)}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -249,7 +258,7 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
 
           <View style={styles.footer}>
             <TouchableOpacity testID="group-filter-reset" style={styles.resetButton} onPress={handleReset}>
-              <Text style={styles.resetButtonText}>Reset</Text>
+              <Text style={styles.resetButtonText}>{t('groups.filter.reset')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="group-filter-apply"
@@ -260,7 +269,7 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
               {locating ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.applyButtonText}>Apply Filters</Text>
+                <Text style={styles.applyButtonText}>{t('groups.filter.apply')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -270,11 +279,11 @@ export default function GroupFilterSheet({ visible, sport, initialFilters, onClo
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.sheetOverlay, justifyContent: 'flex-end' },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'flex-end' },
   sheet: {
     maxHeight: '85%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
@@ -284,20 +293,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.iconBackground,
+    borderBottomColor: colors.tintedSurface,
   },
-  title: { fontSize: 22, fontWeight: '700', color: colors.headingText },
+  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: { padding: spacing.md, gap: spacing.lg },
   section: { gap: spacing.sm },
-  sectionLabel: { fontSize: 15, color: colors.headingText },
+  sectionLabel: { fontSize: 15, color: colors.textPrimary },
   row: { flexDirection: 'row', gap: spacing.sm },
   rowItem: { flex: 1, gap: spacing.xxs },
   geoLoading: { alignSelf: 'flex-start', marginVertical: spacing.sm },
@@ -308,21 +317,21 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  distanceValue: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  distanceValue: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: colors.primary },
   dimmed: { opacity: 0.4 },
   sliderWrap: { width: '100%', alignItems: 'center', paddingVertical: spacing.xs, paddingHorizontal: SLIDER_INSET },
   sliderMarker: {
     height: 22,
     width: 22,
     borderRadius: 11,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
   },
   rangeLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   radioOuter: {
@@ -330,13 +339,13 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: colors.outline,
+    borderColor: colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOuterActive: { borderColor: colors.primaryDark },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primaryDark },
-  helperText: { fontSize: 11, color: colors.outline },
+  radioOuterActive: { borderColor: colors.primary },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  helperText: { fontSize: 11, color: colors.textMuted },
   skillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   skillChip: {
     flexDirection: 'row',
@@ -346,7 +355,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  skillChipSelected: { borderColor: colors.headingText, borderWidth: 2 },
+  skillChipSelected: { borderColor: colors.textPrimary, borderWidth: 2 },
   skillChipCheck: { marginRight: spacing.xxs },
   skillChipText: { fontSize: 13, fontWeight: '700', color: colors.white },
   footer: {
@@ -354,23 +363,23 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.tintedSurface,
   },
   resetButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.outline,
+    borderColor: colors.textMuted,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
-  resetButtonText: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  resetButtonText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   applyButton: {
     flex: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },

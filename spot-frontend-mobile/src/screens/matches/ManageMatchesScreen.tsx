@@ -7,9 +7,12 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
 import JoinRequestListItem from '@/components/matches/JoinRequestListItem';
 import ManageMatchCard from '@/components/matches/ManageMatchCard';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { cancelJoinRequest, cancelMatch, getErrorMessage, listMine, listMyJoinRequests } from '@/services/matchService';
+import type { TranslationKey } from '@/i18n/translations';
 import type { Match, MineTab, MyJoinRequest } from '@/types/match';
 
 type Status = 'loading' | 'ready' | 'error';
@@ -21,11 +24,13 @@ type Props = {
   onEditMatch: (matchId: number) => void;
 };
 
-const TABS: { key: MineTab; label: string; emptyText: string }[] = [
-  { key: 'active', label: 'Active', emptyText: 'No active hosted matches.' },
-  { key: 'completed', label: 'Completed', emptyText: 'No completed matches yet.' },
-  { key: 'joinRequests', label: 'Requests', emptyText: 'No pending or rejected join requests.' },
-];
+function getTabs(t: (key: TranslationKey) => string): { key: MineTab; label: string; emptyText: string }[] {
+  return [
+    { key: 'active', label: t('matches.manage.tabActive'), emptyText: t('matches.manage.emptyActive') },
+    { key: 'completed', label: t('matches.manage.tabCompleted'), emptyText: t('matches.manage.emptyCompleted') },
+    { key: 'joinRequests', label: t('matches.manage.tabRequests'), emptyText: t('matches.manage.emptyRequests') },
+  ];
+}
 
 /**
  * Manage/My Matches — Figma `101:98`, redesigned per `l3tmW`/`a6BBo`/
@@ -34,6 +39,10 @@ const TABS: { key: MineTab; label: string; emptyText: string }[] = [
  * response shape, so kept as separate state rather than reusing `matches`.
  */
 export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad, onEditMatch }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
+  const TABS = getTabs(t);
   const [tab, setTab] = useState<MineTab>('active');
   const [matches, setMatches] = useState<Match[]>([]);
   const [joinRequests, setJoinRequests] = useState<MyJoinRequest[]>([]);
@@ -111,9 +120,9 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity testID="manage-matches-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Manage Matches</Text>
+        <Text style={styles.title}>{t('matches.manage.title')}</Text>
         <View style={styles.backButtonSpacer} />
       </View>
 
@@ -149,7 +158,7 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
           <ErrorBanner message={errorMessage} onRetry={() => fetchData()} />
         ) : isEmpty ? (
           <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={28} color={colors.outline} />
+            <Ionicons name="calendar-outline" size={28} color={colors.outlineMuted} />
             <Text style={styles.emptyStateText}>{activeTab.emptyText}</Text>
           </View>
         ) : tab === 'joinRequests' ? (
@@ -186,20 +195,20 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
 
       <ConfirmDialog
         visible={cancelTarget != null}
-        title="Cancel request?"
-        message="You'll be removed from the waiting list — you can join again later."
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Request"
+        title={t('matches.detail.cancelRequestTitle')}
+        message={t('matches.detail.cancelRequestMessage')}
+        confirmLabel={t('matches.actions.cancelRequest')}
+        cancelLabel={t('matches.detail.keepRequest')}
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelTarget(null)}
       />
 
       <ConfirmDialog
         visible={cancelMatchTarget != null}
-        title="Cancel this match?"
-        message="Joiners will be notified. Pending requests are rejected. This cannot be undone."
-        confirmLabel="Cancel Match"
-        cancelLabel="Keep Match"
+        title={t('matches.detail.cancelMatchTitle')}
+        message={t('matches.detail.cancelMatchMessage')}
+        confirmLabel={t('matches.actions.cancelMatch')}
+        cancelLabel={t('matches.detail.keepMatch')}
         onConfirm={handleConfirmCancelMatch}
         onCancel={() => setCancelMatchTarget(null)}
       />
@@ -207,19 +216,19 @@ export default function ManageMatchesScreen({ onBack, onOpenMatch, onManageSquad
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
 
   tabs: {
     flexDirection: 'row',
@@ -227,18 +236,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: spacing.xxs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     gap: spacing.xxs,
   },
   tabButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, paddingVertical: spacing.sm, borderRadius: 8 },
-  tabButtonActive: { backgroundColor: colors.primaryDark },
-  tabText: { fontSize: 13, fontWeight: '700', color: colors.outline },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: colors.outlineMuted },
   tabTextActive: { color: colors.white },
   tabBadge: {
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.error,
+    backgroundColor: colors.roleErrorText,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
@@ -249,5 +258,5 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
   spinner: { marginTop: spacing.xl },
   emptyState: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  emptyStateText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.outlineMuted, textAlign: 'center' },
 });

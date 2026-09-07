@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { rosterSizeFor } from '@/constants/tournamentFormats';
 import type { JoinRosterRow } from '@/schemas/joinTournamentSchema';
 import type { Sport } from '@/types/match';
@@ -33,6 +35,9 @@ export function makeRosterRow(name = '', jerseyNumber = ''): RosterRow {
  * name-only rows (1 for singles, 2 for doubles/mixed) — no add/remove.
  */
 export default function RosterBuilder({ sport, format, rows, onChange, rosterError, rowErrors }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const isFootball = sport === 'FOOTBALL';
   const maxSize = rosterSizeFor(sport, format);
 
@@ -50,7 +55,7 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
-        <Text style={styles.title}>{isFootball ? 'Squad' : 'Players'}</Text>
+        <Text style={styles.title}>{t('tournaments.join.roster')}</Text>
         <View style={styles.counter}>
           <Text style={styles.counterText}>
             {rows.length} / {maxSize}
@@ -66,8 +71,8 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
               <TextInput
                 testID={`roster-name-${index}`}
                 style={[styles.nameInput, isFootball && styles.nameInputFootball, rowError && styles.inputError]}
-                placeholder={index === 0 ? 'Captain name' : 'Player name'}
-                placeholderTextColor={colors.outline}
+                placeholder={index === 0 ? t('tournaments.join.captainName') : t('tournaments.join.playerName')}
+                placeholderTextColor={colors.textMuted}
                 value={row.name}
                 onChangeText={(text) => updateRow(index, { name: text })}
               />
@@ -76,7 +81,7 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
                   testID={`roster-jersey-${index}`}
                   style={[styles.jerseyInput, rowError && styles.inputError]}
                   placeholder="#"
-                  placeholderTextColor={colors.outline}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
                   maxLength={3}
                   value={row.jerseyNumber}
@@ -88,8 +93,9 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
                   testID={`roster-remove-${index}`}
                   style={styles.removeButton}
                   onPress={() => removeRow(index)}
+                  accessibilityLabel={t('tournaments.join.removePlayer')}
                 >
-                  <Ionicons name="close" size={16} color={colors.bodyText} />
+                  <Ionicons name="close" size={16} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -99,17 +105,17 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
       })}
 
       {isFootball && rows.length < maxSize && (
-        <TouchableOpacity testID="roster-add" style={styles.addButton} onPress={addRow}>
-          <Ionicons name="add" size={15} color={colors.primaryDark} />
-          <Text style={styles.addButtonText}>Add Player</Text>
+        <TouchableOpacity testID="roster-add" style={styles.addButton} onPress={addRow} accessibilityLabel={t('tournaments.join.addPlayer')}>
+          <Ionicons name="add" size={15} color={colors.primary} />
+          <Text style={styles.addButtonText}>{t('tournaments.join.addPlayer')}</Text>
         </TouchableOpacity>
       )}
 
       {isFootball ? (
-        <Text style={styles.hint}>Jersey numbers must be unique within the team.</Text>
+        <Text style={styles.hint}>{t('tournaments.join.jerseyHint')}</Text>
       ) : (
         <Text style={styles.hint}>
-          {maxSize === 1 ? 'Singles needs 1 player.' : 'Doubles / mixed needs exactly 2 players.'}
+          {maxSize === 1 ? t('tournaments.join.singlesHint') : t('tournaments.join.doublesHint')}
         </Text>
       )}
       {rosterError ? <Text style={styles.errorText}>{rosterError}</Text> : null}
@@ -117,44 +123,44 @@ export default function RosterBuilder({ sport, format, rows, onChange, rosterErr
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { gap: spacing.sm },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 16, fontWeight: '700', color: colors.headingText },
-  counter: { backgroundColor: colors.iconBackground, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
-  counterText: { fontSize: 12, fontWeight: '700', color: colors.bodyText },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  counter: { backgroundColor: colors.tintedSurface, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  counterText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
 
   rowGroup: { gap: spacing.xxs },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   nameInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.inputBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.inputBg,
   },
   nameInputFootball: {},
   jerseyInput: {
     width: 54,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.inputBorder,
     borderRadius: 10,
     paddingVertical: spacing.sm,
     textAlign: 'center',
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.inputBg,
   },
   inputError: { borderColor: colors.error },
   removeButton: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -164,11 +170,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
-  hint: { fontSize: 12, color: colors.outline },
+  addButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  hint: { fontSize: 12, color: colors.textMuted },
   errorText: { fontSize: 12, color: colors.error },
 });

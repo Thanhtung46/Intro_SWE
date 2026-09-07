@@ -5,9 +5,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ErrorBanner from '@/components/common/ErrorBanner';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
-import { skillLabel, skillTierColor } from '@/constants/matchSkills';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import {
   deleteGroup,
   getGroupDetail,
@@ -42,6 +44,9 @@ export default function ManageGroupRequestsScreen({
   onEditGroup,
   onAdminTransferred,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -87,7 +92,7 @@ export default function ManageGroupRequestsScreen({
       await kickGroupMember(groupId, userId);
       await fetchData();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setActingUserId(null);
     }
@@ -96,18 +101,18 @@ export default function ManageGroupRequestsScreen({
   const handleConfirmTransfer = async () => {
     if (!transferTarget) return;
     const userId = transferTarget.userId;
-    const name = transferTarget.fullName ?? 'the new admin';
+    const name = transferTarget.fullName ?? t('groups.admin');
     setTransferTarget(null);
     setActingUserId(userId);
     try {
       await transferGroupAdmin(groupId, userId);
       Alert.alert(
-        'Admin transferred',
-        `${name} is now the admin. You're a regular member — leaving Manage.`,
-        [{ text: 'OK', onPress: onAdminTransferred }]
+        t('groups.confirm.transferSuccessTitle'),
+        t('groups.confirm.transferSuccessMessage').replace('{name}', name),
+        [{ text: t('common.confirm'), onPress: onAdminTransferred }]
       );
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
       setActingUserId(null);
     }
   };
@@ -119,7 +124,7 @@ export default function ManageGroupRequestsScreen({
       await deleteGroup(groupId);
       onBack();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setIsDisbanding(false);
     }
@@ -136,7 +141,7 @@ export default function ManageGroupRequestsScreen({
   if (status === 'error' || !group) {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={errorMessage || 'Group not found.'} onRetry={fetchData} />
+        <ErrorBanner message={errorMessage || t('groups.errors.load')} onRetry={fetchData} />
       </SafeAreaView>
     );
   }
@@ -144,12 +149,12 @@ export default function ManageGroupRequestsScreen({
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="manage-group-requests-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="manage-group-requests-back" style={styles.backButton} onPress={onBack} accessibilityLabel={t('groups.actions.back')}>
+          <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.title}>Manage Group</Text>
-          <Text style={styles.subtitle} numberOfLines={1}>{group.name} · {group.memberCount} members</Text>
+          <Text style={styles.title}>{t('groups.manage.groupTitle')}</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>{group.name} · {group.memberCount} {t('groups.members')}</Text>
         </View>
         <View style={styles.backButtonSpacer} />
       </View>
@@ -157,8 +162,8 @@ export default function ManageGroupRequestsScreen({
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.actionsRow}>
           <TouchableOpacity testID="manage-group-edit" style={styles.outlineButton} onPress={onEditGroup}>
-            <Ionicons name="create-outline" size={16} color={colors.primaryDark} />
-            <Text style={styles.outlineButtonText}>Edit Group</Text>
+            <Ionicons name="create-outline" size={16} color={colors.primary} />
+            <Text style={styles.outlineButtonText}>{t('groups.actions.edit')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="manage-group-disband"
@@ -167,20 +172,20 @@ export default function ManageGroupRequestsScreen({
             disabled={isDisbanding}
           >
             <Ionicons name="trash-outline" size={16} color={colors.error} />
-            <Text style={styles.disbandButtonText}>{isDisbanding ? 'Disbanding...' : 'Disband Group'}</Text>
+            <Text style={styles.disbandButtonText}>{isDisbanding ? t('groups.actions.disbanding') : t('groups.actions.disband')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Members</Text>
+          <Text style={styles.sectionTitle}>{t('groups.members')}</Text>
           <View style={styles.countBadge}>
             <Text style={styles.countBadgeText}>{members.length}</Text>
           </View>
         </View>
 
         {members.map((member) => {
-          const label = skillLabel(group.sport, member.skill ?? null);
-          const tier = skillTierColor(group.sport, member.skill ?? null);
+          const label = groupSkillLabel(t, member.skill ?? null);
+          const tier = groupSkillTier(colors, group.sport, member.skill ?? null);
           const isActing = actingUserId === member.userId;
           return (
             <View key={member.userId} style={styles.memberRow}>
@@ -203,7 +208,7 @@ export default function ManageGroupRequestsScreen({
               </View>
               {member.isAdmin ? (
                 <View style={styles.adminTag}>
-                  <Text style={styles.adminTagText}>ADMIN</Text>
+                  <Text style={styles.adminTagText}>{t('groups.adminUpper')}</Text>
                 </View>
               ) : (
                 <View style={styles.memberActions}>
@@ -213,13 +218,14 @@ export default function ManageGroupRequestsScreen({
                     disabled={isActing}
                     onPress={() => setTransferTarget(member)}
                   >
-                    <Text style={styles.transferButtonText}>Make Admin</Text>
+                    <Text style={styles.transferButtonText}>{t('groups.actions.transferAdmin')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID={`kick-member-${member.userId}`}
                     style={styles.kickButton}
                     disabled={isActing}
                     onPress={() => setKickTarget(member)}
+                    accessibilityLabel={t('groups.actions.kick')}
                   >
                     <Ionicons name="close-circle-outline" size={20} color={colors.error} />
                   </TouchableOpacity>
@@ -232,9 +238,9 @@ export default function ManageGroupRequestsScreen({
 
       <ConfirmDialog
         visible={kickTarget != null}
-        title="Kick this member?"
-        message={`${kickTarget?.fullName ?? 'This member'} will be removed and won't be able to rejoin this group.`}
-        confirmLabel="Kick"
+        title={t('groups.confirm.kickTitle')}
+        message={t('groups.confirm.kickMessage').replace('{name}', kickTarget?.fullName ?? t('groups.member'))}
+        confirmLabel={t('groups.actions.kick')}
         destructive
         onConfirm={handleConfirmKick}
         onCancel={() => setKickTarget(null)}
@@ -242,9 +248,9 @@ export default function ManageGroupRequestsScreen({
 
       <ConfirmDialog
         visible={transferTarget != null}
-        title="Make this member admin?"
-        message={`You'll become a regular member and ${transferTarget?.fullName ?? 'they'} will take over as admin.`}
-        confirmLabel="Make Admin"
+        title={t('groups.confirm.transferTitle')}
+        message={t('groups.confirm.transferMessage').replace('{name}', transferTarget?.fullName ?? t('groups.member'))}
+        confirmLabel={t('groups.actions.transferAdmin')}
         destructive={false}
         onConfirm={handleConfirmTransfer}
         onCancel={() => setTransferTarget(null)}
@@ -252,9 +258,9 @@ export default function ManageGroupRequestsScreen({
 
       <ConfirmDialog
         visible={disbandDialogVisible}
-        title="Disband this group?"
-        message="This permanently deletes the group for everyone. This can't be undone."
-        confirmLabel="Disband"
+        title={t('groups.confirm.disbandTitle')}
+        message={t('groups.confirm.disbandMessage')}
+        confirmLabel={t('groups.actions.disband')}
         destructive
         onConfirm={handleConfirmDisband}
         onCancel={() => setDisbandDialogVisible(false)}
@@ -263,22 +269,22 @@ export default function ManageGroupRequestsScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
   backButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButtonSpacer: { width: 36 },
   headerTextWrap: { flex: 1 },
-  title: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  subtitle: { fontSize: 12, color: colors.outline },
+  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 12, color: colors.textMuted },
 
   content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl },
 
@@ -290,11 +296,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xxs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 10,
     paddingVertical: spacing.sm,
   },
-  outlineButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  outlineButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   disbandButton: {
     flex: 1,
     flexDirection: 'row',
@@ -310,12 +316,12 @@ const styles = StyleSheet.create({
   disbandButtonText: { fontSize: 13, fontWeight: '700', color: colors.error },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.headingText },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   countBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxs,
@@ -326,31 +332,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     padding: spacing.sm,
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primary },
   memberInfo: { flex: 1, gap: spacing.xxs },
-  memberName: { fontSize: 14, fontWeight: '700', color: colors.headingText },
+  memberName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   skillPill: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   skillPillText: { fontSize: 10, fontWeight: '700' },
-  adminTag: { backgroundColor: colors.primaryDark, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  adminTag: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   adminTagText: { fontSize: 10, fontWeight: '700', color: colors.white },
   memberActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  transferButton: { borderWidth: 1, borderColor: colors.primaryDark, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  transferButtonText: { fontSize: 11, fontWeight: '700', color: colors.primaryDark },
+  transferButton: { borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  transferButtonText: { fontSize: 11, fontWeight: '700', color: colors.primary },
   kickButton: { padding: spacing.xxs },
 });

@@ -394,6 +394,53 @@ export interface ThemeColors {
    * tông tint xanh `tintedSurface`/`quickActionPrimaryBg`
    * (rgba(77,142,255,0.15)). Light: '#D3E4FE'. */
   clearButtonBg: string;
+
+  // Groups module semantic states. Kept separate because these surfaces need
+  // different contrast in dark mode while preserving the existing light UI.
+  groupImageScrim: string;
+  modalOverlay: string;
+  successSurface: string;
+  successBorder: string;
+  warningSurface: string;
+  warningText: string;
+  dangerSurface: string;
+
+  // Matches module (dark-mode-round: matches). Light values preserve the
+  // exact pre-existing literals (colors.stickyIconButtonBackground/white/
+  // primaryDark) used by MatchCard/MatchDetailScreen/CheckProfileScreen for
+  // glass icon buttons + price chips sitting on top of a cover photo.
+  /** Circular icon-button glass (paper-plane/heart) over a cover photo —
+   * sits on user photo content, not app chrome, so kept the same value in
+   * both themes (same precedent as `selectedAccentOverlay`). */
+  matchIconGlassBg: string;
+  /** Price/date pill background over a cover photo. Light: solid white
+   * (colors.white). Dark: SUY DIỄN — dark translucent chip, same family as
+   * `photoChipBg`/`venueCardChipBg`, so it reads as a chip rather than
+   * disappearing into a dark photo. */
+  matchPriceChipBg: string;
+  /** Price/date pill text. Light: colors.primaryDark. Dark: SUY DIỄN —
+   * white, since the chip background goes dark. */
+  matchPriceChipText: string;
+  /** Skill chip nested inside JoinMatchSheet's amber "Required Skill Level"
+   * banner. Light: colors.skillBannerChipBackground. Dark: SUY DIỄN — a
+   * light translucent overlay that still reads on the banner's dark-amber
+   * background. */
+  matchSkillBannerChipBg: string;
+  /** Price value in Match Detail's info strip. Light: colors.priceText
+   * (a distinct teal-green, not reused elsewhere). Dark: SUY DIỄN — reuses
+   * `successText`'s dark green so it stays legible as a "money-positive"
+   * green rather than guessing a different hue. */
+  matchPriceValueText: string;
+  /** Check Profile hero banner gradient start/end (no cover photo on a host
+   * profile, so a brand-blue gradient stands in). Light: static
+   * colors.primary (#2563EB) → colors.primaryDark (#004AC6), the original
+   * literal pair. Dark: SUY DIỄN — same two-stop feel, deepened. */
+  matchProfileGradientStart: string;
+  matchProfileGradientEnd: string;
+  /** Switch track (off state) on Host Match's "Recurring Match" toggle.
+   * Light: static colors.dotInactive (#D1D5DB). Dark: SUY DIỄN — muted grey
+   * consistent with `divider`/`chromeBorder`'s dark values. */
+  matchSwitchTrackInactive: string;
 }
 
 export const lightTheme: ThemeColors = {
@@ -498,6 +545,22 @@ export const lightTheme: ThemeColors = {
   gridCellBorder: 'rgba(0, 74, 198, 0.05)',
   selectedAccentOverlay: 'rgba(255, 255, 255, 0.3)',
   clearButtonBg: '#D3E4FE',
+  groupImageScrim: colors.heroScrim,
+  modalOverlay: colors.sheetOverlay,
+  successSurface: colors.skillTierGreenBg,
+  successBorder: colors.skillTierGreenBorder,
+  warningSurface: colors.amberSoft,
+  warningText: colors.amber,
+  dangerSurface: colors.errorBackground,
+
+  matchIconGlassBg: colors.stickyIconButtonBackground,
+  matchPriceChipBg: colors.white,
+  matchPriceChipText: colors.primaryDark,
+  matchSkillBannerChipBg: colors.skillBannerChipBackground,
+  matchPriceValueText: colors.priceText,
+  matchProfileGradientStart: colors.primary,
+  matchProfileGradientEnd: colors.primaryDark,
+  matchSwitchTrackInactive: colors.dotInactive,
 };
 
 // Lấy từ Figma "SettingsDark" (node 199:3786) qua Dev Mode MCP —
@@ -617,4 +680,21 @@ export const darkTheme: ThemeColors = {
   gridCellBorder: 'rgba(77, 142, 255, 0.08)',
   selectedAccentOverlay: 'rgba(255, 255, 255, 0.3)',
   clearButtonBg: 'rgba(77, 142, 255, 0.15)',
+  groupImageScrim: 'rgba(12, 19, 36, 0.55)',
+  modalOverlay: 'rgba(0, 0, 0, 0.72)',
+  successSurface: 'rgba(34, 197, 94, 0.14)',
+  successBorder: 'rgba(34, 197, 94, 0.45)',
+  warningSurface: 'rgba(245, 158, 11, 0.14)',
+  warningText: '#FBBF24',
+  dangerSurface: 'rgba(255, 180, 171, 0.12)',
+
+  // Photo-overlay glass — same value as light (sits on user photo content).
+  matchIconGlassBg: 'rgba(17, 24, 39, 0.45)',
+  matchPriceChipBg: 'rgba(12, 19, 36, 0.8)',
+  matchPriceChipText: '#FFFFFF',
+  matchSkillBannerChipBg: 'rgba(255, 255, 255, 0.12)',
+  matchPriceValueText: '#22C55E',
+  matchProfileGradientStart: '#1D4ED8',
+  matchProfileGradientEnd: '#001E52',
+  matchSwitchTrackInactive: 'rgba(66, 71, 84, 0.4)',
 };

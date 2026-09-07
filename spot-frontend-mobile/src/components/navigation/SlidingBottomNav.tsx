@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { colors } from '@/constants/colors';
+import { useTheme } from '@/context/ThemeContext';
 
 export type SlidingTabKey = 'home' | 'booking' | 'matches' | 'schedule' | 'settings';
 
@@ -18,9 +18,6 @@ export type SlidingTab = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
 };
-
-const ACTIVE_BG = '#2170E4';
-const INACTIVE_TEXT = '#334155';
 
 /** Pill glide duration — keep in sync with NAV_DELAY_MS so remount lands after the glide. */
 const GLIDE_MS = 320;
@@ -39,8 +36,8 @@ type Props = {
   active: SlidingTabKey;
   onPress: (key: SlidingTabKey) => void;
   style?: object;
-  activeColor?: string;
-  inactiveColor?: string;
+  activeColor: string;
+  inactiveColor: string;
 };
 
 function frameForIndex(
@@ -70,9 +67,10 @@ export default function SlidingBottomNav({
   active,
   onPress,
   style,
-  activeColor = ACTIVE_BG,
-  inactiveColor = INACTIVE_TEXT,
+  activeColor,
+  inactiveColor,
 }: Props) {
+  const { colors: themeColors } = useTheme();
   const routeActiveIndex = Math.max(0, tabs.findIndex((t) => t.key === active));
   const [visualIndex, setVisualIndex] = useState(routeActiveIndex);
   const [rowWidth, setRowWidth] = useState(0);
@@ -209,8 +207,8 @@ export default function SlidingBottomNav({
             accessibilityState={{ selected: isActive }}
           >
             <View style={styles.tabInner} onLayout={(e) => onInnerLayout(index, e)}>
-              <Ionicons name={tab.icon} size={18} color={isActive ? colors.white : inactiveColor} />
-              <Text style={[styles.label, { color: isActive ? colors.white : inactiveColor }]} numberOfLines={1}>
+              <Ionicons name={tab.icon} size={18} color={isActive ? themeColors.white : inactiveColor} />
+              <Text style={[styles.label, { color: isActive ? themeColors.white : inactiveColor }]} numberOfLines={1}>
                 {tab.label}
               </Text>
             </View>

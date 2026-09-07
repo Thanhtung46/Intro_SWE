@@ -1,7 +1,9 @@
 import React, { useMemo, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import type { ScheduleCourtRow, ScheduleSlot } from '@/types/group';
 
@@ -83,6 +85,9 @@ function slotPixelWidth(durationMinutes: number): number {
 }
 
 function CourtTimeline({ court }: { court: ScheduleCourtRow }) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const scrollRef = useRef<ScrollView>(null);
   const bookedRanges = useMemo(() => mergeBookedRanges(court.slots), [court.slots]);
   const dayStart = court.slots.length ? toMinutes(court.slots[0].startsAt) : 0;
@@ -118,11 +123,11 @@ function CourtTimeline({ court }: { court: ScheduleCourtRow }) {
 
   return (
     <View style={styles.courtBlock}>
-      <Text style={styles.courtName}>{court.name ?? 'Court'}</Text>
+      <Text style={styles.courtName}>{court.name ?? t('groups.schedule.court')}</Text>
 
       {bookedRanges.length > 0 ? (
         <View style={styles.sessionList}>
-          <Text style={styles.sessionHeading}>Group sessions</Text>
+          <Text style={styles.sessionHeading}>{t('groups.schedule.sessions')}</Text>
           {bookedRanges.map((range) => (
             <View key={`${range.start}-${range.end}`} style={styles.sessionRow}>
               <View style={styles.sessionAccent} />
@@ -136,10 +141,10 @@ function CourtTimeline({ court }: { court: ScheduleCourtRow }) {
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyText}>No sessions this day.</Text>
+        <Text style={styles.emptyText}>{t('groups.schedule.noSessions')}</Text>
       )}
 
-      <Text style={styles.scrollHint}>30-min slots · swipe sideways</Text>
+      <Text style={styles.scrollHint}>{t('groups.schedule.scrollHint')}</Text>
 
       <ScrollView
         ref={scrollRef}
@@ -187,11 +192,11 @@ function CourtTimeline({ court }: { court: ScheduleCourtRow }) {
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, styles.cellBooked]} />
-          <Text style={styles.legendText}>Booked (30 min)</Text>
+          <Text style={styles.legendText}>{t('groups.schedule.booked')}</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, styles.cellAvailable]} />
-          <Text style={styles.legendText}>Available</Text>
+          <Text style={styles.legendText}>{t('groups.schedule.available')}</Text>
         </View>
       </View>
     </View>
@@ -203,8 +208,11 @@ function CourtTimeline({ court }: { court: ScheduleCourtRow }) {
  * scrollable day timeline, plus a clear session time summary above.
  */
 export default function GroupScheduleGrid({ courts }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   if (courts.length === 0) {
-    return <Text style={styles.emptyText}>No courts configured for this group.</Text>;
+    return <Text style={styles.emptyText}>{t('groups.schedule.noCourts')}</Text>;
   }
 
   return (
@@ -216,29 +224,29 @@ export default function GroupScheduleGrid({ courts }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { gap: spacing.lg },
   courtBlock: { gap: spacing.sm },
-  courtName: { fontSize: 16, fontWeight: '800', color: colors.headingText },
+  courtName: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
 
   sessionList: {
-    backgroundColor: colors.selectedBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     borderRadius: 12,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  sessionHeading: { fontSize: 12, fontWeight: '700', color: colors.outline, textTransform: 'uppercase' },
+  sessionHeading: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' },
   sessionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sessionAccent: {
     width: 4,
     height: 28,
     borderRadius: 2,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
   },
-  sessionTime: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.headingText },
-  sessionDuration: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  sessionTime: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  sessionDuration: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
-  scrollHint: { fontSize: 11, fontWeight: '600', color: colors.outline },
+  scrollHint: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
   scrollContent: { paddingVertical: 2 },
 
   barTrack: {
@@ -254,11 +262,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
-  cellBooked: { backgroundColor: colors.primaryDark },
+  cellBooked: { backgroundColor: colors.primary },
   cellAvailable: {
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.divider,
   },
   cellBookedLabel: { fontSize: 9, fontWeight: '700', color: colors.white },
 
@@ -275,19 +283,19 @@ const styles = StyleSheet.create({
   hourTick: {
     width: 1,
     height: 8,
-    backgroundColor: colors.outline,
+    backgroundColor: colors.textMuted,
     opacity: 0.5,
     marginBottom: 2,
   },
   hourLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.outline,
+    color: colors.textMuted,
   },
 
   legendRow: { flexDirection: 'row', gap: spacing.md },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
   legendDot: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 11, color: colors.outline },
-  emptyText: { fontSize: 13, color: colors.outline },
+  legendText: { fontSize: 11, color: colors.textMuted },
+  emptyText: { fontSize: 13, color: colors.textMuted },
 });

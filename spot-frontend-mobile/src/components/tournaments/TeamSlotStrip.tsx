@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 
 type TeamSlot = { teamId: number; teamName: string; teamLogoUrl: string | null };
 
@@ -18,6 +20,9 @@ type Props = {
  * `maxTeams - accepted` dashed "OPEN" placeholder tiles.
  */
 export default function TeamSlotStrip({ teams, maxTeams }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const openCount = Math.max(0, maxTeams - teams.length);
 
   return (
@@ -39,9 +44,9 @@ export default function TeamSlotStrip({ teams, maxTeams }: Props) {
       {Array.from({ length: openCount }).map((_, index) => (
         <View key={`open-${index}`} style={styles.tile}>
           <View style={styles.openLogo}>
-            <Ionicons name="add" size={18} color={colors.outline} />
+            <Ionicons name="add" size={18} color={colors.textMuted} />
           </View>
-          <Text style={styles.openName}>OPEN</Text>
+          <Text style={styles.openName}>{t('tournaments.detail.open').toUpperCase()}</Text>
         </View>
       ))}
     </View>
@@ -56,28 +61,28 @@ function initials(name: string): string {
     .join('');
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   tile: { width: 64, alignItems: 'center', gap: spacing.xs },
-  logo: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.iconBackground },
+  logo: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.tintedSurface },
   logoFallback: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoInitials: { fontSize: 11, fontWeight: '800', color: colors.outline },
-  name: { fontSize: 11, fontWeight: '600', color: colors.bodyText },
+  logoInitials: { fontSize: 11, fontWeight: '800', color: colors.textMuted },
+  name: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   openLogo: {
     width: 48,
     height: 48,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.surfaceBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  openName: { fontSize: 11, fontWeight: '600', color: colors.outline },
+  openName: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
 });

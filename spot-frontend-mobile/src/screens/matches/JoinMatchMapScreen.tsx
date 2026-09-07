@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppMap, { type AppMapMarker } from '@/components/common/AppMap';
 import { BottomNavBar } from '@/components/common/BottomNavBar';
 import ErrorBanner from '@/components/common/ErrorBanner';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
 import { spacing } from '@/constants/spacing';
 import { getErrorMessage, getVenueSuggestions, listMatches } from '@/services/matchService';
 import { listGroups } from '@/services/groupService';
@@ -15,6 +15,8 @@ import type { Match, Sport, VenueSuggestion } from '@/types/match';
 import type { Group } from '@/types/group';
 import type { Tournament } from '@/types/tournament';
 import { formatDistanceKm, haversineKm, promptLocationFailure, requestCurrentPosition } from '@/utils/location';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 
 export type BrowseMapMode = 'matches' | 'groups' | 'tournaments';
 
@@ -55,24 +57,13 @@ const SPORT_COORD_OFFSET: Record<Sport, { dLat: number; dLng: number }> = {
   FOOTBALL: { dLat: 0.00028, dLng: 0.00018 },
 };
 
+// Matches' own copy is translated via matches.map.* (see `copy` below);
+// tournaments stays untranslated static English — out of scope for the
+// matches-dark-mode-i18n pass (Tournaments has its own future pass).
 const MODE_COPY: Record<
-  BrowseMapMode,
+  'tournaments',
   { unitOne: string; unitMany: string; empty: string; noPins: string; clusterSuffix: string }
 > = {
-  matches: {
-    unitOne: '1 match',
-    unitMany: 'matches',
-    empty: 'No matches found. Try another sport or search.',
-    noPins: 'None of these matches have a map location yet.',
-    clusterSuffix: 'kèo',
-  },
-  groups: {
-    unitOne: '1 group',
-    unitMany: 'groups',
-    empty: 'No groups found. Try another sport or search.',
-    noPins: 'None of these groups have a map location yet.',
-    clusterSuffix: 'nhóm',
-  },
   tournaments: {
     unitOne: '1 tournament',
     unitMany: 'tournaments',
@@ -172,7 +163,7 @@ function regionForPins(
   };
 }
 
-function matchToPin(match: Match & { latitude: number; longitude: number }): MapPinItem {
+function matchToPin(match: Match & { latitude: number; longitude: number }, spotsLeftSuffix: string): MapPinItem {
   return {
     id: match.matchId,
     sport: match.sport,
@@ -181,7 +172,7 @@ function matchToPin(match: Match & { latitude: number; longitude: number }): Map
     venueName: match.venueName,
     venueAddress: match.venueAddress,
     title: match.title,
-    meta: `${formatWhen(match.startsAt)} · ${match.spotsLeft} chỗ trống`,
+    meta: `${formatWhen(match.startsAt)} · ${match.spotsLeft} ${spotsLeftSuffix}`,
     hostLabel: match.host?.fullName ?? match.hostFullName ?? undefined,
   };
 }
@@ -219,7 +210,16 @@ function tournamentToPin(tournament: Tournament): MapPinItem {
  * with lat/lng. GPS only places 🏠; search narrows by venue text.
  */
 export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenItem }: Props) {
-  const copy = MODE_COPY[mode];
+  const { colors: themeColors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(themeColors);
+  const copy = mode === 'groups' ? {
+    unitOne: t('groups.map.one'), unitMany: t('groups.map.many'), empty: t('groups.map.empty'),
+    noPins: t('groups.map.noPins'), clusterSuffix: t('groups.map.clusterSuffix'),
+  } : mode === 'matches' ? {
+    unitOne: t('matches.map.one'), unitMany: t('matches.map.many'), empty: t('matches.map.empty'),
+    noPins: t('matches.map.noPins'), clusterSuffix: t('matches.map.clusterSuffix'),
+  } : MODE_COPY.tournaments;
   const [category, setCategory] = useState<Category>('ALL');
   const [searchText, setSearchText] = useState('');
   const [appliedLocation, setAppliedLocation] = useState('');
@@ -270,7 +270,7 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
           total = result.total;
           for (const match of result.matches) {
             if (match.latitude != null && match.longitude != null) {
-              pins.push(matchToPin(match as Match & { latitude: number; longitude: number }));
+              pins.push(matchToPin(match as Match & { latitude: number; longitude: number }, t('matches.map.spotsLeftSuffix')));
             }
           }
           if (result.matches.length === 0) break;
@@ -316,7 +316,7 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
       setErrorMessage(getErrorMessage(err));
       setStatus('error');
     }
-  }, [category, appliedLocation, mode, copy.unitOne, copy.unitMany]);
+  }, [category, appliedLocation, mode, copy.unitOne, copy.unitMany, t]);
 
   useEffect(() => {
     fetchItems();
@@ -407,18 +407,18 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
     selectedClusterKey && selectedClusterKey !== '__me__' ? pinGroups.get(selectedClusterKey) ?? null : null;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.screenBackgroundAlt }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity testID="join-map-back" style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={18} color={colors.headingText} />
+        <TouchableOpacity testID="join-map-back" style={[styles.backButton, { backgroundColor: themeColors.tintedSurface }]} onPress={onBack} accessibilityLabel={mode === 'groups' ? t('groups.actions.back') : undefined}>
+          <Ionicons name="arrow-back" size={18} color={themeColors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.searchInputWrap}>
-          <Ionicons name="search-outline" size={18} color={colors.outline} />
+        <View style={[styles.searchInputWrap, { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder }]}>
+          <Ionicons name="search-outline" size={18} color={themeColors.textMuted} />
           <TextInput
             testID="join-map-search-input"
-            style={styles.searchInput}
-            placeholder="Search by venue name or address…"
-            placeholderTextColor={colors.outline}
+            style={[styles.searchInput, { color: themeColors.textPrimary }]}
+            placeholder={mode === 'groups' ? t('groups.map.searchPlaceholder') : mode === 'matches' ? t('matches.map.searchPlaceholder') : 'Search by venue name or address…'}
+            placeholderTextColor={themeColors.textMuted}
             value={searchText}
             onChangeText={(text) => {
               setSearchText(text);
@@ -430,30 +430,30 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
           />
           {searchText.length > 0 ? (
             <TouchableOpacity testID="join-map-clear-search" onPress={clearSearch} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={colors.outline} />
+              <Ionicons name="close-circle" size={18} color={themeColors.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
         <TouchableOpacity
           testID="join-map-near-me"
-          style={styles.nearMeButton}
+          style={[styles.nearMeButton, { backgroundColor: themeColors.tintedSurface }]}
           onPress={async () => {
             await refreshGps(false);
           }}
           disabled={locating}
         >
           {locating ? (
-            <ActivityIndicator size="small" color={colors.primaryDark} />
+            <ActivityIndicator size="small" color={themeColors.primary} />
           ) : (
-            <Ionicons name="navigate" size={18} color={colors.primaryDark} />
+            <Ionicons name="navigate" size={18} color={themeColors.primary} />
           )}
         </TouchableOpacity>
       </View>
 
       {suggestionsVisible && searchText.trim().length > 0 && (suggestionsLoading || suggestions.length > 0) ? (
-        <View testID="join-map-search-suggestions" style={styles.suggestionsBox}>
+        <View testID="join-map-search-suggestions" style={[styles.suggestionsBox, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
           {suggestionsLoading ? (
-            <ActivityIndicator style={styles.suggestionsSpinner} color={colors.primary} />
+            <ActivityIndicator style={styles.suggestionsSpinner} color={themeColors.primary} />
           ) : (
             suggestions.map((suggestion, index) => (
               <TouchableOpacity
@@ -462,13 +462,13 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
                 style={styles.suggestionRow}
                 onPress={() => applySearch(suggestion.applyText)}
               >
-                <Ionicons name="storefront-outline" size={16} color={colors.outline} />
+                <Ionicons name="storefront-outline" size={16} color={themeColors.textMuted} />
                 <View style={styles.suggestionTextWrap}>
-                  <Text style={styles.suggestionText} numberOfLines={1}>
+                  <Text style={[styles.suggestionText, { color: themeColors.textPrimary }]} numberOfLines={1}>
                     {suggestion.title}
                   </Text>
                   {suggestion.subtitle ? (
-                    <Text style={styles.suggestionAddress} numberOfLines={1}>
+                    <Text style={[styles.suggestionAddress, { color: themeColors.textSecondary }]} numberOfLines={1}>
                       {suggestion.subtitle}
                     </Text>
                   ) : null}
@@ -480,7 +480,7 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
       ) : null}
 
       {mapHint ? (
-        <Text style={styles.nearbyHint} numberOfLines={1}>
+        <Text style={[styles.nearbyHint, { color: themeColors.textSecondary }]} numberOfLines={1}>
           {mapHint}
         </Text>
       ) : null}
@@ -488,9 +488,9 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
       <View style={styles.categoryRow}>
         {(
           [
-            { key: 'ALL', label: 'All' },
-            { key: 'FOOTBALL', label: 'Football' },
-            { key: 'BADMINTON', label: 'Badminton' },
+            { key: 'ALL', label: t('common.sportAll') },
+            { key: 'FOOTBALL', label: t('common.sportFootball') },
+            { key: 'BADMINTON', label: t('common.sportBadminton') },
           ] as { key: Category; label: string }[]
         ).map((item) => {
           const isActive = item.key === category;
@@ -498,10 +498,10 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
             <TouchableOpacity
               key={item.key}
               testID={`join-map-category-${item.key.toLowerCase()}`}
-              style={[styles.categoryChip, isActive && styles.categoryChipActive]}
+              style={[styles.categoryChip, { backgroundColor: themeColors.tintedSurface }, isActive && styles.categoryChipActive, isActive && { backgroundColor: themeColors.primary }]}
               onPress={() => setCategory(item.key)}
             >
-              <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>{item.label}</Text>
+              <Text style={[styles.categoryChipText, { color: themeColors.textSecondary }, isActive && styles.categoryChipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -511,7 +511,7 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
 
       <View style={styles.mapArea}>
         {status === 'loading' ? (
-          <ActivityIndicator style={styles.spinner} color={colors.primary} />
+          <ActivityIndicator style={styles.spinner} color={themeColors.primary} />
         ) : (
           <>
             <AppMap
@@ -524,31 +524,31 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
               initialRegion={initialRegion}
             />
             {totalFetched > 0 && items.length === 0 && (
-              <View style={styles.noPinsNotice}>
-                <Text style={styles.noPinsNoticeText}>{copy.noPins}</Text>
+              <View style={[styles.noPinsNotice, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+                <Text style={[styles.noPinsNoticeText, { color: themeColors.textSecondary }]}>{copy.noPins}</Text>
               </View>
             )}
             {totalFetched === 0 && (
-              <View style={styles.noPinsNotice}>
-                <Text style={styles.noPinsNoticeText}>{copy.empty}</Text>
+              <View style={[styles.noPinsNotice, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+                <Text style={[styles.noPinsNoticeText, { color: themeColors.textSecondary }]}>{copy.empty}</Text>
               </View>
             )}
             {selectedGroup && selectedGroup.length > 0 && (
               <View style={styles.popupWrap}>
                 <TouchableOpacity
                   testID="join-map-popup-close"
-                  style={styles.popupCloseButton}
+                  style={[styles.popupCloseButton, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}
                   onPress={() => setSelectedClusterKey(null)}
                 >
-                  <Ionicons name="close" size={16} color={colors.headingText} />
+                  <Ionicons name="close" size={16} color={themeColors.textPrimary} />
                 </TouchableOpacity>
-                <View style={styles.clusterPanel}>
-                  <Text style={styles.clusterPanelTitle}>
+                <View style={[styles.clusterPanel, { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder }]}>
+                  <Text style={[styles.clusterPanelTitle, { color: themeColors.textPrimary }]}>
                     {selectedGroup[0].venueName}
                     {selectedGroup.length > 1 ? ` · ${selectedGroup.length} ${copy.clusterSuffix}` : ''}
                   </Text>
-                  <Text style={styles.clusterPanelSport}>
-                    {SPORT_PIN[selectedGroup[0].sport].emoji} {SPORT_PIN[selectedGroup[0].sport].label}
+                  <Text style={[styles.clusterPanelSport, { color: themeColors.textSecondary }]}>
+                    {SPORT_PIN[selectedGroup[0].sport].emoji} {selectedGroup[0].sport === 'FOOTBALL' ? t('common.sportFootball') : t('common.sportBadminton')}
                     {userPos
                       ? ` · ${formatDistanceKm(
                           haversineKm(
@@ -560,7 +560,7 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
                         )}`
                       : ''}
                   </Text>
-                  <Text style={styles.clusterPanelAddress} numberOfLines={2}>
+                  <Text style={[styles.clusterPanelAddress, { color: themeColors.textSecondary }]} numberOfLines={2}>
                     {selectedGroup[0].venueAddress}
                   </Text>
                   <ScrollView style={styles.clusterList} nestedScrollEnabled>
@@ -568,22 +568,22 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
                       <TouchableOpacity
                         key={item.id}
                         testID={`join-map-cluster-item-${item.id}`}
-                        style={styles.clusterListRow}
+                        style={[styles.clusterListRow, { borderTopColor: themeColors.divider }]}
                         onPress={() => onOpenItem(item.id)}
                       >
                         <View style={styles.clusterListRowMain}>
-                          <Text style={styles.clusterListTitle} numberOfLines={2}>
+                          <Text style={[styles.clusterListTitle, { color: themeColors.textPrimary }]} numberOfLines={2}>
                             {item.title}
                           </Text>
-                          <Text style={styles.clusterListMeta}>{item.meta}</Text>
+                          <Text style={[styles.clusterListMeta, { color: themeColors.textSecondary }]}>{item.meta}</Text>
                           {item.hostLabel ? (
                             <Text style={styles.clusterListHost}>
-                              {mode === 'groups' ? 'Admin' : mode === 'tournaments' ? 'Organizer' : 'Host'}:{' '}
+                              {mode === 'groups' ? t('groups.admin') : mode === 'matches' ? t('matches.map.organizer') : 'Organizer'}:{' '}
                               {item.hostLabel}
                             </Text>
                           ) : null}
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.outline} />
+                        <Ionicons name="chevron-forward" size={16} color={themeColors.textMuted} />
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -599,14 +599,14 @@ export default function JoinMatchMapScreen({ mode = 'matches', onBack, onOpenIte
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -623,25 +623,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     borderRadius: 16,
     paddingHorizontal: spacing.sm,
   },
-  searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.headingText },
+  searchInput: { flex: 1, paddingVertical: spacing.sm, fontSize: 14, color: colors.textPrimary },
   suggestionsBox: {
     marginHorizontal: spacing.md,
     marginTop: -spacing.xs,
     marginBottom: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     paddingVertical: spacing.xs,
     zIndex: 20,
     elevation: 6,
-    shadowColor: colors.primaryDark,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -655,14 +655,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   suggestionTextWrap: { flex: 1, gap: 2 },
-  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.headingText },
-  suggestionAddress: { fontSize: 12, color: colors.outline },
+  suggestionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  suggestionAddress: { fontSize: 12, color: colors.outlineMuted },
   nearbyHint: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.xs,
     fontSize: 12,
     fontWeight: '600',
-    color: colors.outline,
+    color: colors.outlineMuted,
   },
   categoryRow: {
     flexDirection: 'row',
@@ -674,10 +674,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: 999,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.roleCardSelectedBg,
   },
-  categoryChipActive: { backgroundColor: colors.primaryDark },
-  categoryChipText: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  categoryChipActive: { backgroundColor: colors.primary },
+  categoryChipText: { fontSize: 12, fontWeight: '700', color: colors.outlineMuted },
   categoryChipTextActive: { color: colors.white },
   mapArea: { flex: 1, position: 'relative' },
   spinner: { marginTop: spacing.xl },
@@ -686,13 +686,13 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     top: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
   },
-  noPinsNoticeText: { fontSize: 13, color: colors.bodyText, textAlign: 'center' },
+  noPinsNoticeText: { fontSize: 13, color: colors.textSecondaryAlt, textAlign: 'center' },
   popupWrap: {
     position: 'absolute',
     left: spacing.md,
@@ -704,25 +704,25 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
   },
   clusterPanel: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.chromeBorder,
     maxHeight: 280,
     gap: spacing.xs,
   },
-  clusterPanelTitle: { fontSize: 16, fontWeight: '800', color: colors.headingText },
-  clusterPanelSport: { fontSize: 13, fontWeight: '600', color: colors.bodyText },
-  clusterPanelAddress: { fontSize: 12, color: colors.outline, marginBottom: spacing.xs },
+  clusterPanelTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  clusterPanelSport: { fontSize: 13, fontWeight: '600', color: colors.textSecondaryAlt },
+  clusterPanelAddress: { fontSize: 12, color: colors.outlineMuted, marginBottom: spacing.xs },
   clusterList: { maxHeight: 160 },
   clusterListRow: {
     flexDirection: 'row',
@@ -730,10 +730,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.cardBorder,
+    borderTopColor: colors.chromeBorder,
   },
   clusterListRowMain: { flex: 1, gap: 2 },
-  clusterListTitle: { fontSize: 14, fontWeight: '700', color: colors.headingText },
-  clusterListMeta: { fontSize: 12, color: colors.bodyText },
-  clusterListHost: { fontSize: 12, color: colors.outline },
+  clusterListTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  clusterListMeta: { fontSize: 12, color: colors.textSecondaryAlt },
+  clusterListHost: { fontSize: 12, color: colors.outlineMuted },
 });

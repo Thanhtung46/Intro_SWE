@@ -21,10 +21,13 @@ import GroupScheduleGrid from '@/components/groups/GroupScheduleGrid';
 import GroupScheduleCalendar from '@/components/groups/GroupScheduleCalendar';
 import GroupMemberListItem from '@/components/groups/GroupMemberListItem';
 import GroupGalleryGrid from '@/components/groups/GroupGalleryGrid';
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import AppMap from '@/components/common/AppMap';
-import { skillLabel, skillsForSport, skillTierColor } from '@/constants/matchSkills';
+import { skillsForSport } from '@/constants/matchSkills';
+import { groupSkillLabel, groupSkillTier } from '@/components/groups/groupPresentation';
 import {
   addGroupGalleryImage,
   cancelGroupJoinRequest,
@@ -79,6 +82,9 @@ export default function GroupDetailScreen({
   onEditGroup,
   onOpenMemberProfile,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
@@ -140,7 +146,7 @@ export default function GroupDetailScreen({
       await joinGroup(groupId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setIsJoining(false);
     }
@@ -153,7 +159,7 @@ export default function GroupDetailScreen({
       await leaveGroup(groupId);
       onBack();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setIsLeaving(false);
     }
@@ -166,7 +172,7 @@ export default function GroupDetailScreen({
       await cancelGroupJoinRequest(groupId);
       await fetchDetail();
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setIsCancelling(false);
     }
@@ -178,16 +184,16 @@ export default function GroupDetailScreen({
     const zaloUrl = group.zaloUrl?.trim();
     if (!zaloUrl) {
       Alert.alert(
-        'No Zalo link',
+        t('groups.detail.noZaloTitle'),
         group.myRole === 'ADMIN'
-          ? 'Add a Zalo group link in Edit Group so members can share it.'
-          : 'This group has no Zalo invite link yet. Ask the admin to add one.'
+          ? t('groups.detail.noZaloAdmin')
+          : t('groups.detail.noZaloMember')
       );
       return;
     }
     try {
       await Share.share({
-        message: `Join "${group.name}" on Zalo: ${zaloUrl}`,
+        message: `${t('groups.detail.shareInvite').replace('{name}', group.name)} ${zaloUrl}`,
         url: zaloUrl,
       });
     } catch {
@@ -264,7 +270,7 @@ export default function GroupDetailScreen({
       setImages((prev) => [...prev, image]);
       setNewImageUrl('');
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     } finally {
       setIsAddingImage(false);
     }
@@ -278,7 +284,7 @@ export default function GroupDetailScreen({
       await deleteGroupGalleryImage(groupId, imageId);
       setImages((prev) => prev.filter((img) => img.imageId !== imageId));
     } catch (err) {
-      Alert.alert('Something went wrong', getErrorMessage(err));
+      Alert.alert(t('groups.errors.generic'), getErrorMessage(err));
     }
   };
 
@@ -299,7 +305,7 @@ export default function GroupDetailScreen({
   if (status === 'error' || !group) {
     return (
       <SafeAreaView style={styles.centerFill} edges={['top', 'bottom']}>
-        <ErrorBanner message={errorMessage || 'Group not found.'} onRetry={fetchDetail} />
+        <ErrorBanner message={errorMessage || t('groups.errors.load')} onRetry={fetchDetail} />
       </SafeAreaView>
     );
   }
@@ -340,10 +346,10 @@ export default function GroupDetailScreen({
         <View style={styles.tabBar}>
           {(
             [
-              { key: 'about', label: 'About' },
-              { key: 'schedule', label: 'Schedule' },
-              { key: 'members', label: 'Members' },
-              { key: 'gallery', label: 'Gallery' },
+              { key: 'about', label: t('groups.tabs.about') },
+              { key: 'schedule', label: t('groups.tabs.schedule') },
+              { key: 'members', label: t('groups.tabs.members') },
+              { key: 'gallery', label: t('groups.tabs.gallery') },
             ] as { key: DetailTab; label: string }[]
           ).map((item) => {
             const isActive = item.key === tab;
@@ -364,28 +370,28 @@ export default function GroupDetailScreen({
           {tab === 'about' && (
             <>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>About Group</Text>
+                <Text style={styles.sectionTitle}>{t('groups.detail.aboutGroup')}</Text>
                 <View style={styles.notesCard}>
-                  <Text style={styles.notesText}>{group.description || 'No description yet.'}</Text>
+                  <Text style={styles.notesText}>{group.description || t('groups.detail.noDescription')}</Text>
                 </View>
               </View>
 
               <View style={styles.section}>
                 <View style={styles.skillHeaderRow}>
-                  <Ionicons name="stats-chart" size={14} color={colors.primaryDark} />
-                  <Text style={styles.skillHeaderText}>SKILL LEVELS</Text>
+                  <Ionicons name="stats-chart" size={14} color={colors.primary} />
+                  <Text style={styles.skillHeaderText}>{t('groups.skill.levels')}</Text>
                 </View>
                 <View style={styles.skillChips}>
                   {skillRangeCodes.length === 0 ? (
-                    <View style={[styles.skillChip, { backgroundColor: colors.skillTierGreenBg, borderColor: colors.skillTierGreenBorder }]}>
-                      <Text style={[styles.skillChipText, { color: colors.skillTierGreenText }]}>All Levels</Text>
+                    <View style={[styles.skillChip, { backgroundColor: colors.successSurface, borderColor: colors.successBorder }]}>
+                      <Text style={[styles.skillChipText, { color: colors.successText }]}>{t('groups.skill.allLevels')}</Text>
                     </View>
                   ) : (
                     skillRangeCodes.map((code) => {
-                      const tier = skillTierColor(group.sport, code);
+                      const tier = groupSkillTier(colors, group.sport, code);
                       return (
                         <View key={code} style={[styles.skillChip, { backgroundColor: tier.bg, borderColor: tier.border }]}>
-                          <Text style={[styles.skillChipText, { color: tier.text }]}>{skillLabel(group.sport, code)}</Text>
+                          <Text style={[styles.skillChipText, { color: tier.text }]}>{groupSkillLabel(t, code)}</Text>
                         </View>
                       );
                     })
@@ -394,7 +400,7 @@ export default function GroupDetailScreen({
               </View>
 
               <View style={styles.section}>
-                <Text style={styles.venueLabel}>HOME VENUE</Text>
+                <Text style={styles.venueLabel}>{t('groups.detail.homeVenue')}</Text>
                 <View style={styles.venueCard}>
                   <Text style={styles.venueName} numberOfLines={1} ellipsizeMode="tail">
                     {group.venueName}
@@ -419,7 +425,7 @@ export default function GroupDetailScreen({
                             id: String(group.groupId),
                             latitude: group.latitude,
                             longitude: group.longitude,
-                            tintColor: colors.primaryDark,
+                            tintColor: colors.primary,
                             emoji: '📍',
                           },
                         ]}
@@ -433,7 +439,7 @@ export default function GroupDetailScreen({
                     </TouchableOpacity>
                   ) : null}
                   <View style={styles.venueAddressRow}>
-                    <Ionicons name="location-outline" size={14} color={colors.bodyText} />
+                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                     <Text style={styles.venueAddressText} numberOfLines={1} ellipsizeMode="tail">
                       {group.venueAddress}
                     </Text>
@@ -450,22 +456,22 @@ export default function GroupDetailScreen({
                       })
                     }
                   >
-                    <Ionicons name="navigate-outline" size={15} color={colors.primaryDark} />
-                    <Text style={styles.directionsButtonText}>Get Directions</Text>
+                    <Ionicons name="navigate-outline" size={15} color={colors.primary} />
+                    <Text style={styles.directionsButtonText}>{t('groups.actions.directions')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
               <TouchableOpacity testID="group-detail-share-invite" style={styles.shareButton} onPress={handleShareInvite}>
-                <Ionicons name="share-social-outline" size={16} color={colors.primaryDark} />
-                <Text style={styles.shareButtonText}>Share Zalo Group Link</Text>
+                <Ionicons name="share-social-outline" size={16} color={colors.primary} />
+                <Text style={styles.shareButtonText}>{t('groups.actions.shareZalo')}</Text>
               </TouchableOpacity>
 
               <View style={styles.section}>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitle}>Members ({group.memberCount})</Text>
+                  <Text style={styles.sectionTitle}>{t('groups.members')} ({group.memberCount})</Text>
                   <TouchableOpacity onPress={() => setTab('members')}>
-                    <Text style={styles.seeAllText}>See all</Text>
+                    <Text style={styles.seeAllText}>{t('groups.actions.seeAll')}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.memberAvatarRow}>
@@ -477,14 +483,14 @@ export default function GroupDetailScreen({
 
               {isAdmin && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Admin Tools</Text>
+                  <Text style={styles.sectionTitle}>{t('groups.detail.adminTools')}</Text>
                   <TouchableOpacity testID="group-detail-edit" style={styles.shareButton} onPress={onEditGroup}>
-                    <Ionicons name="create-outline" size={16} color={colors.primaryDark} />
-                    <Text style={styles.shareButtonText}>Edit Group</Text>
+                    <Ionicons name="create-outline" size={16} color={colors.primary} />
+                    <Text style={styles.shareButtonText}>{t('groups.actions.edit')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity testID="group-detail-manage-requests" style={styles.manageButton} onPress={onManageRequests}>
                     <Ionicons name="settings-outline" size={16} color={colors.white} />
-                    <Text style={styles.manageButtonText}>Manage Requests</Text>
+                    <Text style={styles.manageButtonText}>{t('groups.actions.manageRequests')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -502,7 +508,7 @@ export default function GroupDetailScreen({
                 <Ionicons
                   name={showScheduleCalendar ? 'chevron-up' : 'calendar-outline'}
                   size={18}
-                  color={colors.primaryDark}
+                  color={colors.primary}
                 />
               </TouchableOpacity>
               {showScheduleCalendar ? (
@@ -527,12 +533,12 @@ export default function GroupDetailScreen({
           {tab === 'members' && (
             <>
               <View style={styles.searchField}>
-                <Ionicons name="search-outline" size={16} color={colors.outline} />
+                <Ionicons name="search-outline" size={16} color={colors.textMuted} />
                 <TextInput
                   testID="group-members-search"
                   style={styles.searchInput}
-                  placeholder="Search members..."
-                  placeholderTextColor={colors.outline}
+                  placeholder={t('groups.detail.searchMembers')}
+                  placeholderTextColor={colors.textMuted}
                   value={memberSearch}
                   onChangeText={setMemberSearch}
                 />
@@ -542,7 +548,7 @@ export default function GroupDetailScreen({
               ) : membersError ? (
                 <ErrorBanner message={membersError} onRetry={fetchMembers} />
               ) : members.length === 0 ? (
-                <Text style={styles.placeholderText}>No members found.</Text>
+                <Text style={styles.placeholderText}>{t('groups.detail.noMembers')}</Text>
               ) : (
                 <View style={styles.membersList}>
                   {members.map((member) => (
@@ -554,7 +560,7 @@ export default function GroupDetailScreen({
                     />
                   ))}
                   {membersTotal > members.length && (
-                    <Text style={styles.helperTextCenter}>Showing {members.length} of {membersTotal}.</Text>
+                    <Text style={styles.helperTextCenter}>{t('groups.detail.showingMembers').replace('{shown}', String(members.length)).replace('{total}', String(membersTotal))}</Text>
                   )}
                 </View>
               )}
@@ -568,8 +574,8 @@ export default function GroupDetailScreen({
                   <TextInput
                     testID="group-gallery-add-url"
                     style={[styles.input, styles.addPhotoInput]}
-                    placeholder="Paste an image URL..."
-                    placeholderTextColor={colors.outline}
+                    placeholder={t('groups.detail.pasteImageUrl')}
+                    placeholderTextColor={colors.textMuted}
                     value={newImageUrl}
                     onChangeText={setNewImageUrl}
                     autoCapitalize="none"
@@ -579,6 +585,7 @@ export default function GroupDetailScreen({
                     style={[styles.addPhotoButton, isAddingImage && styles.joinButtonDisabled]}
                     onPress={handleAddImage}
                     disabled={isAddingImage}
+                    accessibilityLabel={t('groups.actions.addPhoto')}
                   >
                     <Ionicons name="add" size={18} color={colors.white} />
                   </TouchableOpacity>
@@ -598,7 +605,7 @@ export default function GroupDetailScreen({
 
       <SafeAreaView edges={['top']} style={styles.heroTopBarWrap}>
         <View style={styles.heroTopBar}>
-          <TouchableOpacity testID="group-detail-back" style={styles.heroIconButton} onPress={onBack}>
+          <TouchableOpacity testID="group-detail-back" style={styles.heroIconButton} onPress={onBack} accessibilityLabel={t('groups.actions.back')}>
             <Ionicons name="arrow-back" size={18} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -614,7 +621,7 @@ export default function GroupDetailScreen({
                 onPress={() => setLeaveDialogVisible(true)}
                 disabled={isLeaving}
               >
-                <Text style={styles.leaveButtonText}>{isLeaving ? 'Leaving...' : 'Leave Group'}</Text>
+                <Text style={styles.leaveButtonText}>{isLeaving ? t('groups.actions.leaving') : t('groups.actions.leave')}</Text>
               </TouchableOpacity>
             ) : hasPendingRequest ? (
               <TouchableOpacity
@@ -623,7 +630,7 @@ export default function GroupDetailScreen({
                 onPress={() => setCancelDialogVisible(true)}
                 disabled={isCancelling}
               >
-                <Text style={styles.cancelRequestButtonText}>{isCancelling ? 'Cancelling...' : 'Cancel Request'}</Text>
+                <Text style={styles.cancelRequestButtonText}>{isCancelling ? t('groups.actions.cancelling') : t('groups.actions.cancelRequest')}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -632,7 +639,7 @@ export default function GroupDetailScreen({
                 onPress={handleJoin}
                 disabled={!canJoin || isJoining}
               >
-                <Text style={styles.joinButtonText}>{isJoining ? 'Joining...' : 'Join Group'}</Text>
+                <Text style={styles.joinButtonText}>{isJoining ? t('groups.join.joining') : t('groups.join.action')}</Text>
                 {canJoin && !isJoining && <Ionicons name="flash" size={16} color={colors.white} />}
               </TouchableOpacity>
             )}
@@ -642,29 +649,29 @@ export default function GroupDetailScreen({
 
       <ConfirmDialog
         visible={leaveDialogVisible}
-        title="Leave this group?"
-        message="You'll need to send a new join request to get back in."
-        confirmLabel="Leave Group"
-        cancelLabel="Stay"
+        title={t('groups.confirm.leaveTitle')}
+        message={t('groups.confirm.leaveMessage')}
+        confirmLabel={t('groups.actions.leave')}
+        cancelLabel={t('groups.actions.stay')}
         onConfirm={handleConfirmLeave}
         onCancel={() => setLeaveDialogVisible(false)}
       />
 
       <ConfirmDialog
         visible={cancelDialogVisible}
-        title="Cancel request?"
-        message="You can send a new request again later."
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Request"
+        title={t('groups.confirm.cancelTitle')}
+        message={t('groups.confirm.cancelMessage')}
+        confirmLabel={t('groups.actions.cancelRequest')}
+        cancelLabel={t('groups.actions.keepRequest')}
         onConfirm={handleConfirmCancelRequest}
         onCancel={() => setCancelDialogVisible(false)}
       />
 
       <ConfirmDialog
         visible={deleteImageId != null}
-        title="Remove this photo?"
-        message="This can't be undone."
-        confirmLabel="Remove"
+        title={t('groups.confirm.removePhotoTitle')}
+        message={t('groups.confirm.removePhotoMessage')}
+        confirmLabel={t('groups.actions.remove')}
         onConfirm={handleConfirmDeleteImage}
         onCancel={() => setDeleteImageId(null)}
       />
@@ -672,15 +679,15 @@ export default function GroupDetailScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.screenBackground },
-  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackground },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.screenBackgroundAlt },
+  centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: colors.screenBackgroundAlt },
   scrollContent: { paddingBottom: 140 },
 
   hero: { height: 220, overflow: 'hidden' },
-  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.heroScrim },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: colors.groupImageScrim },
   heroContent: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.lg, gap: spacing.xs },
-  heroLogo: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.white, marginBottom: spacing.xs },
+  heroLogo: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.surface, marginBottom: spacing.xs },
   heroTitle: { color: colors.white, fontSize: 22, fontWeight: '800' },
   heroLocationRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, marginTop: 2 },
   heroSubtitle: { color: colors.white, fontSize: 13, opacity: 0.9, flexShrink: 1 },
@@ -691,25 +698,25 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.stickyIconButtonBackground,
+    backgroundColor: colors.glassButtonBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   skillHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  skillHeaderText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.primaryDark },
+  skillHeaderText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.primary },
   skillChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   skillChip: { borderWidth: 1, borderRadius: 9999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
   skillChipText: { fontSize: 12, fontWeight: '700' },
 
-  venueLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.outline },
-  venueCard: { backgroundColor: colors.cardBackground, borderRadius: 16, padding: spacing.md, gap: spacing.sm },
-  venueName: { fontSize: 17, fontWeight: '800', color: colors.headingText },
-  venueMap: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.iconBackground },
+  venueLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: colors.textMuted },
+  venueCard: { backgroundColor: colors.surface, borderRadius: 16, padding: spacing.md, gap: spacing.sm },
+  venueName: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  venueMap: { height: 140, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.tintedSurface },
   venueAddressRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  venueAddressText: { fontSize: 13, color: colors.bodyText, flexShrink: 1 },
+  venueAddressText: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   directionsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
-  directionsButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  directionsButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   tabBar: {
     flexDirection: 'row',
@@ -717,12 +724,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.xs,
     borderRadius: 12,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
     gap: spacing.xxs,
   },
   tabButton: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: 8 },
-  tabButtonActive: { backgroundColor: colors.primaryDark },
-  tabButtonText: { fontSize: 12, fontWeight: '700', color: colors.outline },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabButtonText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   tabButtonTextActive: { color: colors.white },
 
   body: { padding: spacing.md, gap: spacing.lg },
@@ -733,30 +740,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.primaryDark,
+    borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
-  shareButtonText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  shareButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   section: { gap: spacing.sm },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.headingText },
-  seeAllText: { fontSize: 13, fontWeight: '700', color: colors.primaryDark },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  seeAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: spacing.sm,
   },
   manageButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
 
-  notesCard: { backgroundColor: colors.cardBackground, borderRadius: 16, padding: spacing.md },
-  notesText: { fontSize: 13, color: colors.bodyText, lineHeight: 20 },
+  notesCard: { backgroundColor: colors.surface, borderRadius: 16, padding: spacing.md },
+  notesText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
 
 
   memberAvatarRow: { flexDirection: 'row' },
@@ -766,52 +773,52 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 2,
     borderColor: colors.white,
-    backgroundColor: colors.iconBackground,
+    backgroundColor: colors.tintedSurface,
   },
   memberAvatarOverlap: { marginLeft: -10 },
 
   placeholder: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl * 2 },
-  placeholderText: { fontSize: 13, color: colors.outline, textAlign: 'center' },
+  placeholderText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
 
   tabSpinner: { marginTop: spacing.lg },
-  helperTextCenter: { fontSize: 12, color: colors.outline, textAlign: 'center', marginTop: spacing.xs },
+  helperTextCenter: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs },
 
   pickerField: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  pickerValue: { fontSize: 14, color: colors.headingText },
+  pickerValue: { fontSize: 14, color: colors.textPrimary },
 
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
   },
-  searchInput: { flex: 1, fontSize: 14, color: colors.headingText, paddingVertical: 0 },
+  searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary, paddingVertical: 0 },
   membersList: { gap: spacing.sm },
 
   input: {
     borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderColor: colors.surfaceBorder,
     borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     fontSize: 14,
-    color: colors.headingText,
-    backgroundColor: colors.white,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
   addPhotoRow: { flexDirection: 'row', gap: spacing.sm },
   addPhotoInput: { flex: 1 },
@@ -819,19 +826,19 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.white },
+  actionBarWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.iconBackground,
+    borderTopColor: colors.tintedSurface,
   },
   joinButton: {
     flexDirection: 'row',
@@ -844,7 +851,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     width: '100%',
   },
-  joinButtonDisabled: { backgroundColor: colors.outline },
+  joinButtonDisabled: { backgroundColor: colors.textMuted },
   joinButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
 
   leaveButton: {

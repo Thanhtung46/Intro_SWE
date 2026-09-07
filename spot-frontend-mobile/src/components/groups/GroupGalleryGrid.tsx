@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { colors } from '@/constants/colors';
+import type { ThemeColors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/constants/spacing';
 import type { GalleryImage } from '@/types/group';
 
@@ -22,10 +24,13 @@ const COLUMNS = 3;
  * tapped for delete).
  */
 export default function GroupGalleryGrid({ images, isAdmin, onRequestDelete }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = createStyles(colors);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   if (images.length === 0) {
-    return <Text style={styles.emptyText}>No photos yet.</Text>;
+    return <Text style={styles.emptyText}>{t('groups.detail.noPhotos')}</Text>;
   }
 
   return (
@@ -41,6 +46,7 @@ export default function GroupGalleryGrid({ images, isAdmin, onRequestDelete }: P
                 testID={`group-gallery-delete-${image.imageId}`}
                 style={styles.deleteButton}
                 onPress={() => onRequestDelete(image.imageId)}
+                accessibilityLabel={t('groups.actions.removePhoto')}
               >
                 <Ionicons name="close" size={12} color={colors.white} />
               </TouchableOpacity>
@@ -52,7 +58,7 @@ export default function GroupGalleryGrid({ images, isAdmin, onRequestDelete }: P
       <Modal visible={previewUrl != null} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
         <TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={() => setPreviewUrl(null)}>
           {previewUrl && <Image source={{ uri: previewUrl }} style={styles.previewImage} resizeMode="contain" />}
-          <TouchableOpacity testID="group-gallery-preview-close" style={styles.previewClose} onPress={() => setPreviewUrl(null)}>
+          <TouchableOpacity testID="group-gallery-preview-close" style={styles.previewClose} onPress={() => setPreviewUrl(null)} accessibilityLabel={t('groups.actions.close')}>
             <Ionicons name="close" size={22} color={colors.white} />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -63,10 +69,10 @@ export default function GroupGalleryGrid({ images, isAdmin, onRequestDelete }: P
 
 const THUMB_SIZE_PERCENT = `${100 / COLUMNS}%` as const;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   thumbWrap: { width: THUMB_SIZE_PERCENT, aspectRatio: 1, padding: 2 },
-  thumb: { width: '100%', height: '100%', borderRadius: 8, backgroundColor: colors.iconBackground },
+  thumb: { width: '100%', height: '100%', borderRadius: 8, backgroundColor: colors.tintedSurface },
   deleteButton: {
     position: 'absolute',
     top: 6,
@@ -74,13 +80,13 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.modalOverlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: { fontSize: 12, color: colors.outline },
+  emptyText: { fontSize: 12, color: colors.textMuted },
 
-  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
+  previewOverlay: { flex: 1, backgroundColor: colors.modalOverlay, alignItems: 'center', justifyContent: 'center' },
   previewImage: { width: '100%', height: '80%' },
   previewClose: {
     position: 'absolute',
@@ -89,7 +95,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.glassButtonBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

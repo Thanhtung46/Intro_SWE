@@ -27,32 +27,32 @@ interface SelectFieldProps {
   themeColors?: ThemeColors;
 }
 
-export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle, disabled }: SelectFieldProps) {
+export function SelectField({ label, required, placeholder, value, options, onChange, error, containerStyle, disabled, themeColors }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
   return (
     <View style={[styles.container, containerStyle]}>
-      <Text style={styles.label}>
+      <Text style={[styles.label, themeColors && { color: themeColors.textSecondary }]}>
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
       <TouchableOpacity
-        style={[styles.input, error ? styles.inputError : null, disabled ? styles.inputDisabled : null]}
+        style={[styles.input, themeColors && { backgroundColor: themeColors.inputBg, borderColor: themeColors.inputBorder }, error ? styles.inputError : null, disabled ? styles.inputDisabled : null]}
         onPress={() => !disabled && setOpen(true)}
         activeOpacity={disabled ? 1 : 0.7}
         disabled={disabled}
       >
-        <Text style={selected ? styles.valueText : styles.placeholderText} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={[selected ? styles.valueText : styles.placeholderText, themeColors && { color: selected ? themeColors.textPrimary : themeColors.textMuted }]} numberOfLines={1} ellipsizeMode="tail">
           {selected ? selected.label : placeholder}
         </Text>
-        {!disabled && <Ionicons name="chevron-down" size={18} color={colors.placeholder} />}
+        {!disabled && <Ionicons name="chevron-down" size={18} color={themeColors?.textMuted ?? colors.placeholder} />}
       </TouchableOpacity>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
+        <TouchableOpacity style={[styles.overlay, themeColors && { backgroundColor: themeColors.modalOverlay }]} activeOpacity={1} onPress={() => setOpen(false)}>
+          <View style={[styles.sheet, themeColors && { backgroundColor: themeColors.surface, borderColor: themeColors.surfaceBorder, borderWidth: 1 }]}>
             <FlatList
               data={options}
               keyExtractor={(item) => item.value}
@@ -64,7 +64,7 @@ export function SelectField({ label, required, placeholder, value, options, onCh
                     setOpen(false);
                   }}
                 >
-                  <Text style={styles.optionText}>{item.label}</Text>
+                  <Text style={[styles.optionText, themeColors && { color: themeColors.textPrimary }]}>{item.label}</Text>
                 </TouchableOpacity>
               )}
             />
