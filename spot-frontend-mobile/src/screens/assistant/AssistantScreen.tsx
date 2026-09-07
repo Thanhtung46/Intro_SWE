@@ -26,7 +26,6 @@ import {
   AssistantReply,
   ConflictAlternative,
   MatchResult,
-  VenueResult,
   clearConversation,
   getHistory,
   getOrCreateConversationId,

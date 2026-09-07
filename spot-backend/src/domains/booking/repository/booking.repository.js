@@ -114,10 +114,27 @@ export async function markBookingPaid(client, bookingId, playerId) {
      SET status = 'PAID', updated_at = CURRENT_TIMESTAMP
      WHERE booking_id = $1 AND player_id = $2 AND status = 'PENDING_PAYMENT'
      RETURNING booking_id, field_id, booking_date::text AS booking_date, status,
-       total_amount, deposit_amount, hire_referee, referee_fee_vnd,
+       total_amount, deposit_amount, hire_referee, referee_fee_vnd, booking_code,
        lower(booking_time_range) AS starts_at,
        upper(booking_time_range) AS ends_at`,
     [bookingId, playerId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function markBookingPaidWithCode(client, bookingId, playerId, bookingCode) {
+  const { rows } = await client.query(
+    `UPDATE schema_booking.bookings
+     SET status = 'PAID',
+         booking_code = $3,
+         payment_expires_at = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE booking_id = $1 AND player_id = $2 AND status = 'PENDING_PAYMENT'
+     RETURNING booking_id, field_id, booking_date::text AS booking_date, status,
+       total_amount, deposit_amount, hire_referee, referee_fee_vnd, booking_code,
+       lower(booking_time_range) AS starts_at,
+       upper(booking_time_range) AS ends_at`,
+    [bookingId, playerId, bookingCode],
   );
   return rows[0] ?? null;
 }

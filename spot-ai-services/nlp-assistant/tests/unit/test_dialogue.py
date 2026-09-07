@@ -85,6 +85,9 @@ class FakeBackend:
     async def get_geo_vn(self):
         return {"provinces": []}
 
+    async def get_geo_vn(self):
+        return {"provinces": []}
+
 
 class FakeLLM:
     def __init__(self, intent=None, extraction=None):
